@@ -98,6 +98,16 @@ tr.total td { font-weight: 600; border-top: 2px solid var(--ink-3) }
 .alert { border: 1px solid var(--warn); border-radius: 4px; padding: 8px 10px; color: var(--ink); background: color-mix(in srgb, var(--warn) 12%, var(--panel)) }
 .alert b { color: var(--warn) }
 .status-chip { font: 600 11px var(--body); padding: 2px 8px; border-radius: 999px; border: 1px solid var(--rule); color: var(--ink-2); white-space: nowrap }
+.hc { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 12px; align-items: end }
+.hc b { font: 600 28px/1.1 var(--display); font-variant-numeric: tabular-nums; display: block }
+.hc-total b { font-size: 40px; color: var(--accent) }
+.hc span { color: var(--ink-2); font-size: 13px; display: block }
+.hc-cell { position: relative; padding-left: 14px }
+.hc-swatch { position: absolute; left: 0; top: 6px; width: 8px; height: 8px; border-radius: 2px }
+.hc-bar { display: flex; gap: 2px; height: 12px; border-radius: 3px; overflow: hidden }
+.hc-bar span { display: block; min-width: 4px }
+.hc-lists { display: flex; flex-wrap: wrap; gap: 8px 24px }
+.hc-lists ul { margin: 6px 0 0; padding-left: 18px }
 .co-head { display: flex; gap: 8px; justify-content: space-between; align-items: start }
 @media (prefers-reduced-motion: reduce) { * { transition-duration: .01s !important } }
 </style>
@@ -122,7 +132,7 @@ tr.total td { font-weight: 600; border-top: 2px solid var(--ink-3) }
     <div class="loaders">
       <label class="drop" data-kind="cf"><b>Fund cash flows</b><span class="note">Contributions, distributions and NAV per fund. CSV or XLSX.</span><input type="file" id="fileCf" accept=".csv,.xlsx,.xls"><span class="status">Not loaded</span></label>
       <label class="drop" data-kind="inv"><b>Investments &amp; operating data</b><span class="note">One row per portfolio company. Optional; powers the gross charts.</span><input type="file" id="fileInv" accept=".csv,.xlsx,.xls"><span class="status">Not loaded</span></label>
-      <label class="drop" data-kind="team"><b>Investment team</b><span class="note">Name, title, year joined, background. Optional; powers the team bios.</span><input type="file" id="fileTeam" accept=".csv,.xlsx,.xls"><span class="status">Not loaded</span></label>
+      <label class="drop" data-kind="team"><b>Firm staff</b><span class="note">Everyone at the firm with their title; background for partners. Optional; powers headcount and partner bios.</span><input type="file" id="fileTeam" accept=".csv,.xlsx,.xls"><span class="status">Not loaded</span></label>
     </div>
     <div class="bm">
       <div class="panel-head">
@@ -143,7 +153,8 @@ investments: company, fund, sector, country, deal_type, entry_date, exit_date,
              revenue_entry, revenue_exit, ebitda_entry, ebitda_exit,
              tev_entry, tev_exit, net_debt_entry, net_debt_exit, ownership_entry,
              founded, pre_investment, milestones ("2019-06: text | 2021-03: text"), deal_lead
-team:        name, title, joined, focus, prior, education, boards
+team:        name, title, level (optional), joined, focus, prior, education, boards
+             one row per person at the firm; background fields are only needed for partners
 benchmarks:  vintage, metric (TVPI|IRR|DPI), top, median, bottom</pre>
     </details>
   </section>
@@ -151,7 +162,7 @@ benchmarks:  vintage, metric (TVPI|IRR|DPI), top, median, bottom</pre>
   <nav class="tabs" role="tablist" aria-label="Views">
     <button type="button" role="tab" id="tab-record" data-view="record" aria-selected="true">Track record</button>
     <button type="button" role="tab" id="tab-companies" data-view="companies" aria-selected="false">Portfolio companies <span id="flagCount"></span></button>
-    <button type="button" role="tab" id="tab-team" data-view="team" aria-selected="false">Investment team</button>
+    <button type="button" role="tab" id="tab-team" data-view="team" aria-selected="false">Team &amp; partners</button>
   </nav>
   <div id="out" class="wrap" style="padding:0;margin:0;max-width:none" role="tabpanel"></div>
 </div>
@@ -218,10 +229,26 @@ function normInv(rows) {
     o.entry = date(r.entry_date); o.exit = date(r.exit_date); o.realized = o.realized || 0; o.unrealized = o.unrealized || 0; return o })
     .filter(r => r.company && isFinite(r.invested));
 }
+const LEVELS = [["partner", "Partners"], ["mid", "Mid-level professionals"], ["junior", "Junior professionals"], ["back", "Back office"]];
+// An explicit level column wins; otherwise read it off the title. Partner titles are checked first
+// so "Partner & CFO" counts as a partner. Back-office checks run before "director" so a
+// "Director of Investor Relations" is not counted as a mid-level investor.
+function levelOf(level, title) {
+  const l = String(level || "").trim().toLowerCase();
+  if (l) return /partner|senior/.test(l) ? "partner" : /mid/.test(l) ? "mid" : /junior/.test(l) ? "junior" : /back|admin|ops|operations/.test(l) ? "back" : "other";
+  const t = String(title || "").toLowerCase();
+  if (!t) return "other";
+  if (/\b(partner|founder|managing director|chief investment officer|cio)\b/.test(t)) return "partner";
+  if (/financ|\bcfo\b|\bcoo\b|controller|account|compliance|legal|counsel|investor relations|\bir\b|operations|office|assistant|admin|human|\bhr\b|technology|marketing|tax|treasur|recept/.test(t)) return "back";
+  if (/principal|vice president|\bvp\b|director/.test(t)) return "mid";
+  if (/associate|analyst|intern/.test(t)) return "junior";
+  return "other";
+}
 function normTeam(rows) {
   need(rows, ["name"], "Team");
   return rows.map(r => ({ name: String(r.name).trim(), title: String(r.title || "").trim(), joined: num(r.joined), focus: String(r.focus || "").trim(),
-    prior: String(r.prior || "").trim(), education: String(r.education || "").trim(), boards: String(r.boards || "").trim() })).filter(r => r.name);
+    prior: String(r.prior || "").trim(), education: String(r.education || "").trim(), boards: String(r.boards || "").trim(),
+    level: levelOf(r.level, r.title) })).filter(r => r.name);
 }
 function normBm(rows) {
   need(rows, ["vintage", "metric", "top", "median", "bottom"], "Benchmarks");
@@ -423,7 +450,7 @@ function renderTeam(P, F, asOf) {
   const out = document.getElementById("out");
   const leads = [...new Set(P.map(c => String(c.deal_lead || "").trim()).filter(Boolean))];
   const roster = [...(state.team || [])];
-  leads.forEach(n => { if (!roster.some(t => t.name === n)) roster.push({ name: n, title: "", prior: "", education: "", focus: "", boards: "" }) });
+  leads.forEach(n => { if (!roster.some(t => t.name === n)) roster.push({ name: n, title: "", prior: "", education: "", focus: "", boards: "", level: "other", unlisted: true }) });
   if (!roster.length) { out.innerHTML = `<div class="panel empty">Load an investment team file, or a <code>deal_lead</code> column in the investments file, to build team bios.</div>`; return }
   const fundShort = n => n.replace(/^.*?(Fund\s+\S+)$/i, "$1");
   const people = roster.map(t => {
@@ -434,6 +461,23 @@ function renderTeam(P, F, asOf) {
       funds: [...new Set(D.map(c => fundShort(c.fund)))], flags: D.filter(c => c.flag), live: D.filter(c => c.status !== "Realized") };
   }).sort((a, b) => b.inv - a.inv);
   const total = people.reduce((s, p) => s + p.inv, 0);
+  // Bios cover partners. With no partner identified (e.g. only deal_lead names, no team file), fall back to everyone who led deals.
+  const hasPartners = people.some(p => p.level === "partner");
+  const bioPeople = people.filter(p => hasPartners ? p.level === "partner" : p.D.length);
+  const nonPartnerLeads = hasPartners ? people.filter(p => p.level !== "partner" && p.D.length) : [];
+  const staff = people.filter(p => !p.unlisted), groups = [...LEVELS, ["other", "Unclassified"]].map(([k, l]) => [k, l, staff.filter(p => p.level === k)]).filter(([k, , g]) => k !== "other" || g.length);
+  const nInvest = staff.filter(p => ["partner", "mid", "junior"].includes(p.level)).length, nPartner = groups[0][2].length;
+  const headcount = !state.team ? `<section class="panel"><h2>Firm headcount</h2><p class="note">Load a team file listing everyone at the firm (name and title, or a level column) to see headcount by level.</p></section>` :
+    `<section class="panel"><div class="panel-head"><h2>Firm headcount</h2><p class="note">From the team file · one row per person</p></div>
+    <div class="hc">
+      <div class="hc-total"><b>${staff.length}</b><span>people at the firm</span></div>
+      ${groups.map(([k, l, g], i) => `<div class="hc-cell"><span class="hc-swatch" style="background:${k === "other" ? css("--ink-3") : series(i)}"></span><b>${g.length}</b><span>${l}</span><span class="note">${fp(g.length / staff.length, 0)}</span></div>`).join("")}
+    </div>
+    <div class="hc-bar" role="img" aria-label="${groups.map(([, l, g]) => `${l} ${g.length}`).join(", ")}">${groups.filter(([, , g]) => g.length).map(([k, l, g], i) => `<span title="${l}: ${g.length}" style="flex:${g.length};background:${k === "other" ? css("--ink-3") : series(groups.findIndex(x => x[0] === k))}"></span>`).join("")}</div>
+    <p>${nInvest} investment professionals and ${groups.find(g => g[0] === "back")[2].length} back-office staff.${nPartner ? ` ${((nInvest - nPartner) / nPartner).toFixed(1)} non-partner investment professionals per partner.` : ""}${groups.some(g => g[0] === "other") ? ` <span class="muted">Some titles could not be classified; add a <code>level</code> column (partner, mid, junior, back office) to place them.</span>` : ""}</p>
+    <div class="hc-lists">${groups.map(([k, l, g]) => g.length ? `<details><summary>${l} (${g.length})</summary><ul>${g.map(p => `<li>${esc(p.name)}${p.title ? ` <span class="tags">· ${esc(p.title)}</span>` : ""}</li>`).join("")}</ul></details>` : "").join("")}</div>
+    ${nonPartnerLeads.length ? `<p class="note">Deals led by non-partners: ${nonPartnerLeads.map(p => `${esc(p.name)}${p.title ? ` (${esc(p.title)})` : ""}, ${p.D.length} deal${p.D.length > 1 ? "s" : ""}, ${fm(p.inv)} at ${fx(p.tvm)}`).join("; ")}.</p>` : ""}
+    </section>`;
   const bio = p => {
     const who = `${esc(p.name)}${p.title ? ` is ${/^[aeiou]/i.test(p.title) ? "an" : "a"} ${esc(p.title)} at the firm` : ""}${isFinite(p.joined) ? `${p.title ? "," : ""} having joined in ${p.joined}` : ""}.`;
     const parts = [who];
@@ -453,8 +497,8 @@ function renderTeam(P, F, asOf) {
     h += `<ol>${[...p.D].sort((a, b) => (a.entry || 0) - (b.entry || 0)).map(c => `<li><time>${c.entry ? c.entry.getFullYear() : "—"}</time><span>${esc(c.company)} <span class="tags">· ${fundShort(c.fund)} · ${c.status.toLowerCase()} · ${fx(c.tvm)}</span></span></li>`).join("")}</ol>`;
     return h;
   };
-  out.innerHTML = `<section class="panel"><div><h2>Investment team</h2><p class="note">Ordered by capital led. Backgrounds come from the team file. Each track record is calculated from the deals credited to that person in the investments file's <code>deal_lead</code> column.</p></div></section>
-    <div class="cards">${people.map(p => `<article class="co${p.flags.length ? " flagged" : ""}">
+  out.innerHTML = `${headcount}<section class="panel"><div><h2>${hasPartners ? "Partners" : "Deal leads"}</h2><p class="note">Ordered by capital led. Backgrounds come from the team file. Each track record is calculated from the deals credited to that person in the investments file's <code>deal_lead</code> column.</p></div></section>
+    <div class="cards">${bioPeople.map(p => `<article class="co${p.flags.length ? " flagged" : ""}">
       <div class="co-head"><div><h3>${esc(p.name)}</h3><div class="tags">${[p.title, p.focus && "Focus: " + p.focus].filter(Boolean).map(esc).join(" · ")}</div></div>${p.D.length ? `<span class="status-chip">${p.D.length} deals</span>` : ""}</div>
       ${p.D.length ? `<div class="figs"><span>Led <b>${fm(p.inv)}</b></span><span>Value <b>${fm(p.tv)}</b></span><span>Gross <b>${fx(p.tvm)}</b></span><span>Realized <b>${p.R.length ? fx(p.rTvm) : "–"}</b></span><span>Held <b>${p.live.length}</b></span></div>` : ""}
       <h4>Background</h4>${bio(p)}

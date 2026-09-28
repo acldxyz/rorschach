@@ -70,6 +70,12 @@ TEAM = [
  dict(name="Priya Raman", title="Principal", joined=2019, focus="Information Technology; Health Care",
       prior="", education="BS Computer Science, Georgia Tech; MBA, Stanford", boards=""),
 ]
+# The rest of the firm: name and title only. Levels are inferred from titles by the app.
+STAFF = [("Tom Castellano", "Vice President"), ("Aisha Bello", "Principal"), ("Grace Liu", "Senior Associate"),
+         ("Marcus Dunn", "Associate"), ("Hannah Pruitt", "Associate"), ("Leo Fischer", "Analyst"), ("Nadia Karim", "Analyst"),
+         ("Robert Haines", "Chief Financial Officer"), ("Elena Sorokina", "Controller"), ("Chris Adebayo", "Head of Investor Relations"),
+         ("Maria Delgado", "Chief Compliance Officer"), ("Kevin Tran", "Fund Accountant"), ("Julia Brenner", "Office Manager")]
+TEAM += [dict(name=n, title=t, joined="", focus="", prior="", education="", boards="") for n, t in STAFF]
 LEAD = {"Industrials": "Margaret Ellison", "Business Services": "Margaret Ellison", "Health Care": "David Okafor",
         "Information Technology": "Sarah Lindqvist", "Financials": "Sarah Lindqvist", "Consumer Discretionary": "James Whitaker"}
 
