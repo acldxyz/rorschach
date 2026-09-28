@@ -70,6 +70,13 @@ tr.total td { font-weight: 600; border-top: 2px solid var(--ink-3) }
 .grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 520px), 1fr)); gap: 20px }
 .grid3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); gap: 16px }
 .chart { position: relative; height: 280px; min-width: 0 } .chart.tall { height: 340px }
+.figs-row { display: flex; flex-wrap: wrap; gap: 8px 24px; align-items: center; border-top: 1px solid var(--rule); padding-top: 12px }
+.seg { display: inline-flex; border: 1px solid var(--rule); border-radius: 4px; overflow: hidden }
+.seg button { border: 0; border-radius: 0; padding: 5px 12px }
+.seg button[aria-pressed="true"] { background: var(--accent); color: var(--panel) }
+#curCtl input { width: 5.5em; font: 13px var(--mono); text-align: right; color: var(--ink); background: var(--bg); border: 1px solid var(--rule); border-radius: 3px; padding: 4px 6px }
+#curNote:empty { display: none }
+#curNote.warn { color: var(--warn) }
 .bm { display: grid; gap: 8px; border-top: 1px solid var(--rule); padding-top: 12px }
 .bm-title { font-family: var(--display); font-weight: 600; font-size: 15px }
 .drop-inline { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: center; padding: 6px 12px; position: relative }
@@ -137,6 +144,12 @@ tr.total td { font-weight: 600; border-top: 2px solid var(--ink-3) }
       <label class="drop" data-kind="inv"><b>Investments &amp; operating data</b><span class="note">One row per portfolio company. Optional; powers the gross charts.</span><input type="file" id="fileInv" accept=".csv,.xlsx,.xls"><span class="status">Not loaded</span></label>
       <label class="drop" data-kind="team"><b>Firm staff</b><span class="note">Everyone at the firm with their title; background for partners. Optional; powers headcount and partner bios.</span><input type="file" id="fileTeam" accept=".csv,.xlsx,.xls"><span class="status">Not loaded</span></label>
     </div>
+    <div class="figs-row">
+      <div class="row"><label for="inUnit" class="note">Amounts in files are in</label>
+        <select id="inUnit"><option value="1">full units</option><option value="1000">thousands</option><option value="1000000">millions</option></select></div>
+      <div class="row" id="curCtl" hidden></div>
+    </div>
+    <p class="note" id="curNote"></p>
     <div class="bm">
       <div class="panel-head">
         <div class="row"><label for="bmSrc"><b class="bm-title">Benchmark</b></label>
@@ -149,8 +162,8 @@ tr.total td { font-weight: 600; border-top: 2px solid var(--ink-3) }
     <p class="errors" id="errors" role="alert"></p>
     <details>
       <summary>File formats</summary>
-      <p class="note">Headers are case-insensitive. Amounts in millions. Contributions negative, distributions positive, NAV is the reported value at a date (the latest NAV per fund is used).</p>
-<pre>cash_flows:  fund, vintage, fund_size, date, type (Contribution|Distribution|NAV), amount
+      <p class="note">Headers are case-insensitive. Set the unit your files use above (full amounts, thousands or millions); the app picks millions, thousands or full figures for display from the size of the funds. Add a <code>currency</code> column (ISO code, e.g. EUR) to the cash flows; investment amounts are read in their fund's currency. Contributions negative, distributions positive, NAV is the reported value at a date (the latest NAV per fund is used).</p>
+<pre>cash_flows:  fund, vintage, fund_size, date, type (Contribution|Distribution|NAV), amount, currency
 investments: company, fund, sector, country, deal_type, entry_date, exit_date,
              invested, realized, unrealized,
              revenue_entry, revenue_exit, ebitda_entry, ebitda_exit,
@@ -183,7 +196,7 @@ const BM_SOURCES = {
 };
 // Figures typed or uploaded per source stay in this browser only.
 const bmStore = { load(k) { try { return JSON.parse(localStorage.getItem("bm:" + k)) || {} } catch { return {} } }, save(k, v) { try { localStorage.setItem("bm:" + k, JSON.stringify(v)) } catch {} } };
-const state = { view: "record", coFund: "all", coFlagOnly: false, cf: null, inv: null, bm: null, bmSrc: "sample", bmSample: null, gp: "", dim: "sector", vcScope: "all" };
+const state = { cur: { sym: "$", unit: { div: 1, suffix: "", word: "" } }, curMode: "local", inUnit: 1, rates: (() => { try { return JSON.parse(localStorage.getItem("fx-rates")) || {} } catch { return {} } })(), isSample: false, view: "record", coFund: "all", coFlagOnly: false, cf: null, inv: null, bm: null, bmSrc: "sample", bmSample: null, gp: "", dim: "sector", vcScope: "all" };
 let charts = [];
 
 // ---------- parsing ----------
@@ -224,7 +237,7 @@ function need(rows, cols, label) {
 }
 function normCf(rows) {
   need(rows, ["fund", "date", "type", "amount"], "Cash flows");
-  return rows.map(r => ({ fund: r.fund.trim(), vintage: num(r.vintage), size: num(r.fund_size), date: date(r.date), type: String(r.type).trim().toLowerCase(), amount: num(r.amount) }))
+  return rows.map(r => ({ fund: r.fund.trim(), vintage: num(r.vintage), size: num(r.fund_size), date: date(r.date), type: String(r.type).trim().toLowerCase(), amount: num(r.amount), currency: String(r.currency || "").trim().toUpperCase() }))
     .filter(r => r.fund && r.date && isFinite(r.amount));
 }
 function normInv(rows) {
@@ -293,7 +306,43 @@ function quartile(v, b) { if (!b || !isFinite(v)) return null; return v >= b.top
 // ---------- formatting ----------
 const fx = (v, d = 2) => isFinite(v) ? v.toFixed(d) + "x" : "–";
 const fp = (v, d = 1) => isFinite(v) ? (v * 100).toFixed(d) + "%" : "–";
-const fm = (v, d = 1) => isFinite(v) ? "$" + v.toLocaleString(undefined, { minimumFractionDigits: d, maximumFractionDigits: d }) : "–";
+// Money is converted into the display currency before any maths (see cfView / invView); fm only
+// shortens and labels. The unit is chosen once per render so every figure on the page shares it.
+const fm = (v, d = 1) => { if (!isFinite(v)) return "–"; const u = state.cur.unit, dd = u.div === 1 ? 0 : d;
+  return (v < 0 ? "-" : "") + state.cur.sym + (Math.abs(v) / u.div).toLocaleString("en-US", { minimumFractionDigits: dd, maximumFractionDigits: dd }) + u.suffix };
+const symbolOf = c => { try { return new Intl.NumberFormat("en-US", { style: "currency", currency: c, currencyDisplay: "narrowSymbol" }).formatToParts(0).find(p => p.type === "currency").value } catch { return c + " " } };
+const MONEY_INV = ["invested", "realized", "unrealized", "revenue_entry", "revenue_exit", "ebitda_entry", "ebitda_exit", "tev_entry", "tev_exit", "net_debt_entry", "net_debt_exit"];
+function currencySetup() {
+  const byFund = {}; state.cf.forEach(r => { if (r.currency && !byFund[r.fund]) byFund[r.fund] = r.currency }); state.cf.forEach(r => { byFund[r.fund] ??= "USD" });
+  const set = [...new Set(Object.values(byFund))], home = set.length === 1 ? set[0] : null;
+  const wantUsd = !home || (home !== "USD" && state.curMode === "usd");
+  const missing = set.filter(c => c !== "USD" && !(state.rates[c] > 0));
+  // Without the rates we cannot convert: a single-currency book falls back to its own currency, a mixed book cannot be combined at all.
+  const disp = wantUsd && !missing.length ? "USD" : home;
+  const factor = c => state.inUnit * (c === disp ? 1 : state.rates[c]);
+  return { byFund, set, home, disp, missing, wantUsd, factor, sym: disp ? symbolOf(disp) : "", unit: { div: 1, suffix: "", word: "" } };
+}
+const cfView = () => state.cf.map(r => { const f = state.cur.factor(state.cur.byFund[r.fund]); return { ...r, amount: r.amount * f, size: r.size * f } });
+const invView = () => state.inv.map(d => { const f = state.cur.factor(state.cur.byFund[d.fund] ?? state.cur.home ?? "USD"), o = { ...d }; MONEY_INV.forEach(k => o[k] = d[k] * f); return o });
+function pickUnit(F) {
+  const big = Math.max(0, ...F.map(f => Math.max(Math.abs(f.size) || 0, f.paid, f.dist + f.nav)));
+  return big >= 1e6 ? { div: 1e6, suffix: "M", word: "millions" } : big >= 1e3 ? { div: 1e3, suffix: "K", word: "thousands" } : { div: 1, suffix: "", word: "" };
+}
+function renderCur() {
+  const c = state.cur, ctl = document.getElementById("curCtl"), note = document.getElementById("curNote");
+  const others = c.set.filter(x => x !== "USD"), key = c.set.join(",") + (c.home || "mixed");
+  ctl.hidden = !others.length;
+  if (ctl.dataset.key !== key) {
+    ctl.dataset.key = key;
+    ctl.innerHTML = (c.home ? `<span class="note">Show in</span><span class="seg" role="group" aria-label="Display currency"><button type="button" data-cur="local">${esc(c.home)}</button><button type="button" data-cur="usd">USD</button></span>` : `<span class="note">Funds report in ${others.concat(c.set.includes("USD") ? ["USD"] : []).map(esc).join(", ")}; shown in USD so they can be combined.</span>`)
+      + others.map(x => `<label class="row note" for="rate-${x}">1 ${esc(x)} = <input id="rate-${x}" data-rate="${x}" inputmode="decimal" value="${state.rates[x] ?? ""}"> USD</label>`).join("");
+  }
+  ctl.querySelectorAll("[data-cur]").forEach(b => b.setAttribute("aria-pressed", String((b.dataset.cur === "usd") === (c.disp === "USD" && c.home !== "USD"))));
+  const msgs = [];
+  if (c.wantUsd && c.missing.length) msgs.push(`Enter ${c.missing.map(x => `the ${x} → USD rate`).join(" and ")} to ${c.home ? "show USD" : "combine the funds"}.`);
+  else if (c.disp === "USD" && others.length) msgs.push(`Converted at one rate for all dates, so multiples and IRRs match the ${c.home ? c.home : "local-currency"} figures.${state.isSample ? " The sample rate is a placeholder, not a live rate." : ""}`);
+  note.textContent = msgs.join(" "); note.className = "note" + (c.wantUsd && c.missing.length ? " warn" : "");
+}
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
 const series = i => css(`--s${(i % 8) + 1}`);
@@ -305,9 +354,12 @@ function render() {
   document.getElementById("out").setAttribute("aria-labelledby", "tab-" + state.view);
   const out = document.getElementById("out");
   if (!state.cf) { out.innerHTML = `<div class="panel empty">Load fund cash flows, or the sample data, to build the charts.</div>`; document.getElementById("asOf").textContent = ""; return }
-  const F = fundStats(state.cf), fundColor = Object.fromEntries(F.map((f, i) => [f.name, series(i)]));
+  state.cur = currencySetup(); renderCur();
+  if (!state.cur.disp) { out.innerHTML = `<div class="panel empty">These funds report in different currencies. Enter the exchange rates above to combine them in USD.</div>`; document.getElementById("asOf").textContent = ""; return }
+  const F = fundStats(cfView()), fundColor = Object.fromEntries(F.map((f, i) => [f.name, series(i)]));
   const asOf = new Date(Math.max(...F.map(f => f.asOf)));
-  document.getElementById("asOf").textContent = "As of " + asOf.toISOString().slice(0, 10) + " · USD millions";
+  state.cur.unit = pickUnit(F);
+  document.getElementById("asOf").textContent = `As of ${asOf.toISOString().slice(0, 10)} · ${state.cur.disp}${state.cur.unit.word ? " " + state.cur.unit.word : ""}`;
   const profiles = state.inv ? companyProfiles(asOf) : [], nFlag = profiles.filter(c => c.flag).length;
   document.getElementById("flagCount").innerHTML = nFlag ? `<span class="flag-pill">${nFlag} to check</span>` : "";
   if (state.view === "companies") return renderCompanies(profiles, F, asOf);
@@ -516,7 +568,7 @@ function renderTeam(P, F, asOf) {
 
 function boardOf(v) { const t = String(v ?? "").trim().toLowerCase(); return /^(y|yes|true|1)$/.test(t) ? "Yes" : /^(n|no|false|0)$/.test(t) ? "No" : "Unknown" }
 function dealView(asOf) {
-  return state.inv.map(d => {
+  return invView().map(d => {
     const tv = d.realized + d.unrealized, tvm = tv / d.invested, end = d.exit || asOf;
     const irr = d.entry ? xirr([{ d: d.entry, a: -d.invested }, { d: end, a: tv }]) : NaN;
     const range = tvm < 1 ? "< 1.0x" : tvm < 2 ? "1.0x – 2.0x" : tvm < 3 ? "2.0x – 3.0x" : "3.0x +";
@@ -590,7 +642,7 @@ function renderGross(F, fundColor, asOf) {
 
   charts.push(new Chart(document.getElementById("cDeals"), { type: "scatter", data: { datasets: F.map(f => ({ label: f.name, backgroundColor: fundColor[f.name], borderColor: css("--panel"), borderWidth: 2, pointRadius: 6, pointHoverRadius: 8,
     data: D.filter(d => d.fund === f.name).map(d => ({ x: d.invested, y: d.tvm, d })) })) },
-    options: { scales: { x: { title: { display: true, text: "Invested ($M)" }, beginAtZero: true }, y: { title: { display: true, text: "Gross TVM" }, beginAtZero: true, ticks: { callback: v => fx(v, 1) }, grid: { color: c => c.tick.value === 1 ? css("--ink-3") : css("--rule") } } },
+    options: { scales: { x: { title: { display: true, text: `Invested (${state.cur.sym}${state.cur.unit.suffix})` }, beginAtZero: true }, y: { title: { display: true, text: "Gross TVM" }, beginAtZero: true, ticks: { callback: v => fx(v, 1) }, grid: { color: c => c.tick.value === 1 ? css("--ink-3") : css("--rule") } } },
       plugins: { legend: { position: "bottom", labels: { boxWidth: 10 } }, tooltip: { callbacks: { label: c => `${c.raw.d.company}: ${fm(c.raw.x)} → ${fx(c.raw.y)} (${c.raw.d.status})` } } } } }));
 
   document.getElementById("invTbl").innerHTML = `<table><thead><tr><th>Company</th><th>Fund</th><th>Sector</th><th>Lead</th><th>Board</th><th>Entry</th><th>Exit</th><th>Invested</th><th>Realized</th><th>Unrealized</th><th>Gross TVM</th><th>Gross IRR</th><th>Rev CAGR</th><th>EV/EBITDA in → out</th></tr></thead><tbody>
@@ -604,6 +656,7 @@ async function load(kind, file) {
   const err = document.getElementById("errors"); err.textContent = "";
   try {
     const rows = await readFile(file);
+    if (kind === "cf") state.isSample = false;
     if (kind === "bm") { if (state.bmSrc === "sample") { state.bmSrc = "custom"; document.getElementById("bmSrc").value = "custom" } state.bm = normBm(rows); bmStore.save(state.bmSrc, state.bm); renderBm() }
     else state[kind] = kind === "cf" ? normCf(rows) : kind === "team" ? normTeam(rows) : normInv(rows);
     setStatus(kind, `${file.name} · ${kind === "bm" ? Object.keys(state.bm).length + " vintages" : state[kind].length + " rows"}`, "ok");
@@ -621,10 +674,16 @@ document.getElementById("sampleBtn").addEventListener("click", () => {
   state.cf = normCf(parseCSV(SAMPLE.cf)); state.inv = normInv(parseCSV(SAMPLE.inv)); state.bmSample = normBm(parseCSV(SAMPLE.bm)); state.team = normTeam(parseCSV(SAMPLE.team)); setStatus("team", `Sample · ${state.team.length} people`, "ok"); state.bmSrc = "sample"; document.getElementById("bmSrc").value = "sample"; state.bm = state.bmSample; renderBm();
   setStatus("cf", `Sample · ${state.cf.length} rows`, "ok"); setStatus("inv", `Sample · ${state.inv.length} companies`, "ok"); 
   document.getElementById("gpTitle").textContent = "Northbrook Harbor Partners (sample)";
+  state.isSample = true; state.inUnit = 1; document.getElementById("inUnit").value = "1";
+  if (!(state.rates.EUR > 0)) state.rates.EUR = 1.10;
   render();
 });
+document.getElementById("inUnit").addEventListener("change", e => { state.inUnit = +e.target.value; render() });
+document.getElementById("curCtl").addEventListener("click", e => { const b = e.target.closest("[data-cur]"); if (b) { state.curMode = b.dataset.cur; render() } });
+document.getElementById("curCtl").addEventListener("change", e => { const c = e.target.dataset.rate; if (!c) return; const x = num(e.target.value);
+  if (x > 0) state.rates[c] = x; else delete state.rates[c]; try { localStorage.setItem("fx-rates", JSON.stringify(state.rates)) } catch {} render() });
 document.getElementById("clearBtn").addEventListener("click", () => {
-  Object.assign(state, { cf: null, inv: null, team: null }); ["cf", "inv", "team"].forEach(k => setStatus(k, "Not loaded"));
+  Object.assign(state, { cf: null, inv: null, team: null, isSample: false }); ["cf", "inv", "team"].forEach(k => setStatus(k, "Not loaded"));
   document.querySelectorAll(".drop input").forEach(i => i.value = ""); document.getElementById("gpTitle").textContent = "Track Record Analyzer"; renderBm(); render();
 });
 function hasBm(b) { return b && Object.values(b).some(v => Object.values(v).some(q => [q.top, q.median, q.bottom].some(isFinite))) }

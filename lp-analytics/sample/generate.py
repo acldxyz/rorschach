@@ -20,20 +20,20 @@ Copperleaf Security|Driftwood Learning|Elmstone Testing""".replace("\n", "").spl
 # milestones as (months after entry, text). Blank fields are deliberate: they exercise the
 # app's fallbacks (near-inception, no description, too early, check-in flag).
 P = {
- "Atlas Precision": ("Industrials", "Buyout", 1988, "Family-owned maker of aerospace fasteners in Ohio, ~$70M revenue, single plant, founder seeking succession.", [(9, "Hired first outside CEO"), (20, "Opened second plant in Texas"), (38, "Lost largest customer contract; restructured cost base")]),
+ "Atlas Precision": ("Industrials", "Buyout", 1988, "Family-owned maker of aerospace fasteners in Ohio, ~€70M revenue, single plant, founder seeking succession.", [(9, "Hired first outside CEO"), (20, "Opened second plant in Texas"), (38, "Lost largest customer contract; restructured cost base")]),
  "Brightwater Health": ("Health Care", "Growth Equity", 2009, "Regional home-health provider in five states, growing ~20% a year, founder-led with minority angel investors.", [(12, "Entered three new states"), (30, "Launched value-based care contracts with two payers"), (54, "Recapitalised; firm took partial liquidity")]),
  "Cinder Analytics": ("Information Technology", "Growth Equity", 2011, "Hospital revenue-cycle analytics software, ~200 customers, break-even, seed and Series A backed.", [(10, "Moved product to subscription pricing"), (26, "Acquired a coding-audit tool"), (48, "Crossed 600 hospital customers")]),
  "Dovetail Foods": ("Consumer Discretionary", "Buyout", 1972, "Private-label snack maker supplying grocers in the Northeast, flat sales, underinvested plants.", [(8, "New CEO from a national food brand"), (24, "Automated two packaging lines"), (47, "Won national grocery private-label contract")]),
- "Everline Insurance": ("Financials", "Carve-out", 1995, "Specialty commercial insurance brokerage unit of a larger carrier, no standalone systems.", [(12, "Completed separation from parent; new IT stack"), (30, "Five bolt-on agency acquisitions"), (60, "Reached $50M EBITDA")]),
+ "Everline Insurance": ("Financials", "Carve-out", 1995, "Specialty commercial insurance brokerage unit of a larger carrier, no standalone systems.", [(12, "Completed separation from parent; new IT stack"), (30, "Five bolt-on agency acquisitions"), (60, "Reached €50M EBITDA")]),
  "Falcon Ridge Logistics": ("Industrials", "Buyout", 2001, "Asset-light freight brokerage focused on refrigerated loads in the Southeast.", [(14, "Launched digital load-matching platform"), (30, "Added cross-border Mexico lane")]),
  "Granite Payroll": ("Business Services", "Carve-out", 2004, "Payroll processing division for small businesses, carved out of a regional bank.", [(10, "Standalone brand launched"), (28, "Migrated clients to cloud platform")]),
  "Harbor Dental Group": ("Health Care", "Buyout", 2008, "Dental service organisation with 18 practices in Florida.", [(12, "Grew to 45 practices through acquisitions"), (36, "Added orthodontics service line"), (56, "Reached 110 practices across four states")]),
  "Ironclad Controls": ("Industrials", "Buyout", 1981, "Maker of industrial flow-control valves sold through distributors, founder retiring.", [(15, "Built direct sales team for OEM accounts"), (40, "Acquired European valve maker"), (70, "Opened plant in Mexico")]),
- "Juniper Software": ("Information Technology", "Growth Equity", 2017, "", [(12, "Launched first commercial product"), (30, "Reached $10M ARR"), (52, "Growth stalled; sold to strategic buyer below cost")]),
+ "Juniper Software": ("Information Technology", "Growth Equity", 2017, "", [(12, "Launched first commercial product"), (30, "Reached €10M ARR"), (52, "Growth stalled; sold to strategic buyer below cost")]),
  "Keystone Pet Care": ("Consumer Discretionary", "Buyout", 1999, "Chain of 40 pet grooming and boarding locations in the Mid-Atlantic.", [(12, "Opened 15 new locations"), (40, "Launched membership programme")]),
  "Lumen Diagnostics": ("Health Care", "Carve-out", 1990, "Clinical lab testing unit of a diagnostics conglomerate, 12 labs.", [(18, "Standalone operation complete"), (32, "COVID testing volumes lifted revenue 3x"), (60, "Repositioned toward specialty oncology testing")]),
  "Meridian Freight": ("Industrials", "Buyout", 1994, "Less-than-truckload carrier in the Midwest, 30 terminals.", [(20, "Terminal network rationalised to 24"), (48, "Fuel costs compressed margins")]),
- "Northwind Labs": ("Health Care", "Buyout", 2006, "Contract research organisation for early-stage biotech, ~$150M revenue.", [(12, "Added preclinical imaging capability"), (36, "Won multi-year sponsor contract with top-10 pharma"), (72, "Sold to strategic acquirer")]),
+ "Northwind Labs": ("Health Care", "Buyout", 2006, "Contract research organisation for early-stage biotech, ~€150M revenue.", [(12, "Added preclinical imaging capability"), (36, "Won multi-year sponsor contract with top-10 pharma"), (72, "Sold to strategic acquirer")]),
  "Orchard Home Brands": ("Consumer Discretionary", "Buyout", 1985, "Home fragrance and candle brand sold mainly through department stores.", [(10, "Shifted mix to direct-to-consumer online"), (30, "Entered mass retail with a second brand"), (66, "Sold to consumer products company")]),
  "Pinecrest Staffing": ("Business Services", "Take-private", 1998, "Publicly listed light-industrial staffing firm trading below book value.", []),
  "Quarry Materials": ("Industrials", "Take-private", 1964, "Listed aggregates and ready-mix producer with 22 quarries in the Mountain West.", [(14, "Acquired four quarries from a competitor"), (40, "Raised prices on infrastructure-bill demand")]),
@@ -41,7 +41,7 @@ P = {
  "Summit Data": ("Information Technology", "Buyout", 2012, "", [(24, "Migrated customers to new data platform")]),
  "Tidewater Marine": ("Industrials", "Carve-out", 1979, "", []),
  "Upland Outdoors": ("Consumer Discretionary", "Buyout", 2002, "Outdoor apparel brand with 30 stores and wholesale to specialty retailers.", [(9, "Pandemic demand doubled online sales"), (30, "Opened 12 stores"), (48, "Dividend recap returned part of capital")]),
- "Vantage Payments": ("Financials", "Growth Equity", 2016, "Payments processor for independent medical practices, ~$40M revenue.", [(12, "Launched patient financing product"), (36, "Processed $5B annual volume"), (51, "Sold to a larger payments company")]),
+ "Vantage Payments": ("Financials", "Growth Equity", 2016, "Payments processor for independent medical practices, ~€40M revenue.", [(12, "Launched patient financing product"), (36, "Processed €5B annual volume"), (51, "Sold to a larger payments company")]),
  "Westbrook Fluid Systems": ("Industrials", "Growth Equity", 2010, "Designer of water-treatment skids for municipal utilities.", [(18, "Won first federal infrastructure contract")]),
  "Yardline Sports": ("Consumer Discretionary", "Buyout", 2005, "Operator of 25 youth sports facilities in Texas and Oklahoma.", [(12, "Opened six facilities"), (30, "Launched tournament events business")]),
  "Zephyr Cloud": ("Information Technology", "Take-private", 2009, "Listed cloud backup software company with slowing growth.", [(8, "Cut 15% of workforce"), (24, "Launched ransomware protection add-on")]),
@@ -179,6 +179,13 @@ for fund, vint, size in FUNDS:
     flows[(REPORT, "NAV")] = round(unreal_total - 0.2 * min(gain, unreal_total) * 0.9, 2)
     for (d, k), a in sorted(flows.items()):
         cfs.append(dict(fund=fund, vintage=vint, fund_size=size, date=d, type=k, amount=a))
+
+# Files carry full currency amounts (not millions) so the app's unit scaling is exercised.
+M = 1_000_000
+for r in cfs: r["amount"] = round(r["amount"] * M); r["fund_size"] = r["fund_size"] * M; r["currency"] = "EUR"
+for r in invs:
+    for k in ("invested", "realized", "unrealized", "revenue_entry", "revenue_exit", "ebitda_entry", "ebitda_exit", "tev_entry", "tev_exit", "net_debt_entry", "net_debt_exit"):
+        r[k] = round(r[k] * M)
 
 def write(name, rows):
     with open(name, "w", newline="") as f:
