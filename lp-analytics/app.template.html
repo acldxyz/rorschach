@@ -76,6 +76,29 @@ tr.total td { font-weight: 600; border-top: 2px solid var(--ink-3) }
 .bm th.grp { text-align: center; border-bottom: 1px solid var(--ink-3) }
 .errors { color: var(--bad); font-size: 13px; margin: 0 }
 .empty { color: var(--ink-3); padding: 24px; text-align: center }
+.tabs { display: flex; flex-wrap: wrap; gap: 4px; border-bottom: 1px solid var(--rule) }
+.tabs button { border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: none; padding: 8px 14px; color: var(--ink-2); font: 600 14px var(--display) }
+.tabs button[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--accent) }
+.tabs button:hover { color: var(--ink) }
+.flag-pill { display: inline-block; font: 600 11px var(--body); padding: 1px 7px; border-radius: 999px; background: var(--warn); color: var(--panel); margin-left: 4px }
+.cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 440px), 1fr)); gap: 16px }
+.co { background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 16px; display: grid; gap: 10px; align-content: start; min-width: 0 }
+.co.flagged { border-color: var(--warn); box-shadow: inset 3px 0 0 var(--warn) }
+.co h3 { color: var(--ink); text-transform: none; letter-spacing: .01em; font-size: 17px }
+.co .tags { color: var(--ink-3); font-size: 12px }
+.co .figs { display: flex; flex-wrap: wrap; gap: 4px 16px; font: 12px var(--mono); color: var(--ink-2); font-variant-numeric: tabular-nums }
+.co .figs b { color: var(--ink); font-weight: 500 }
+.co h4 { margin: 0; font: 600 11px var(--body); text-transform: uppercase; letter-spacing: .08em; color: var(--ink-3) }
+.co p { margin: 0; max-width: 65ch }
+.co .muted { color: var(--ink-3); font-style: italic }
+.co ol { margin: 0; padding: 0; list-style: none; display: grid; gap: 4px }
+.co li { display: grid; grid-template-columns: 5.2em 1fr; gap: 8px }
+.co li time { font: 12px/1.7 var(--mono); color: var(--ink-3) }
+.co li.derived span { color: var(--ink-2) }
+.alert { border: 1px solid var(--warn); border-radius: 4px; padding: 8px 10px; color: var(--ink); background: color-mix(in srgb, var(--warn) 12%, var(--panel)) }
+.alert b { color: var(--warn) }
+.status-chip { font: 600 11px var(--body); padding: 2px 8px; border-radius: 999px; border: 1px solid var(--rule); color: var(--ink-2); white-space: nowrap }
+.co-head { display: flex; gap: 8px; justify-content: space-between; align-items: start }
 @media (prefers-reduced-motion: reduce) { * { transition-duration: .01s !important } }
 </style>
 
@@ -99,6 +122,7 @@ tr.total td { font-weight: 600; border-top: 2px solid var(--ink-3) }
     <div class="loaders">
       <label class="drop" data-kind="cf"><b>Fund cash flows</b><span class="note">Contributions, distributions and NAV per fund. CSV or XLSX.</span><input type="file" id="fileCf" accept=".csv,.xlsx,.xls"><span class="status">Not loaded</span></label>
       <label class="drop" data-kind="inv"><b>Investments &amp; operating data</b><span class="note">One row per portfolio company. Optional; powers the gross charts.</span><input type="file" id="fileInv" accept=".csv,.xlsx,.xls"><span class="status">Not loaded</span></label>
+      <label class="drop" data-kind="team"><b>Investment team</b><span class="note">Name, title, year joined, background. Optional; powers the team bios.</span><input type="file" id="fileTeam" accept=".csv,.xlsx,.xls"><span class="status">Not loaded</span></label>
     </div>
     <div class="bm">
       <div class="panel-head">
@@ -117,12 +141,19 @@ tr.total td { font-weight: 600; border-top: 2px solid var(--ink-3) }
 investments: company, fund, sector, country, deal_type, entry_date, exit_date,
              invested, realized, unrealized,
              revenue_entry, revenue_exit, ebitda_entry, ebitda_exit,
-             tev_entry, tev_exit, net_debt_entry, net_debt_exit, ownership_entry
+             tev_entry, tev_exit, net_debt_entry, net_debt_exit, ownership_entry,
+             founded, pre_investment, milestones ("2019-06: text | 2021-03: text"), deal_lead
+team:        name, title, joined, focus, prior, education, boards
 benchmarks:  vintage, metric (TVPI|IRR|DPI), top, median, bottom</pre>
     </details>
   </section>
 
-  <div id="out" class="wrap" style="padding:0"></div>
+  <nav class="tabs" role="tablist" aria-label="Views">
+    <button type="button" role="tab" id="tab-record" data-view="record" aria-selected="true">Track record</button>
+    <button type="button" role="tab" id="tab-companies" data-view="companies" aria-selected="false">Portfolio companies <span id="flagCount"></span></button>
+    <button type="button" role="tab" id="tab-team" data-view="team" aria-selected="false">Investment team</button>
+  </nav>
+  <div id="out" class="wrap" style="padding:0;margin:0;max-width:none" role="tabpanel"></div>
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
@@ -137,7 +168,7 @@ const BM_SOURCES = {
 };
 // Figures typed or uploaded per source stay in this browser only.
 const bmStore = { load(k) { try { return JSON.parse(localStorage.getItem("bm:" + k)) || {} } catch { return {} } }, save(k, v) { try { localStorage.setItem("bm:" + k, JSON.stringify(v)) } catch {} } };
-const state = { cf: null, inv: null, bm: null, bmSrc: "sample", bmSample: null, gp: "", dim: "sector", vcScope: "all" };
+const state = { view: "record", coFund: "all", coFlagOnly: false, cf: null, inv: null, bm: null, bmSrc: "sample", bmSample: null, gp: "", dim: "sector", vcScope: "all" };
 let charts = [];
 
 // ---------- parsing ----------
@@ -183,9 +214,14 @@ function normCf(rows) {
 }
 function normInv(rows) {
   need(rows, ["company", "fund", "invested"], "Investments");
-  return rows.map(r => { const o = { ...r }; for (const k in o) if (!["company", "fund", "sector", "country", "deal_type", "entry_date", "exit_date"].includes(k)) o[k] = num(o[k]);
+  return rows.map(r => { const o = { ...r }; for (const k in o) if (!["company", "fund", "sector", "country", "deal_type", "entry_date", "exit_date", "pre_investment", "milestones", "deal_lead"].includes(k)) o[k] = num(o[k]);
     o.entry = date(r.entry_date); o.exit = date(r.exit_date); o.realized = o.realized || 0; o.unrealized = o.unrealized || 0; return o })
     .filter(r => r.company && isFinite(r.invested));
+}
+function normTeam(rows) {
+  need(rows, ["name"], "Team");
+  return rows.map(r => ({ name: String(r.name).trim(), title: String(r.title || "").trim(), joined: num(r.joined), focus: String(r.focus || "").trim(),
+    prior: String(r.prior || "").trim(), education: String(r.education || "").trim(), boards: String(r.boards || "").trim() })).filter(r => r.name);
 }
 function normBm(rows) {
   need(rows, ["vintage", "metric", "top", "median", "bottom"], "Benchmarks");
@@ -234,11 +270,17 @@ const series = i => css(`--s${(i % 8) + 1}`);
 // ---------- render ----------
 function render() {
   charts.forEach(c => c.destroy()); charts = [];
+  document.querySelectorAll(".tabs [role=tab]").forEach(b => b.setAttribute("aria-selected", String(b.dataset.view === state.view)));
+  document.getElementById("out").setAttribute("aria-labelledby", "tab-" + state.view);
   const out = document.getElementById("out");
   if (!state.cf) { out.innerHTML = `<div class="panel empty">Load fund cash flows, or the sample data, to build the charts.</div>`; document.getElementById("asOf").textContent = ""; return }
   const F = fundStats(state.cf), fundColor = Object.fromEntries(F.map((f, i) => [f.name, series(i)]));
   const asOf = new Date(Math.max(...F.map(f => f.asOf)));
   document.getElementById("asOf").textContent = "As of " + asOf.toISOString().slice(0, 10) + " · USD millions";
+  const profiles = state.inv ? companyProfiles(asOf) : [], nFlag = profiles.filter(c => c.flag).length;
+  document.getElementById("flagCount").innerHTML = nFlag ? `<span class="flag-pill">${nFlag} to check</span>` : "";
+  if (state.view === "companies") return renderCompanies(profiles, F, asOf);
+  if (state.view === "team") return renderTeam(profiles, F, asOf);
   const bm = hasBm(state.bm) ? state.bm : {}, bmOn = hasBm(state.bm);
   const q = (f, m, v) => { const r = quartile(v, bm[f.vintage]?.[m]); return r ? `<span class="pill q${r}">Q${r}</span>` : `<span class="pill na">–</span>` };
   const T = F.reduce((t, f) => ({ paid: t.paid + f.paid, dist: t.dist + f.dist, nav: t.nav + f.nav, size: t.size + (f.size || 0) }), { paid: 0, dist: 0, nav: 0, size: 0 });
@@ -309,6 +351,115 @@ function render() {
       tooltip: { callbacks: { label: c => `${c.dataset.label}: ${fm(c.raw)}` } } } } }));
 
   if (state.inv) renderGross(F, fundColor, asOf);
+}
+
+// ---------- portfolio company profiles ----------
+const monthsBetween = (a, b) => (b.getFullYear() - a.getFullYear()) * 12 + b.getMonth() - a.getMonth();
+const ym = d => d.toLocaleDateString("en-US", { month: "short", year: "numeric" });
+const span = m => m < 24 ? `${m} month${m === 1 ? "" : "s"}` : `${(m / 12).toFixed(1).replace(/\.0$/, "")} years`;
+// Firms that back a company within two years of its founding are, for LP purposes, backing the idea
+// rather than an operating track record, so the missing history is itself the story.
+const NEAR_INCEPTION_YEARS = 2, CHECK_IN_MONTHS = 12;
+function parseMilestones(txt) {
+  return String(txt || "").split(/\s*[|\n]\s*/).filter(Boolean).map(t => {
+    const m = t.match(/^(\d{4}-\d{2}(?:-\d{2})?)\s*[:\-–]\s*(.+)$/);
+    return m ? { d: date(m[1].length === 7 ? m[1] + "-01" : m[1]), text: m[2] } : { d: null, text: t };
+  });
+}
+function companyProfiles(asOf) {
+  return dealView(asOf).map(d => {
+    const entry = d.entry, held = entry ? monthsBetween(entry, d.exit || asOf) : null, sinceEntry = entry ? monthsBetween(entry, asOf) : null;
+    const pre = String(d.pre_investment || "").trim(), founded = isFinite(d.founded) ? d.founded : null;
+    const nearInception = founded && entry && entry.getFullYear() - founded <= NEAR_INCEPTION_YEARS;
+    const reported = parseMilestones(d.milestones).sort((a, b) => (a.d || 0) - (b.d || 0));
+    // Exits and partial realizations are milestones the data already proves; show them even when the GP reported nothing.
+    const derived = [];
+    if (d.status === "Realized" && d.exit) derived.push({ d: d.exit, text: `Exited at ${fx(d.tvm)} gross (${fm(d.tv)} returned on ${fm(d.invested)})` });
+    if (d.status === "Partially realized") derived.push({ d: null, text: `Partially realized: ${fm(d.realized)} returned, ${fm(d.unrealized)} still held` });
+    const flag = d.status !== "Realized" && !reported.length && sinceEntry != null && sinceEntry >= CHECK_IN_MONTHS;
+    const ops = [];
+    if (d.revenue_entry > 0 && d.revenue_exit > 0) ops.push(`Revenue ${fm(d.revenue_entry, 0)} → ${fm(d.revenue_exit, 0)}`);
+    if (d.ebitda_entry > 0 && d.ebitda_exit > 0) ops.push(`EBITDA ${fm(d.ebitda_entry, 0)} → ${fm(d.ebitda_exit, 0)}`);
+    if (isFinite(d.net_debt_entry) && isFinite(d.net_debt_exit)) ops.push(`Net debt ${fm(d.net_debt_entry, 0)} → ${fm(d.net_debt_exit, 0)}`);
+    return { ...d, held, sinceEntry, pre, founded, nearInception, reported, derived, flag, ops };
+  });
+}
+function renderCompanies(P, F, asOf) {
+  const out = document.getElementById("out");
+  if (!state.inv) { out.innerHTML = `<div class="panel empty">Load investments &amp; operating data to see a profile of each portfolio company.</div>`; return }
+  const shown = P.filter(c => (state.coFund === "all" || c.fund === state.coFund) && (!state.coFlagOnly || c.flag)).sort((a, b) => (b.flag - a.flag) || ((a.entry || 0) - (b.entry || 0)));
+  const nFlag = P.filter(c => c.flag).length;
+  const preHtml = c => {
+    const inc = c.nearInception ? `The firm invested close to inception: founded ${c.founded}, ${span(Math.max(0, monthsBetween(new Date(c.founded, 0, 1), c.entry)))} before the ${ym(c.entry)} investment.` : "";
+    if (c.pre) return `<p>${esc(c.pre)}</p>${inc ? `<p class="muted">${inc}</p>` : ""}`;
+    if (inc) return `<p>${inc} There was little operating history before the investment.</p>`;
+    return `<p class="muted">No pre-investment description provided${c.founded ? ` (founded ${c.founded})` : ""}.</p>`;
+  };
+  const sinceHtml = c => {
+    const items = [...c.reported, ...c.derived].sort((a, b) => (a.d || asOf) - (b.d || asOf));
+    let h = items.length ? `<ol>${items.map(m => `<li class="${c.derived.includes(m) ? "derived" : ""}"><time>${m.d ? ym(m.d) : "—"}</time><span>${esc(m.text)}</span></li>`).join("")}</ol>` : "";
+    if (!c.reported.length && c.status !== "Realized" && c.entry) {
+      h += c.flag
+        ? `<div class="alert"><b>Check in.</b> No milestones reported in the ${span(c.sinceEntry)} since the ${ym(c.entry)} investment (data as of ${ym(asOf)}). Ask the GP how this company is performing.</div>`
+        : `<p class="muted">No milestones yet. The firm invested in ${ym(c.entry)}, ${span(c.sinceEntry)} before the data date (${ym(asOf)}), so there may not have been enough time.</p>`;
+    }
+    if (c.ops.length) h += `<p class="tags">${c.ops.join(" · ")}${c.exit ? " (entry → exit)" : " (entry → latest)"}</p>`;
+    return h || `<p class="muted">No milestones reported.</p>`;
+  };
+  out.innerHTML = `<section class="panel"><div class="panel-head"><div><h2>Portfolio companies</h2><p class="note">${P.length} companies · ${nFlag ? `${nFlag} unrealized with no reported milestones after ${CHECK_IN_MONTHS}+ months` : "none need a check-in"}</p></div>
+    <div class="row"><label for="coFund" class="note">Fund</label><select id="coFund"><option value="all">All funds</option>${F.map(f => `<option value="${esc(f.name)}"${state.coFund === f.name ? " selected" : ""}>${esc(f.name)}</option>`).join("")}</select>
+    <label class="row note" for="coFlag"><input type="checkbox" id="coFlag"${state.coFlagOnly ? " checked" : ""}> Needs check-in only</label></div></div>
+    <p class="note">Descriptions and milestones come from the optional <code>pre_investment</code>, <code>founded</code> and <code>milestones</code> columns of the investments file. Exits come from the cash data.</p></section>
+    <div class="cards">${shown.map(c => `<article class="co${c.flag ? " flagged" : ""}">
+      <div class="co-head"><div><h3>${esc(c.company)}</h3><div class="tags">${[c.fund, c.sector, c.country, c.deal_type].filter(Boolean).map(esc).join(" · ")}</div></div><span class="status-chip">${c.status}</span></div>
+      <div class="figs"><span>Invested <b>${c.entry ? ym(c.entry) : "–"}</b></span><span>Cost <b>${fm(c.invested)}</b></span><span>Value <b>${fm(c.tv)}</b></span><span>Gross <b>${fx(c.tvm)}</b></span><span>Held <b>${c.held != null ? span(c.held) : "–"}</b></span></div>
+      <h4>Before the investment</h4>${preHtml(c)}
+      <h4>Since the investment</h4>${sinceHtml(c)}
+    </article>`).join("") || `<div class="panel empty">No companies match these filters.</div>`}</div>`;
+}
+
+// ---------- investment team ----------
+function renderTeam(P, F, asOf) {
+  const out = document.getElementById("out");
+  const leads = [...new Set(P.map(c => String(c.deal_lead || "").trim()).filter(Boolean))];
+  const roster = [...(state.team || [])];
+  leads.forEach(n => { if (!roster.some(t => t.name === n)) roster.push({ name: n, title: "", prior: "", education: "", focus: "", boards: "" }) });
+  if (!roster.length) { out.innerHTML = `<div class="panel empty">Load an investment team file, or a <code>deal_lead</code> column in the investments file, to build team bios.</div>`; return }
+  const fundShort = n => n.replace(/^.*?(Fund\s+\S+)$/i, "$1");
+  const people = roster.map(t => {
+    const D = P.filter(c => String(c.deal_lead || "").trim() === t.name);
+    const inv = D.reduce((s, c) => s + c.invested, 0), tv = D.reduce((s, c) => s + c.tv, 0);
+    const R = D.filter(c => c.status === "Realized"), rInv = R.reduce((s, c) => s + c.invested, 0), rTv = R.reduce((s, c) => s + c.tv, 0);
+    return { ...t, D, inv, tv, tvm: tv / inv, R, rTvm: rTv / rInv, losses: D.filter(c => c.tvm < 1).length, best: [...D].sort((a, b) => b.tvm - a.tvm)[0],
+      funds: [...new Set(D.map(c => fundShort(c.fund)))], flags: D.filter(c => c.flag), live: D.filter(c => c.status !== "Realized") };
+  }).sort((a, b) => b.inv - a.inv);
+  const total = people.reduce((s, p) => s + p.inv, 0);
+  const bio = p => {
+    const who = `${esc(p.name)}${p.title ? ` is ${/^[aeiou]/i.test(p.title) ? "an" : "a"} ${esc(p.title)} at the firm` : ""}${isFinite(p.joined) ? `${p.title ? "," : ""} having joined in ${p.joined}` : ""}.`;
+    const parts = [who];
+    parts.push(p.prior ? `Before joining: ${esc(p.prior)}.` : `<span class="muted">No prior experience provided.</span>`);
+    if (p.education) parts.push(`Education: ${esc(p.education)}.`);
+    if (p.boards) parts.push(`${esc(p.boards)}.`);
+    return `<p>${parts.join(" ")}</p>`;
+  };
+  const record = p => {
+    if (!p.D.length) return `<p class="muted">No investments attributed to ${esc(p.name)} in the loaded data.</p>`;
+    let t = `Led ${p.D.length} investment${p.D.length > 1 ? "s" : ""} across ${p.funds.join(", ")}, ${fm(p.inv)} invested (${fp(p.inv / total, 0)} of the team's capital), now worth ${fm(p.tv)} at ${fx(p.tvm)} gross.`;
+    t += p.R.length ? ` ${p.R.length} realized at ${fx(p.rTvm)}.` : " Nothing realized yet.";
+    t += p.losses ? ` ${p.losses} currently below cost.` : " None currently below cost.";
+    if (p.best && p.D.length > 1) t += ` Best result: ${esc(p.best.company)} at ${fx(p.best.tvm)}.`;
+    let h = `<p>${t}</p>`;
+    if (p.flags.length) h += `<div class="alert"><b>Check in.</b> ${p.flags.map(c => esc(c.company)).join(", ")} ${p.flags.length > 1 ? "have" : "has"} no reported milestones after 12+ months. Raise ${p.flags.length > 1 ? "them" : "it"} with ${esc(p.name)}.</div>`;
+    h += `<ol>${[...p.D].sort((a, b) => (a.entry || 0) - (b.entry || 0)).map(c => `<li><time>${c.entry ? c.entry.getFullYear() : "—"}</time><span>${esc(c.company)} <span class="tags">· ${fundShort(c.fund)} · ${c.status.toLowerCase()} · ${fx(c.tvm)}</span></span></li>`).join("")}</ol>`;
+    return h;
+  };
+  out.innerHTML = `<section class="panel"><div><h2>Investment team</h2><p class="note">Ordered by capital led. Backgrounds come from the team file. Each track record is calculated from the deals credited to that person in the investments file's <code>deal_lead</code> column.</p></div></section>
+    <div class="cards">${people.map(p => `<article class="co${p.flags.length ? " flagged" : ""}">
+      <div class="co-head"><div><h3>${esc(p.name)}</h3><div class="tags">${[p.title, p.focus && "Focus: " + p.focus].filter(Boolean).map(esc).join(" · ")}</div></div>${p.D.length ? `<span class="status-chip">${p.D.length} deals</span>` : ""}</div>
+      ${p.D.length ? `<div class="figs"><span>Led <b>${fm(p.inv)}</b></span><span>Value <b>${fm(p.tv)}</b></span><span>Gross <b>${fx(p.tvm)}</b></span><span>Realized <b>${p.R.length ? fx(p.rTvm) : "–"}</b></span><span>Held <b>${p.live.length}</b></span></div>` : ""}
+      <h4>Background</h4>${bio(p)}
+      <h4>Track record at the firm</h4>${record(p)}
+    </article>`).join("")}</div>`;
 }
 
 function dealView(asOf) {
@@ -382,7 +533,7 @@ async function load(kind, file) {
   try {
     const rows = await readFile(file);
     if (kind === "bm") { if (state.bmSrc === "sample") { state.bmSrc = "custom"; document.getElementById("bmSrc").value = "custom" } state.bm = normBm(rows); bmStore.save(state.bmSrc, state.bm); renderBm() }
-    else state[kind] = kind === "cf" ? normCf(rows) : normInv(rows);
+    else state[kind] = kind === "cf" ? normCf(rows) : kind === "team" ? normTeam(rows) : normInv(rows);
     setStatus(kind, `${file.name} · ${kind === "bm" ? Object.keys(state.bm).length + " vintages" : state[kind].length + " rows"}`, "ok");
     render();
   } catch (e) { err.textContent = e.message; setStatus(kind, "Could not read file", "err") }
@@ -395,13 +546,13 @@ document.querySelectorAll(".drop").forEach(el => {
   el.addEventListener("drop", e => { e.preventDefault(); el.classList.remove("over"); e.dataTransfer.files[0] && load(kind, e.dataTransfer.files[0]) });
 });
 document.getElementById("sampleBtn").addEventListener("click", () => {
-  state.cf = normCf(parseCSV(SAMPLE.cf)); state.inv = normInv(parseCSV(SAMPLE.inv)); state.bmSample = normBm(parseCSV(SAMPLE.bm)); state.bmSrc = "sample"; document.getElementById("bmSrc").value = "sample"; state.bm = state.bmSample; renderBm();
+  state.cf = normCf(parseCSV(SAMPLE.cf)); state.inv = normInv(parseCSV(SAMPLE.inv)); state.bmSample = normBm(parseCSV(SAMPLE.bm)); state.team = normTeam(parseCSV(SAMPLE.team)); setStatus("team", `Sample · ${state.team.length} people`, "ok"); state.bmSrc = "sample"; document.getElementById("bmSrc").value = "sample"; state.bm = state.bmSample; renderBm();
   setStatus("cf", `Sample · ${state.cf.length} rows`, "ok"); setStatus("inv", `Sample · ${state.inv.length} companies`, "ok"); 
   document.getElementById("gpTitle").textContent = "Northbrook Harbor Partners (sample)";
   render();
 });
 document.getElementById("clearBtn").addEventListener("click", () => {
-  Object.assign(state, { cf: null, inv: null }); ["cf", "inv"].forEach(k => setStatus(k, "Not loaded"));
+  Object.assign(state, { cf: null, inv: null, team: null }); ["cf", "inv", "team"].forEach(k => setStatus(k, "Not loaded"));
   document.querySelectorAll(".drop input").forEach(i => i.value = ""); document.getElementById("gpTitle").textContent = "Track Record Analyzer"; renderBm(); render();
 });
 function hasBm(b) { return b && Object.values(b).some(v => Object.values(v).some(q => [q.top, q.median, q.bottom].some(isFinite))) }
@@ -425,7 +576,10 @@ document.getElementById("bmGrid").addEventListener("change", e => {
   bmStore.save(state.bmSrc, b); state.bm = b; render();
 });
 document.getElementById("bmSrc").addEventListener("change", e => { state.bmSrc = e.target.value; renderBm(); render() });
-document.addEventListener("change", e => { if (e.target.id === "dimSel") { state.dim = e.target.value; render() } if (e.target.id === "vcSel") { state.vcScope = e.target.value; render() } });
+function setView(v) { state.view = v; render() }
+document.querySelectorAll(".tabs [role=tab]").forEach(b => b.addEventListener("click", () => setView(b.dataset.view)));
+if (["#companies", "#team"].includes(location.hash)) state.view = location.hash.slice(1);
+document.addEventListener("change", e => { if (e.target.id === "coFund") { state.coFund = e.target.value; render() } if (e.target.id === "coFlag") { state.coFlagOnly = e.target.checked; render() } if (e.target.id === "dimSel") { state.dim = e.target.value; render() } if (e.target.id === "vcSel") { state.vcScope = e.target.value; render() } });
 matchMedia("(prefers-color-scheme: dark)").addEventListener("change", render);
 new MutationObserver(render).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
 // Open on the sample so the first view shows what the tool does.
