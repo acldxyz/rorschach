@@ -1,0 +1,392 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Track Record Analyzer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+Condensed:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout: a working ledger. Loader strip, fund summary table, then chart panels in a two-up grid that stacks on phones. */
+:root {
+  --bg: #f5f6f3; --panel: #ffffff; --ink: #16201e; --ink-2: #4f5a57; --ink-3: #7b8582;
+  --rule: #dfe3de; --accent: #1f5f5b; --accent-soft: #e4efec;
+  --good: #2e7d32; --warn: #b26a00; --bad: #c0392b;
+  --q1: #1d4f8c; --q2: #4a86c8; --q3: #9dbfe3; --q4: #d9e6f3;
+  --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --s4: #eda100; --s5: #e87ba4; --s6: #008300; --s7: #4a3aa7; --s8: #e34948;
+  --display: "IBM Plex Sans Condensed", "Arial Narrow", system-ui, sans-serif;
+  --body: "IBM Plex Sans", system-ui, "Segoe UI", sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #111615; --panel: #192120; --ink: #eef2f0; --ink-2: #b4bebb; --ink-3: #85908c;
+  --rule: #2c3634; --accent: #6cc2b8; --accent-soft: #1f3431;
+  --good: #66bb6a; --warn: #f0a531; --bad: #ef6b5b;
+  --q1: #8fbef0; --q2: #5b93d3; --q3: #33689f; --q4: #213f5f;
+  --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; --s5: #d55181; --s6: #2f9a2f; --s7: #9085e9; --s8: #e66767;
+  color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #111615; --panel: #192120; --ink: #eef2f0; --ink-2: #b4bebb; --ink-3: #85908c;
+  --rule: #2c3634; --accent: #6cc2b8; --accent-soft: #1f3431;
+  --good: #66bb6a; --warn: #f0a531; --bad: #ef6b5b;
+  --q1: #8fbef0; --q2: #5b93d3; --q3: #33689f; --q4: #213f5f;
+  --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; --s5: #d55181; --s6: #2f9a2f; --s7: #9085e9; --s8: #e66767;
+  color-scheme: dark }
+* { box-sizing: border-box }
+body { background: var(--bg); color: var(--ink); font: 14px/1.5 var(--body); margin: 0; padding: 24px 16px 48px }
+.wrap { max-width: 1240px; margin: 0 auto; display: grid; gap: 20px }
+h1, h2, h3 { font-family: var(--display); font-weight: 600; margin: 0; text-wrap: balance; letter-spacing: .01em }
+h1 { font-size: 26px } h2 { font-size: 18px } h3 { font-size: 14px; color: var(--ink-2); text-transform: uppercase; letter-spacing: .08em }
+header { display: flex; flex-wrap: wrap; gap: 8px 24px; align-items: baseline; justify-content: space-between }
+.sub { color: var(--ink-2); margin: 2px 0 0 }
+.meta { font-family: var(--mono); font-size: 12px; color: var(--ink-3) }
+.panel { background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 16px; min-width: 0; display: grid; gap: 12px; align-content: start }
+.panel-head { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; justify-content: space-between }
+.note { color: var(--ink-3); font-size: 12px; margin: 0 }
+.loaders { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 12px }
+.drop { border: 1px dashed var(--rule); border-radius: 6px; padding: 12px; display: grid; gap: 4px; cursor: pointer; transition: border-color .15s, background .15s }
+.drop:hover, .drop.over { border-color: var(--accent); background: var(--accent-soft) }
+.drop:focus-within { outline: 2px solid var(--accent); outline-offset: 2px }
+.drop b { font-family: var(--display); font-weight: 600 }
+.drop input { position: absolute; width: 1px; height: 1px; opacity: 0 }
+.drop .status { font-family: var(--mono); font-size: 12px; color: var(--ink-3) }
+.drop .status.ok { color: var(--good) } .drop .status.err { color: var(--bad) }
+.row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center }
+button, select { font: 500 13px var(--body); color: var(--ink); background: var(--panel); border: 1px solid var(--rule); border-radius: 4px; padding: 6px 12px; cursor: pointer }
+button.primary { background: var(--accent); color: var(--panel); border-color: var(--accent) }
+button:hover, select:hover { border-color: var(--accent) }
+button:focus-visible, select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px }
+details summary { cursor: pointer; color: var(--accent); font-weight: 500 }
+details pre { font: 12px/1.5 var(--mono); background: var(--bg); padding: 10px; border-radius: 4px; overflow-x: auto; margin: 8px 0 0 }
+.tbl { overflow-x: auto }
+table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums }
+th, td { padding: 6px 10px; text-align: right; border-bottom: 1px solid var(--rule); white-space: nowrap }
+th { font: 600 11px var(--body); text-transform: uppercase; letter-spacing: .06em; color: var(--ink-3) }
+th:first-child, td:first-child { text-align: left }
+td { font-family: var(--mono); font-size: 13px } td:first-child { font-family: var(--body); font-weight: 500 }
+tr.total td { font-weight: 600; border-top: 2px solid var(--ink-3) }
+.pill { display: inline-block; min-width: 34px; text-align: center; font: 600 11px var(--body); padding: 2px 6px; border-radius: 999px }
+.pill.q1 { background: var(--q1); color: var(--panel) } .pill.q2 { background: var(--q2); color: var(--panel) }
+.pill.q3 { background: var(--q3); color: var(--ink) } .pill.q4 { background: var(--q4); color: var(--ink) }
+.pill.na { color: var(--ink-3) }
+.grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 520px), 1fr)); gap: 20px }
+.grid3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); gap: 16px }
+.chart { position: relative; height: 280px; min-width: 0 } .chart.tall { height: 340px }
+.errors { color: var(--bad); font-size: 13px; margin: 0 }
+.empty { color: var(--ink-3); padding: 24px; text-align: center }
+@media (prefers-reduced-motion: reduce) { * { transition-duration: .01s !important } }
+</style>
+
+<div class="wrap">
+  <header>
+    <div>
+      <h1 id="gpTitle">Track Record Analyzer</h1>
+      <p class="sub">Load a GP's fund cash flows and portfolio operating data to build net and gross track-record charts.</p>
+    </div>
+    <div class="meta" id="asOf"></div>
+  </header>
+
+  <section class="panel" aria-labelledby="loadH">
+    <div class="panel-head">
+      <h2 id="loadH">Data</h2>
+      <div class="row">
+        <button class="primary" id="sampleBtn" type="button">Load sample data</button>
+        <button id="clearBtn" type="button">Clear</button>
+      </div>
+    </div>
+    <div class="loaders">
+      <label class="drop" data-kind="cf"><b>Fund cash flows</b><span class="note">Contributions, distributions and NAV per fund. CSV or XLSX.</span><input type="file" id="fileCf" accept=".csv,.xlsx,.xls"><span class="status">Not loaded</span></label>
+      <label class="drop" data-kind="inv"><b>Investments &amp; operating data</b><span class="note">One row per portfolio company. Optional; powers the gross charts.</span><input type="file" id="fileInv" accept=".csv,.xlsx,.xls"><span class="status">Not loaded</span></label>
+      <label class="drop" data-kind="bm"><b>Benchmark quartiles</b><span class="note">Top, median and bottom quartile by vintage. Optional.</span><input type="file" id="fileBm" accept=".csv,.xlsx,.xls"><span class="status">Not loaded</span></label>
+    </div>
+    <p class="errors" id="errors" role="alert"></p>
+    <details>
+      <summary>File formats</summary>
+      <p class="note">Headers are case-insensitive. Amounts in millions. Contributions negative, distributions positive, NAV is the reported value at a date (the latest NAV per fund is used).</p>
+<pre>cash_flows:  fund, vintage, fund_size, date, type (Contribution|Distribution|NAV), amount
+investments: company, fund, sector, country, deal_type, entry_date, exit_date,
+             invested, realized, unrealized,
+             revenue_entry, revenue_exit, ebitda_entry, ebitda_exit,
+             tev_entry, tev_exit, net_debt_entry, net_debt_exit, ownership_entry
+benchmarks:  vintage, metric (TVPI|IRR|DPI), top, median, bottom</pre>
+    </details>
+  </section>
+
+  <div id="out" class="wrap" style="padding:0"></div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script>
+const SAMPLE = {"cf": "fund,vintage,fund_size,date,type,amount\nNorthbrook Harbor Fund I,2014,600,2014-03-31,Contribution,-56.3\nNorthbrook Harbor Fund I,2014,600,2014-06-30,Contribution,-3.0\nNorthbrook Harbor Fund I,2014,600,2014-09-30,Contribution,-47.7\nNorthbrook Harbor Fund I,2014,600,2014-12-31,Contribution,-72.5\nNorthbrook Harbor Fund I,2014,600,2015-03-31,Contribution,-3.0\nNorthbrook Harbor Fund I,2014,600,2015-06-30,Contribution,-3.0\nNorthbrook Harbor Fund I,2014,600,2015-09-30,Contribution,-43.8\nNorthbrook Harbor Fund I,2014,600,2015-12-31,Contribution,-66.8\nNorthbrook Harbor Fund I,2014,600,2016-03-31,Contribution,-58.4\nNorthbrook Harbor Fund I,2014,600,2016-06-30,Contribution,-3.0\nNorthbrook Harbor Fund I,2014,600,2016-09-30,Contribution,-43.1\nNorthbrook Harbor Fund I,2014,600,2016-12-31,Contribution,-3.0\nNorthbrook Harbor Fund I,2014,600,2017-03-31,Contribution,-65.4\nNorthbrook Harbor Fund I,2014,600,2017-06-30,Contribution,-3.0\nNorthbrook Harbor Fund I,2014,600,2017-09-30,Contribution,-42.1\nNorthbrook Harbor Fund I,2014,600,2017-12-31,Contribution,-3.0\nNorthbrook Harbor Fund I,2014,600,2018-03-31,Contribution,-61.8\nNorthbrook Harbor Fund I,2014,600,2018-06-30,Contribution,-3.0\nNorthbrook Harbor Fund I,2014,600,2018-09-30,Contribution,-3.0\nNorthbrook Harbor Fund I,2014,600,2018-12-31,Contribution,-3.0\nNorthbrook Harbor Fund I,2014,600,2018-12-31,Distribution,21.6\nNorthbrook Harbor Fund I,2014,600,2019-03-31,Contribution,-3.0\nNorthbrook Harbor Fund I,2014,600,2019-06-30,Contribution,-1.92\nNorthbrook Harbor Fund I,2014,600,2019-09-30,Contribution,-1.86\nNorthbrook Harbor Fund I,2014,600,2019-09-30,Distribution,107.8\nNorthbrook Harbor Fund I,2014,600,2019-12-31,Contribution,-1.79\nNorthbrook Harbor Fund I,2014,600,2019-12-31,Distribution,109.9\nNorthbrook Harbor Fund I,2014,600,2020-03-31,Contribution,-1.73\nNorthbrook Harbor Fund I,2014,600,2020-06-30,Contribution,-1.67\nNorthbrook Harbor Fund I,2014,600,2020-09-30,Contribution,-1.61\nNorthbrook Harbor Fund I,2014,600,2020-12-31,Contribution,-1.55\nNorthbrook Harbor Fund I,2014,600,2021-03-31,Contribution,-1.48\nNorthbrook Harbor Fund I,2014,600,2021-06-30,Contribution,-1.42\nNorthbrook Harbor Fund I,2014,600,2021-06-30,Distribution,67.7\nNorthbrook Harbor Fund I,2014,600,2021-09-30,Contribution,-1.36\nNorthbrook Harbor Fund I,2014,600,2021-09-30,Distribution,104.1\nNorthbrook Harbor Fund I,2014,600,2021-12-31,Contribution,-1.3\nNorthbrook Harbor Fund I,2014,600,2021-12-31,Distribution,145.3\nNorthbrook Harbor Fund I,2014,600,2022-03-31,Contribution,-1.24\nNorthbrook Harbor Fund I,2014,600,2022-06-30,Contribution,-1.18\nNorthbrook Harbor Fund I,2014,600,2022-09-30,Contribution,-1.11\nNorthbrook Harbor Fund I,2014,600,2022-09-30,Distribution,164.42\nNorthbrook Harbor Fund I,2014,600,2022-12-31,Contribution,-1.05\nNorthbrook Harbor Fund I,2014,600,2023-03-31,Contribution,-0.99\nNorthbrook Harbor Fund I,2014,600,2023-06-30,Contribution,-0.93\nNorthbrook Harbor Fund I,2014,600,2023-06-30,Distribution,213.84\nNorthbrook Harbor Fund I,2014,600,2023-09-30,Contribution,-0.87\nNorthbrook Harbor Fund I,2014,600,2023-12-31,Contribution,-0.8\nNorthbrook Harbor Fund I,2014,600,2023-12-31,Distribution,18.72\nNorthbrook Harbor Fund I,2014,600,2024-03-31,Contribution,-0.74\nNorthbrook Harbor Fund I,2014,600,2024-06-30,Contribution,-0.68\nNorthbrook Harbor Fund I,2014,600,2024-06-30,Distribution,162.64\nNorthbrook Harbor Fund I,2014,600,2025-12-31,NAV,0.0\nNorthbrook Harbor Fund II,2017,900,2017-03-31,Contribution,-4.5\nNorthbrook Harbor Fund II,2017,900,2017-06-30,Contribution,-59.3\nNorthbrook Harbor Fund II,2017,900,2017-09-30,Contribution,-76.1\nNorthbrook Harbor Fund II,2017,900,2017-12-31,Contribution,-54.4\nNorthbrook Harbor Fund II,2017,900,2018-03-31,Contribution,-4.5\nNorthbrook Harbor Fund II,2017,900,2018-06-30,Contribution,-109.0\nNorthbrook Harbor Fund II,2017,900,2018-09-30,Contribution,-4.5\nNorthbrook Harbor Fund II,2017,900,2018-12-31,Contribution,-92.2\nNorthbrook Harbor Fund II,2017,900,2019-03-31,Contribution,-62.3\nNorthbrook Harbor Fund II,2017,900,2019-06-30,Contribution,-69.0\nNorthbrook Harbor Fund II,2017,900,2019-09-30,Contribution,-4.5\nNorthbrook Harbor Fund II,2017,900,2019-12-31,Contribution,-75.1\nNorthbrook Harbor Fund II,2017,900,2020-03-31,Contribution,-76.2\nNorthbrook Harbor Fund II,2017,900,2020-06-30,Contribution,-4.5\nNorthbrook Harbor Fund II,2017,900,2020-09-30,Contribution,-60.6\nNorthbrook Harbor Fund II,2017,900,2020-12-31,Contribution,-107.3\nNorthbrook Harbor Fund II,2017,900,2021-03-31,Contribution,-4.5\nNorthbrook Harbor Fund II,2017,900,2021-06-30,Contribution,-4.5\nNorthbrook Harbor Fund II,2017,900,2021-09-30,Contribution,-4.5\nNorthbrook Harbor Fund II,2017,900,2021-12-31,Contribution,-4.5\nNorthbrook Harbor Fund II,2017,900,2022-03-31,Contribution,-4.5\nNorthbrook Harbor Fund II,2017,900,2022-06-30,Contribution,-2.88\nNorthbrook Harbor Fund II,2017,900,2022-09-30,Contribution,-2.78\nNorthbrook Harbor Fund II,2017,900,2022-12-31,Contribution,-2.69\nNorthbrook Harbor Fund II,2017,900,2023-03-31,Contribution,-2.6\nNorthbrook Harbor Fund II,2017,900,2023-06-30,Contribution,-2.51\nNorthbrook Harbor Fund II,2017,900,2023-06-30,Distribution,165.5\nNorthbrook Harbor Fund II,2017,900,2023-09-30,Contribution,-2.41\nNorthbrook Harbor Fund II,2017,900,2023-12-31,Contribution,-2.32\nNorthbrook Harbor Fund II,2017,900,2024-03-31,Contribution,-2.23\nNorthbrook Harbor Fund II,2017,900,2024-06-30,Contribution,-2.13\nNorthbrook Harbor Fund II,2017,900,2024-09-30,Contribution,-2.04\nNorthbrook Harbor Fund II,2017,900,2024-09-30,Distribution,81.7\nNorthbrook Harbor Fund II,2017,900,2024-12-31,Contribution,-1.95\nNorthbrook Harbor Fund II,2017,900,2025-03-31,Contribution,-1.86\nNorthbrook Harbor Fund II,2017,900,2025-03-31,Distribution,275.8\nNorthbrook Harbor Fund II,2017,900,2025-06-30,Contribution,-1.76\nNorthbrook Harbor Fund II,2017,900,2025-06-30,Distribution,126.9\nNorthbrook Harbor Fund II,2017,900,2025-09-30,Contribution,-1.67\nNorthbrook Harbor Fund II,2017,900,2025-09-30,Distribution,1001.77\nNorthbrook Harbor Fund II,2017,900,2025-12-31,Contribution,-1.58\nNorthbrook Harbor Fund II,2017,900,2025-12-31,NAV,662.15\nNorthbrook Harbor Fund III,2021,1400,2021-03-31,Contribution,-7.0\nNorthbrook Harbor Fund III,2021,1400,2021-06-30,Contribution,-112.2\nNorthbrook Harbor Fund III,2021,1400,2021-09-30,Contribution,-7.0\nNorthbrook Harbor Fund III,2021,1400,2021-12-31,Contribution,-150.9\nNorthbrook Harbor Fund III,2021,1400,2022-03-31,Contribution,-106.3\nNorthbrook Harbor Fund III,2021,1400,2022-06-30,Contribution,-7.0\nNorthbrook Harbor Fund III,2021,1400,2022-09-30,Contribution,-126.6\nNorthbrook Harbor Fund III,2021,1400,2022-12-31,Contribution,-7.0\nNorthbrook Harbor Fund III,2021,1400,2023-03-31,Contribution,-106.4\nNorthbrook Harbor Fund III,2021,1400,2023-06-30,Contribution,-178.4\nNorthbrook Harbor Fund III,2021,1400,2023-09-30,Contribution,-7.0\nNorthbrook Harbor Fund III,2021,1400,2023-12-31,Contribution,-192.2\nNorthbrook Harbor Fund III,2021,1400,2024-03-31,Contribution,-7.0\nNorthbrook Harbor Fund III,2021,1400,2024-06-30,Contribution,-7.0\nNorthbrook Harbor Fund III,2021,1400,2024-09-30,Contribution,-315.0\nNorthbrook Harbor Fund III,2021,1400,2024-12-31,Contribution,-7.0\nNorthbrook Harbor Fund III,2021,1400,2025-03-31,Contribution,-7.0\nNorthbrook Harbor Fund III,2021,1400,2025-06-30,Contribution,-7.0\nNorthbrook Harbor Fund III,2021,1400,2025-09-30,Contribution,-7.0\nNorthbrook Harbor Fund III,2021,1400,2025-09-30,Distribution,222.8\nNorthbrook Harbor Fund III,2021,1400,2025-12-31,Contribution,-7.0\nNorthbrook Harbor Fund III,2021,1400,2025-12-31,NAV,1600.61\n", "inv": "company,fund,sector,country,deal_type,entry_date,exit_date,invested,realized,unrealized,revenue_entry,revenue_exit,ebitda_entry,ebitda_exit,tev_entry,tev_exit,net_debt_entry,net_debt_exit,ownership_entry,ownership_exit\nAtlas Precision,Northbrook Harbor Fund I,Industrials,United States,Buyout,2014-03-31,2018-12-31,53.3,21.6,0.0,69.6,97.0,14.6,16.2,193.9,114.8,102.0,77.5,0.58,0.58\nBrightwater Health,Northbrook Harbor Fund I,Financials,United States,Growth Equity,2014-09-30,2019-09-30,44.7,107.8,0.0,63.1,89.4,10.7,17.0,134.4,218.6,58.6,35.8,0.59,0.59\nCinder Analytics,Northbrook Harbor Fund I,Health Care,United States,Growth Equity,2014-12-31,2021-09-30,69.5,104.1,0.0,149.9,178.2,36.6,39.5,396.6,357.1,231.9,110.3,0.422,0.422\nDovetail Foods,Northbrook Harbor Fund I,Consumer Discretionary,United Kingdom,Buyout,2015-09-30,2021-12-31,40.8,145.3,0.0,102.5,129.3,17.0,25.8,228.1,512.3,96.6,44.1,0.31,0.31\nEverline Insurance,Northbrook Harbor Fund I,Information Technology,Germany,Carve-out,2015-12-31,2023-06-30,63.8,267.3,0.0,177.1,297.8,30.1,50.7,361.0,903.4,187.3,175.7,0.367,0.367\nFalcon Ridge Logistics,Northbrook Harbor Fund I,Health Care,United States,Buyout,2016-03-31,2019-12-31,55.4,109.9,0.0,165.5,229.0,41.6,46.7,413.0,561.1,197.1,132.7,0.257,0.257\nGranite Payroll,Northbrook Harbor Fund I,Consumer Discretionary,United States,Carve-out,2016-09-30,2021-06-30,40.1,67.7,0.0,66.0,81.1,12.0,15.6,154.9,215.1,64.5,62.4,0.443,0.443\nHarbor Dental Group,Northbrook Harbor Fund I,Industrials,United States,Buyout,2017-03-31,2022-09-30,62.4,191.6,0.0,91.8,121.2,13.6,19.8,131.4,254.6,58.7,31.3,0.858,0.858\nIronclad Controls,Northbrook Harbor Fund I,Business Services,United Kingdom,Buyout,2017-09-30,2024-06-30,39.1,203.3,0.0,55.8,109.7,14.4,28.3,190.4,561.3,101.1,97.0,0.438,0.438\nJuniper Software,Northbrook Harbor Fund I,Financials,United States,Growth Equity,2018-03-31,2023-12-31,58.8,23.4,0.0,112.9,96.5,17.0,16.1,228.1,93.4,111.3,46.9,0.504,0.504\nKeystone Pet Care,Northbrook Harbor Fund II,Financials,Canada,Buyout,2017-06-30,2023-06-30,54.8,165.5,0.0,80.0,138.1,19.2,34.1,234.2,414.0,116.1,57.3,0.464,0.464\nLumen Diagnostics,Northbrook Harbor Fund II,Financials,Canada,Carve-out,2017-09-30,2025-03-31,71.6,275.8,0.0,168.8,453.1,22.7,56.0,289.1,626.3,145.6,73.7,0.499,0.499\nMeridian Freight,Northbrook Harbor Fund II,Information Technology,Germany,Buyout,2017-12-31,2024-09-30,49.9,81.7,0.0,133.4,157.2,31.8,30.1,306.4,306.0,154.3,57.0,0.328,0.328\nNorthwind Labs,Northbrook Harbor Fund II,Health Care,Canada,Buyout,2018-06-30,2025-09-30,104.5,653.5,0.0,209.5,253.4,56.5,61.9,760.0,2172.5,449.2,228.5,0.336,0.336\nOrchard Home Brands,Northbrook Harbor Fund II,Health Care,Germany,Buyout,2018-12-31,2025-09-30,87.7,531.6,0.0,180.9,321.1,40.6,88.1,507.5,1983.6,211.6,189.9,0.296,0.296\nPinecrest Staffing,Northbrook Harbor Fund II,Financials,Germany,Take-private,2019-03-31,,57.8,0.0,99.1,144.5,129.0,28.0,32.7,342.7,395.3,142.9,52.8,0.289,0.289\nQuarry Materials,Northbrook Harbor Fund II,Health Care,United Kingdom,Take-private,2019-06-30,,64.5,0.0,327.7,118.1,299.7,24.5,68.7,224.7,746.6,90.5,65.0,0.481,0.481\nRedwood Clinics,Northbrook Harbor Fund II,Consumer Discretionary,United Kingdom,Take-private,2019-12-31,,70.6,20.8,62.3,148.4,301.2,35.9,59.9,364.1,371.3,185.3,160.8,0.395,0.395\nSummit Data,Northbrook Harbor Fund II,Financials,United States,Buyout,2020-03-31,,71.7,16.4,49.2,142.8,131.8,21.3,20.0,181.6,160.4,101.7,87.2,0.897,0.897\nTidewater Marine,Northbrook Harbor Fund II,Information Technology,United States,Carve-out,2020-09-30,,56.1,8.7,26.1,86.6,68.3,11.0,12.0,98.7,52.3,39.6,15.6,0.95,0.95\nUpland Outdoors,Northbrook Harbor Fund II,Consumer Discretionary,United States,Buyout,2020-12-31,,102.8,81.0,243.1,297.6,304.4,69.0,74.1,889.0,1682.0,523.1,528.5,0.281,0.281\nVantage Payments,Northbrook Harbor Fund III,Health Care,United Kingdom,Growth Equity,2021-06-30,2025-09-30,105.2,222.8,0.0,309.5,384.4,48.0,82.3,636.8,986.6,305.4,284.9,0.317,0.317\nWestbrook Fluid Systems,Northbrook Harbor Fund III,Financials,United States,Growth Equity,2021-12-31,,143.9,0.0,271.4,255.2,301.4,60.1,56.5,516.8,630.5,264.0,153.7,0.569,0.569\nYardline Sports,Northbrook Harbor Fund III,Business Services,United States,Buyout,2022-03-31,,99.3,0.0,151.3,137.9,141.4,22.4,17.9,194.9,217.6,90.4,58.3,0.95,0.95\nZephyr Cloud,Northbrook Harbor Fund III,Business Services,United States,Take-private,2022-09-30,,119.6,0.0,276.2,294.3,333.6,39.5,30.8,347.4,558.9,186.8,188.0,0.745,0.745\nAlder Specialty Chem,Northbrook Harbor Fund III,Health Care,United States,Growth Equity,2023-03-31,,99.4,0.0,383.9,131.2,156.5,33.9,48.5,364.6,841.0,170.6,91.7,0.512,0.512\nBeacon Vet,Northbrook Harbor Fund III,Information Technology,Canada,Take-private,2023-06-30,,171.4,0.0,154.1,261.6,257.2,70.4,69.0,819.8,704.5,415.0,340.5,0.423,0.423\nCopperleaf Security,Northbrook Harbor Fund III,Consumer Discretionary,Germany,Growth Equity,2023-12-31,,185.2,0.0,108.5,466.6,613.2,97.1,104.2,917.6,690.8,454.2,419.3,0.4,0.4\nDriftwood Learning,Northbrook Harbor Fund III,Industrials,United States,Buyout,2024-09-30,,198.8,0.0,231.3,590.1,652.4,103.2,110.5,1306.3,1116.6,707.1,419.5,0.332,0.332\nElmstone Testing,Northbrook Harbor Fund III,Industrials,Germany,Buyout,2024-09-30,,109.2,0.0,123.0,141.9,169.7,32.1,41.1,334.3,327.7,167.6,139.9,0.655,0.655\n", "bm": "vintage,metric,top,median,bottom\n2014,TVPI,2.35,1.85,1.45\n2014,IRR,0.21,0.145,0.09\n2014,DPI,1.95,1.4,0.95\n2017,TVPI,2.2,1.7,1.35\n2017,IRR,0.24,0.16,0.1\n2017,DPI,1.2,0.7,0.35\n2021,TVPI,1.45,1.18,1.0\n2021,IRR,0.17,0.09,0.01\n2021,DPI,0.25,0.07,0.0\n"};
+const state = { cf: null, inv: null, bm: null, gp: "", dim: "sector", vcScope: "all" };
+let charts = [];
+
+// ---------- parsing ----------
+function parseCSV(text) {
+  const rows = []; let row = [], f = "", q = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (q) { if (c === '"') { if (text[i + 1] === '"') { f += '"'; i++ } else q = false } else f += c }
+    else if (c === '"') q = true;
+    else if (c === ",") { row.push(f); f = "" }
+    else if (c === "\n" || c === "\r") { if (c === "\r" && text[i + 1] === "\n") i++; row.push(f); rows.push(row); row = []; f = "" }
+    else f += c;
+  }
+  if (f || row.length) { row.push(f); rows.push(row) }
+  return toObjects(rows.filter(r => r.some(x => x.trim() !== "")));
+}
+function toObjects(rows) {
+  const h = rows[0].map(k => String(k).trim().toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, ""));
+  return rows.slice(1).map(r => Object.fromEntries(h.map((k, i) => [k, r[i] ?? ""])));
+}
+const num = v => { if (v === "" || v == null) return NaN; const n = typeof v === "number" ? v : parseFloat(String(v).replace(/[$,\s]/g, "").replace(/^\((.*)\)$/, "-$1")); return n };
+function date(v) {
+  if (v instanceof Date) return v;
+  if (typeof v === "number") return new Date(Math.round((v - 25569) * 864e5));
+  if (!v) return null; const d = new Date(String(v).trim() + (/^\d{4}-\d\d-\d\d$/.test(String(v).trim()) ? "T00:00:00" : ""));
+  return isNaN(d) ? null : d;
+}
+async function readFile(file) {
+  if (/\.xlsx?$/i.test(file.name)) {
+    const wb = XLSX.read(await file.arrayBuffer(), { cellDates: true });
+    return toObjects(XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, raw: true, defval: "" }));
+  }
+  return parseCSV(await file.text());
+}
+function need(rows, cols, label) {
+  const miss = cols.filter(c => !(c in (rows[0] || {})));
+  if (miss.length) throw new Error(`${label}: missing column${miss.length > 1 ? "s" : ""} ${miss.join(", ")}.`);
+}
+function normCf(rows) {
+  need(rows, ["fund", "date", "type", "amount"], "Cash flows");
+  return rows.map(r => ({ fund: r.fund.trim(), vintage: num(r.vintage), size: num(r.fund_size), date: date(r.date), type: String(r.type).trim().toLowerCase(), amount: num(r.amount) }))
+    .filter(r => r.fund && r.date && isFinite(r.amount));
+}
+function normInv(rows) {
+  need(rows, ["company", "fund", "invested"], "Investments");
+  return rows.map(r => { const o = { ...r }; for (const k in o) if (!["company", "fund", "sector", "country", "deal_type", "entry_date", "exit_date"].includes(k)) o[k] = num(o[k]);
+    o.entry = date(r.entry_date); o.exit = date(r.exit_date); o.realized = o.realized || 0; o.unrealized = o.unrealized || 0; return o })
+    .filter(r => r.company && isFinite(r.invested));
+}
+function normBm(rows) {
+  need(rows, ["vintage", "metric", "top", "median", "bottom"], "Benchmarks");
+  const m = {}; rows.forEach(r => { (m[num(r.vintage)] ??= {})[String(r.metric).trim().toUpperCase()] = { top: num(r.top), median: num(r.median), bottom: num(r.bottom) } }); return m;
+}
+
+// ---------- math ----------
+function xirr(flows) {
+  if (!flows.some(f => f.a > 0) || !flows.some(f => f.a < 0)) return NaN;
+  const t0 = flows[0].d, yrs = flows.map(f => (f.d - t0) / 31557600000);
+  const npv = r => flows.reduce((s, f, i) => s + f.a / Math.pow(1 + r, yrs[i]), 0);
+  // Scan for the first sign change above -90%, then bisect. Late fee calls after the last
+  // distribution make NPV non-monotonic near -100%, so a single wide bracket can miss the root.
+  const grid = [-0.9, -0.75, -0.5, -0.3, -0.15, 0, 0.05, 0.1, 0.2, 0.35, 0.5, 0.75, 1, 2, 5, 10];
+  let lo, hi, flo;
+  for (let i = 0; i < grid.length - 1; i++) { const a = npv(grid[i]), b = npv(grid[i + 1]); if (a * b <= 0) { lo = grid[i]; hi = grid[i + 1]; flo = a; break } }
+  if (lo === undefined) return NaN;
+  for (let i = 0; i < 200; i++) { const mid = (lo + hi) / 2, fm = npv(mid); if (Math.abs(fm) < 1e-9) return mid; if (fm * flo < 0) hi = mid; else { lo = mid; flo = fm } }
+  return (lo + hi) / 2;
+}
+function fundStats(cf) {
+  const funds = [...new Set(cf.map(r => r.fund))];
+  return funds.map(name => {
+    const rows = cf.filter(r => r.fund === name).sort((a, b) => a.date - b.date);
+    const navs = rows.filter(r => r.type === "nav"), nav = navs.length ? navs[navs.length - 1] : null;
+    const moves = rows.filter(r => r.type !== "nav");
+    const paid = -moves.filter(r => r.amount < 0).reduce((s, r) => s + r.amount, 0);
+    const dist = moves.filter(r => r.amount > 0).reduce((s, r) => s + r.amount, 0);
+    const navV = nav ? nav.amount : 0, asOf = nav ? nav.date : rows[rows.length - 1].date;
+    const flows = moves.map(r => ({ d: r.date, a: r.amount })); if (navV) flows.push({ d: asOf, a: navV });
+    flows.sort((a, b) => a.d - b.d);
+    const vintage = rows.find(r => isFinite(r.vintage))?.vintage ?? rows[0].date.getFullYear();
+    return { name, vintage, size: rows.find(r => isFinite(r.size))?.size, paid, dist, nav: navV, asOf, tvpi: (dist + navV) / paid, dpi: dist / paid, rvpi: navV / paid, irr: xirr(flows), rows: moves };
+  }).sort((a, b) => a.vintage - b.vintage);
+}
+function quartile(v, b) { if (!b || !isFinite(v)) return null; return v >= b.top ? 1 : v >= b.median ? 2 : v >= b.bottom ? 3 : 4 }
+
+// ---------- formatting ----------
+const fx = (v, d = 2) => isFinite(v) ? v.toFixed(d) + "x" : "–";
+const fp = (v, d = 1) => isFinite(v) ? (v * 100).toFixed(d) + "%" : "–";
+const fm = (v, d = 1) => isFinite(v) ? "$" + v.toLocaleString(undefined, { minimumFractionDigits: d, maximumFractionDigits: d }) : "–";
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const series = i => css(`--s${(i % 8) + 1}`);
+
+// ---------- render ----------
+function render() {
+  charts.forEach(c => c.destroy()); charts = [];
+  const out = document.getElementById("out");
+  if (!state.cf) { out.innerHTML = `<div class="panel empty">Load fund cash flows, or the sample data, to build the charts.</div>`; document.getElementById("asOf").textContent = ""; return }
+  const F = fundStats(state.cf), fundColor = Object.fromEntries(F.map((f, i) => [f.name, series(i)]));
+  const asOf = new Date(Math.max(...F.map(f => f.asOf)));
+  document.getElementById("asOf").textContent = "As of " + asOf.toISOString().slice(0, 10) + " · USD millions";
+  const bm = state.bm || {};
+  const q = (f, m, v) => { const r = quartile(v, bm[f.vintage]?.[m]); return r ? `<span class="pill q${r}">Q${r}</span>` : `<span class="pill na">–</span>` };
+  const T = F.reduce((t, f) => ({ paid: t.paid + f.paid, dist: t.dist + f.dist, nav: t.nav + f.nav, size: t.size + (f.size || 0) }), { paid: 0, dist: 0, nav: 0, size: 0 });
+  const allFlows = F.flatMap(f => f.rows.map(r => ({ d: r.date, a: r.amount })).concat(f.nav ? [{ d: f.asOf, a: f.nav }] : [])).sort((a, b) => a.d - b.d);
+
+  let html = `<section class="panel"><div class="panel-head"><h2>Net performance summary</h2><p class="note">Quartile pills rank each fund against its vintage benchmark (TVPI · IRR · DPI).</p></div>
+  <div class="tbl"><table><thead><tr><th>Fund</th><th>Vintage</th><th>Size</th><th>Paid-in</th><th>Distributed</th><th>NAV</th><th>TVPI</th><th>DPI</th><th>RVPI</th><th>Net IRR</th><th>Quartile</th></tr></thead><tbody>
+  ${F.map(f => `<tr><td>${esc(f.name)}</td><td>${f.vintage}</td><td>${fm(f.size, 0)}</td><td>${fm(f.paid)}</td><td>${fm(f.dist)}</td><td>${fm(f.nav)}</td><td>${fx(f.tvpi)}</td><td>${fx(f.dpi)}</td><td>${fx(f.rvpi)}</td><td>${fp(f.irr)}</td><td>${q(f, "TVPI", f.tvpi)} ${q(f, "IRR", f.irr)} ${q(f, "DPI", f.dpi)}</td></tr>`).join("")}
+  <tr class="total"><td>Total / pooled</td><td></td><td>${fm(T.size, 0)}</td><td>${fm(T.paid)}</td><td>${fm(T.dist)}</td><td>${fm(T.nav)}</td><td>${fx((T.dist + T.nav) / T.paid)}</td><td>${fx(T.dist / T.paid)}</td><td>${fx(T.nav / T.paid)}</td><td>${fp(xirr(allFlows))}</td><td></td></tr>
+  </tbody></table></div></section>`;
+
+  html += `<section class="panel"><div class="panel-head"><h2>Net relative performance</h2><p class="note">${state.bm ? "Bands show benchmark quartiles for each fund's vintage; the marker is the fund." : "Load benchmark quartiles to draw the bands."}</p></div>
+    <div class="grid3"><div><h3>Net TVPI</h3><div class="chart"><canvas id="cTvpi"></canvas></div></div><div><h3>Net IRR</h3><div class="chart"><canvas id="cIrr"></canvas></div></div><div><h3>DPI</h3><div class="chart"><canvas id="cDpi"></canvas></div></div></div></section>`;
+
+  html += `<div class="grid2"><section class="panel"><h2>J-curve</h2><p class="note">Cumulative net cash flow to LPs, by quarter since each fund's first call.</p><div class="chart tall"><canvas id="cJ"></canvas></div></section>
+    <section class="panel"><h2>Annual cash flows</h2><p class="note">Capital called (below zero) and distributed (above), all funds.</p><div class="chart tall"><canvas id="cAnnual"></canvas></div></section></div>`;
+
+  if (state.inv) {
+    html += `<section class="panel"><div class="panel-head"><h2>Portfolio slices</h2><div class="row"><label for="dimSel" class="note">Slice by</label><select id="dimSel">
+      ${[["sector", "Sector"], ["country", "Country"], ["deal_type", "Deal type"], ["status", "Status"], ["entry_year", "Entry year"], ["tvm_range", "Gross TVM range"]].map(([k, l]) => `<option value="${k}"${state.dim === k ? " selected" : ""}>${l}</option>`).join("")}</select></div></div>
+      <div class="grid3"><div><h3>Invested capital mix by fund</h3><div class="chart"><canvas id="cMix"></canvas></div></div><div><h3>Gross TVM</h3><div class="chart"><canvas id="cSliceTvm"></canvas></div></div><div><h3>Number of investments</h3><div class="chart"><canvas id="cCount"></canvas></div></div></div>
+      <div class="tbl" id="sliceTbl"></div></section>`;
+    html += `<div class="grid2"><section class="panel"><div class="panel-head"><h2>Value creation bridge</h2><select id="vcSel" aria-label="Deals included">
+      <option value="all">All deals</option><option value="realized">Realized deals</option>${F.map(f => `<option value="${esc(f.name)}">${esc(f.name)}</option>`).join("")}</select></div>
+      <p class="note">Equity gain attributed to EBITDA growth, multiple change and net debt change, at the fund's ownership. Deals without operating data fall into Other.</p><div class="chart tall"><canvas id="cVc"></canvas></div></section>
+      <section class="panel"><h2>Deal outcomes</h2><p class="note">Gross TVM against capital invested; hover a point for the company.</p><div class="chart tall"><canvas id="cDeals"></canvas></div></section></div>
+      <section class="panel"><h2>Investments</h2><div class="tbl" id="invTbl"></div></section>`;
+  } else html += `<div class="panel empty">Load investments &amp; operating data to add portfolio slices, the value creation bridge and deal outcomes.</div>`;
+  out.innerHTML = html;
+  document.getElementById("vcSel") && (document.getElementById("vcSel").value = state.vcScope);
+
+  Chart.defaults.font.family = css("--body"); Chart.defaults.color = css("--ink-2"); Chart.defaults.borderColor = css("--rule");
+  Chart.defaults.plugins.tooltip.backgroundColor = css("--ink"); Chart.defaults.plugins.tooltip.titleColor = css("--bg"); Chart.defaults.plugins.tooltip.bodyColor = css("--bg");
+  Chart.defaults.maintainAspectRatio = false; Chart.defaults.animation = matchMedia("(prefers-reduced-motion: reduce)").matches ? false : { duration: 350 };
+
+  // Relative performance: quartile bands as overlaid floating bars, fund as a marker.
+  [["cTvpi", "TVPI", "tvpi", fx], ["cIrr", "IRR", "irr", fp], ["cDpi", "DPI", "dpi", fx]].forEach(([id, m, k, f]) => {
+    const labels = F.map(x => [x.name.replace(/^.*?(Fund\s+\S+)$/i, "$1"), `(${x.vintage})`]);
+    const B = F.map(x => bm[x.vintage]?.[m]);
+    const lo = Math.min(0, ...F.map(x => x[k]).filter(isFinite), ...B.filter(Boolean).map(b => b.bottom)) ;
+    const hiV = Math.max(...F.map(x => x[k]).filter(isFinite), ...B.filter(Boolean).map(b => b.top));
+    const floor = m === "IRR" ? Math.min(lo, -0.05) : 0, ceil = hiV * (m === "IRR" ? 1.35 : 1.25);
+    const band = (name, col, fn) => ({ type: "bar", label: name, data: B.map(b => b ? fn(b) : null), backgroundColor: css(col), borderColor: css("--panel"), borderWidth: 1, barPercentage: .7, categoryPercentage: .8, order: 2 });
+    const ds = state.bm ? [band("1st quartile", "--q1", b => [b.top, ceil]), band("2nd quartile", "--q2", b => [b.median, b.top]), band("3rd quartile", "--q3", b => [b.bottom, b.median]), band("4th quartile", "--q4", b => [floor, b.bottom])] : [];
+    ds.push({ type: "line", label: "Fund", data: F.map(x => x[k]), showLine: false, pointStyle: "rectRot", pointRadius: 8, pointHoverRadius: 10, backgroundColor: css("--accent"), borderColor: css("--panel"), borderWidth: 2, order: 1 });
+    charts.push(new Chart(document.getElementById(id), { data: { labels, datasets: ds }, options: {
+      scales: { x: { stacked: true, grid: { display: false } }, y: { stacked: false, min: floor, max: ceil, ticks: { callback: v => f(v, m === "IRR" ? 0 : 1) }, grid: { color: css("--rule") } } },
+      plugins: { legend: { position: "bottom", labels: { boxWidth: 10, font: { size: 11 } } }, tooltip: { callbacks: { label: c => Array.isArray(c.raw) ? `${c.dataset.label}: ${f(c.raw[0])} – ${f(c.raw[1])}` : `Fund ${m}: ${f(c.raw)}` } } } } }));
+  });
+
+  // J-curve by quarter index so funds of different vintages overlay.
+  const jDs = F.map(f => { let c = 0; const t0 = f.rows[0].date, byQ = {};
+    f.rows.forEach(r => { const qi = Math.round((r.date - t0) / (91.3 * 864e5)); byQ[qi] = (byQ[qi] || 0) + r.amount });
+    const maxQ = Math.max(...Object.keys(byQ).map(Number)); const pts = [];
+    for (let i = 0; i <= maxQ; i++) { c += byQ[i] || 0; pts.push({ x: i / 4, y: c }) }
+    return { label: f.name, data: pts, borderColor: fundColor[f.name], backgroundColor: fundColor[f.name], borderWidth: 2, pointRadius: 0, pointHoverRadius: 4, tension: 0 } });
+  charts.push(new Chart(document.getElementById("cJ"), { type: "line", data: { datasets: jDs }, options: { interaction: { mode: "nearest", intersect: false },
+    scales: { x: { type: "linear", title: { display: true, text: "Years since first call" }, grid: { display: false } }, y: { ticks: { callback: v => fm(v, 0) }, grid: { color: c => c.tick.value === 0 ? css("--ink-3") : css("--rule") } } },
+    plugins: { legend: { position: "bottom", labels: { boxWidth: 10 } }, tooltip: { callbacks: { title: c => `Year ${c[0].raw.x.toFixed(2)}`, label: c => `${c.dataset.label}: ${fm(c.raw.y)}` } } } } }));
+
+  const years = [...new Set(F.flatMap(f => f.rows.map(r => r.date.getFullYear())))].sort();
+  const annual = [];
+  F.forEach(f => ["Called", "Distributed"].forEach(kind => annual.push({ label: `${f.name} · ${kind}`, stack: kind, backgroundColor: fundColor[f.name], borderColor: css("--panel"), borderWidth: 1, borderRadius: 2,
+    data: years.map(y => f.rows.filter(r => r.date.getFullYear() === y && (kind === "Called" ? r.amount < 0 : r.amount > 0)).reduce((s, r) => s + r.amount, 0)) })));
+  charts.push(new Chart(document.getElementById("cAnnual"), { type: "bar", data: { labels: years, datasets: annual }, options: {
+    scales: { x: { stacked: true, grid: { display: false } }, y: { stacked: true, ticks: { callback: v => fm(v, 0) }, grid: { color: c => c.tick.value === 0 ? css("--ink-3") : css("--rule") } } },
+    plugins: { legend: { position: "bottom", labels: { boxWidth: 10, filter: i => i.text.endsWith("Called"), generateLabels: ch => Chart.defaults.plugins.legend.labels.generateLabels(ch).filter(l => l.text.endsWith("Called")).map(l => ({ ...l, text: l.text.replace(" · Called", "") })) } },
+      tooltip: { callbacks: { label: c => `${c.dataset.label}: ${fm(c.raw)}` } } } } }));
+
+  if (state.inv) renderGross(F, fundColor, asOf);
+}
+
+function dealView(asOf) {
+  return state.inv.map(d => {
+    const tv = d.realized + d.unrealized, tvm = tv / d.invested, end = d.exit || asOf;
+    const irr = d.entry ? xirr([{ d: d.entry, a: -d.invested }, { d: end, a: tv }]) : NaN;
+    const range = tvm < 1 ? "< 1.0x" : tvm < 2 ? "1.0x – 2.0x" : tvm < 3 ? "2.0x – 3.0x" : "3.0x +";
+    return { ...d, tv, tvm, irr, loss: Math.max(0, d.invested - tv), status: d.unrealized > 0 ? (d.realized > 0 ? "Partially realized" : "Unrealized") : "Realized",
+      entry_year: d.entry ? String(d.entry.getFullYear()) : "Unknown", tvm_range: range };
+  });
+}
+
+function renderGross(F, fundColor, asOf) {
+  const D = dealView(asOf), dim = state.dim;
+  const order = dim === "tvm_range" ? ["< 1.0x", "1.0x – 2.0x", "2.0x – 3.0x", "3.0x +"] : null;
+  const cats = order ? order.filter(c => D.some(d => d[dim] === c)) :
+    [...new Set(D.map(d => d[dim] || "Unspecified"))].sort((a, b) => dim === "entry_year" ? a.localeCompare(b) : D.filter(d => d[dim] === b).reduce((s, d) => s + d.invested, 0) - D.filter(d => d[dim] === a).reduce((s, d) => s + d.invested, 0));
+  // Categories keep one colour for the whole slice view; beyond eight they fold into Other.
+  const shown = cats.slice(0, cats.length > 8 ? 7 : 8), catOf = d => shown.includes(d[dim] || "Unspecified") ? (d[dim] || "Unspecified") : "Other";
+  const C = cats.length > 8 ? [...shown, "Other"] : shown;
+  const agg = rows => { const inv = rows.reduce((s, d) => s + d.invested, 0), tv = rows.reduce((s, d) => s + d.tv, 0);
+    const fl = rows.filter(d => d.entry).flatMap(d => [{ d: d.entry, a: -d.invested }, { d: d.exit || asOf, a: d.tv }]).sort((a, b) => a.d - b.d);
+    return { n: rows.length, inv, real: rows.reduce((s, d) => s + d.realized, 0), unr: rows.reduce((s, d) => s + d.unrealized, 0), tv, loss: rows.reduce((s, d) => s + d.loss, 0), tvm: tv / inv, irr: xirr(fl) } };
+
+  charts.push(new Chart(document.getElementById("cMix"), { type: "bar", data: { labels: F.map(f => f.name.replace(/^.*?(Fund\s+\S+)$/i, "$1")),
+    datasets: C.map((c, i) => ({ label: c, backgroundColor: series(i), borderColor: css("--panel"), borderWidth: 1,
+      data: F.map(f => { const all = D.filter(d => d.fund === f.name), s = all.reduce((t, d) => t + d.invested, 0); return s ? all.filter(d => catOf(d) === c).reduce((t, d) => t + d.invested, 0) / s : 0 }) })) },
+    options: { indexAxis: "y", scales: { x: { stacked: true, max: 1, ticks: { callback: v => fp(v, 0) } }, y: { stacked: true, grid: { display: false } } },
+      plugins: { legend: { position: "bottom", labels: { boxWidth: 10, font: { size: 11 } } }, tooltip: { callbacks: { label: c => `${c.dataset.label}: ${fp(c.raw)}` } } } } }));
+  const byCat = C.map(c => agg(D.filter(d => catOf(d) === c)));
+  const catBar = (id, key, f) => charts.push(new Chart(document.getElementById(id), { type: "bar", data: { labels: C, datasets: [{ data: byCat.map(a => a[key]), backgroundColor: C.map((_, i) => series(i)), borderRadius: 4, borderSkipped: "start" }] },
+    options: { scales: { x: { grid: { display: false }, ticks: { autoSkip: false, maxRotation: 45, font: { size: 11 } } }, y: { beginAtZero: true, ticks: { callback: v => f(v), precision: 0 } } }, plugins: { legend: { display: false }, tooltip: { callbacks: { label: c => f(c.raw) } } } } }));
+  catBar("cSliceTvm", "tvm", v => fx(v, 1)); catBar("cCount", "n", v => String(v));
+  const tot = agg(D);
+  document.getElementById("sliceTbl").innerHTML = `<table><thead><tr><th>${esc(document.querySelector(`#dimSel option[value="${dim}"]`).textContent)}</th><th>Deals</th><th>Invested</th><th>Realized</th><th>Unrealized</th><th>Total value</th><th>Losses</th><th>Gross TVM</th><th>Gross IRR</th><th>Loss ratio</th><th>% of invested</th></tr></thead><tbody>
+    ${C.map((c, i) => [c, byCat[i]]).concat([["Total", tot]]).map(([c, a]) => `<tr${c === "Total" ? ' class="total"' : ""}><td>${esc(c)}</td><td>${a.n}</td><td>${fm(a.inv)}</td><td>${fm(a.real)}</td><td>${fm(a.unr)}</td><td>${fm(a.tv)}</td><td>${fm(a.loss)}</td><td>${fx(a.tvm)}</td><td>${fp(a.irr)}</td><td>${fp(a.loss / a.inv)}</td><td>${fp(a.inv / tot.inv)}</td></tr>`).join("")}</tbody></table>`;
+
+  // Value creation: per deal at 100%, EBITDA effect at entry multiple, multiple effect on exit EBITDA, debt paydown; scaled by ownership.
+  const sc = state.vcScope, V = D.filter(d => sc === "all" ? true : sc === "realized" ? d.status === "Realized" : d.fund === sc);
+  let e = 0, m = 0, n = 0, inv = 0, tv = 0;
+  V.forEach(d => { inv += d.invested; tv += d.tv;
+    const ok = [d.ebitda_entry, d.ebitda_exit, d.tev_entry, d.tev_exit, d.net_debt_entry, d.net_debt_exit].every(isFinite) && d.ebitda_entry > 0 && d.ebitda_exit > 0;
+    if (!ok) return; const own = isFinite(d.ownership_entry) && d.ownership_entry > 0 ? d.ownership_entry : d.invested / (d.tev_entry - d.net_debt_entry);
+    const m0 = d.tev_entry / d.ebitda_entry, m1 = d.tev_exit / d.ebitda_exit;
+    e += own * (d.ebitda_exit - d.ebitda_entry) * m0; m += own * (m1 - m0) * d.ebitda_exit; n += -own * (d.net_debt_exit - d.net_debt_entry) });
+  const other = tv - inv - e - m - n, steps = [["EBITDA growth", e], ["Multiple change", m], ["Net debt change", n]];
+  if (Math.abs(other) > 0.005 * Math.max(inv, 1)) steps.push(["Other", other]);
+  let run = inv; const bars = [{ l: "Invested", r: [0, inv], k: "end" }];
+  steps.forEach(([l, v]) => { bars.push({ l, r: [run, run + v], k: v >= 0 ? "up" : "down", v }); run += v });
+  bars.push({ l: sc === "realized" ? "Exit value" : "Total value", r: [0, tv], k: "end" });
+  const gain = tv - inv;
+  charts.push(new Chart(document.getElementById("cVc"), { type: "bar", data: { labels: bars.map(b => b.l), datasets: [{ data: bars.map(b => b.r),
+    backgroundColor: bars.map(b => b.k === "end" ? css("--ink-3") : b.k === "up" ? css("--good") : css("--bad")), borderRadius: 3, borderSkipped: false }] },
+    options: { scales: { x: { grid: { display: false }, ticks: { autoSkip: false, font: { size: 11 } } }, y: { beginAtZero: true, ticks: { callback: v => fm(v, 0) } } },
+      plugins: { legend: { display: false }, tooltip: { callbacks: { label: c => { const b = bars[c.dataIndex]; return b.k === "end" ? fm(b.r[1]) : `${fm(b.v)} (${fp(b.v / gain, 0)} of value created)` } } } } } }));
+
+  charts.push(new Chart(document.getElementById("cDeals"), { type: "scatter", data: { datasets: F.map(f => ({ label: f.name, backgroundColor: fundColor[f.name], borderColor: css("--panel"), borderWidth: 2, pointRadius: 6, pointHoverRadius: 8,
+    data: D.filter(d => d.fund === f.name).map(d => ({ x: d.invested, y: d.tvm, d })) })) },
+    options: { scales: { x: { title: { display: true, text: "Invested ($M)" }, beginAtZero: true }, y: { title: { display: true, text: "Gross TVM" }, beginAtZero: true, ticks: { callback: v => fx(v, 1) }, grid: { color: c => c.tick.value === 1 ? css("--ink-3") : css("--rule") } } },
+      plugins: { legend: { position: "bottom", labels: { boxWidth: 10 } }, tooltip: { callbacks: { label: c => `${c.raw.d.company}: ${fm(c.raw.x)} → ${fx(c.raw.y)} (${c.raw.d.status})` } } } } }));
+
+  document.getElementById("invTbl").innerHTML = `<table><thead><tr><th>Company</th><th>Fund</th><th>Sector</th><th>Entry</th><th>Exit</th><th>Invested</th><th>Realized</th><th>Unrealized</th><th>Gross TVM</th><th>Gross IRR</th><th>Rev CAGR</th><th>EV/EBITDA in → out</th></tr></thead><tbody>
+    ${D.sort((a, b) => (a.entry || 0) - (b.entry || 0)).map(d => { const yrs = ((d.exit || asOf) - d.entry) / 31557600000, cagr = Math.pow(d.revenue_exit / d.revenue_entry, 1 / yrs) - 1;
+      return `<tr><td>${esc(d.company)}</td><td style="font-family:var(--body)">${esc(d.fund)}</td><td style="font-family:var(--body)">${esc(d.sector || "")}</td><td>${d.entry ? d.entry.toISOString().slice(0, 10) : "–"}</td><td>${d.exit ? d.exit.toISOString().slice(0, 10) : "–"}</td><td>${fm(d.invested)}</td><td>${fm(d.realized)}</td><td>${fm(d.unrealized)}</td><td>${fx(d.tvm)}</td><td>${fp(d.irr)}</td><td>${fp(cagr)}</td><td>${fx(d.tev_entry / d.ebitda_entry, 1)} → ${fx(d.tev_exit / d.ebitda_exit, 1)}</td></tr>` }).join("")}</tbody></table>`;
+}
+
+// ---------- wiring ----------
+function setStatus(kind, text, cls) { const s = document.querySelector(`.drop[data-kind="${kind}"] .status`); s.textContent = text; s.className = "status " + (cls || "") }
+async function load(kind, file) {
+  const err = document.getElementById("errors"); err.textContent = "";
+  try {
+    const rows = await readFile(file);
+    state[kind] = kind === "cf" ? normCf(rows) : kind === "inv" ? normInv(rows) : normBm(rows);
+    setStatus(kind, `${file.name} · ${kind === "bm" ? Object.keys(state.bm).length + " vintages" : state[kind].length + " rows"}`, "ok");
+    render();
+  } catch (e) { err.textContent = e.message; setStatus(kind, "Could not read file", "err") }
+}
+document.querySelectorAll(".drop").forEach(el => {
+  const kind = el.dataset.kind, input = el.querySelector("input");
+  input.addEventListener("change", () => input.files[0] && load(kind, input.files[0]));
+  el.addEventListener("dragover", e => { e.preventDefault(); el.classList.add("over") });
+  el.addEventListener("dragleave", () => el.classList.remove("over"));
+  el.addEventListener("drop", e => { e.preventDefault(); el.classList.remove("over"); e.dataTransfer.files[0] && load(kind, e.dataTransfer.files[0]) });
+});
+document.getElementById("sampleBtn").addEventListener("click", () => {
+  state.cf = normCf(parseCSV(SAMPLE.cf)); state.inv = normInv(parseCSV(SAMPLE.inv)); state.bm = normBm(parseCSV(SAMPLE.bm));
+  setStatus("cf", `Sample · ${state.cf.length} rows`, "ok"); setStatus("inv", `Sample · ${state.inv.length} companies`, "ok"); setStatus("bm", "Sample · illustrative quartiles", "ok");
+  document.getElementById("gpTitle").textContent = "Northbrook Harbor Partners (sample)";
+  render();
+});
+document.getElementById("clearBtn").addEventListener("click", () => {
+  Object.assign(state, { cf: null, inv: null, bm: null }); ["cf", "inv", "bm"].forEach(k => setStatus(k, "Not loaded"));
+  document.querySelectorAll(".drop input").forEach(i => i.value = ""); document.getElementById("gpTitle").textContent = "Track Record Analyzer"; render();
+});
+document.addEventListener("change", e => { if (e.target.id === "dimSel") { state.dim = e.target.value; render() } if (e.target.id === "vcSel") { state.vcScope = e.target.value; render() } });
+matchMedia("(prefers-color-scheme: dark)").addEventListener("change", render);
+new MutationObserver(render).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+// Open on the sample so the first view shows what the tool does.
+document.getElementById("sampleBtn").click();
+</script>
+
+</html>
