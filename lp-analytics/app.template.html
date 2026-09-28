@@ -64,6 +64,9 @@ tr.total td { font-weight: 600; border-top: 2px solid var(--ink-3) }
 .pill.q1 { background: var(--q1); color: var(--panel) } .pill.q2 { background: var(--q2); color: var(--panel) }
 .pill.q3 { background: var(--q3); color: var(--ink) } .pill.q4 { background: var(--q4); color: var(--ink) }
 .pill.na { color: var(--ink-3) }
+/* Grid children default to min-width:auto, which lets a wide table inside push the page sideways. */
+.panel { grid-template-columns: minmax(0, 1fr) }
+.grid2 > *, .grid3 > * { min-width: 0 }
 .grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 520px), 1fr)); gap: 20px }
 .grid3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); gap: 16px }
 .chart { position: relative; height: 280px; min-width: 0 } .chart.tall { height: 340px }
@@ -152,7 +155,8 @@ investments: company, fund, sector, country, deal_type, entry_date, exit_date,
              invested, realized, unrealized,
              revenue_entry, revenue_exit, ebitda_entry, ebitda_exit,
              tev_entry, tev_exit, net_debt_entry, net_debt_exit, ownership_entry,
-             founded, pre_investment, milestones ("2019-06: text | 2021-03: text"), deal_lead
+             founded, pre_investment, milestones ("2019-06: text | 2021-03: text"), deal_lead,
+             board_seat (Yes|No)
 team:        name, title, level (optional), joined, focus, prior, education, boards
              one row per person at the firm; background fields are only needed for partners
 benchmarks:  vintage, metric (TVPI|IRR|DPI), top, median, bottom</pre>
@@ -225,7 +229,7 @@ function normCf(rows) {
 }
 function normInv(rows) {
   need(rows, ["company", "fund", "invested"], "Investments");
-  return rows.map(r => { const o = { ...r }; for (const k in o) if (!["company", "fund", "sector", "country", "deal_type", "entry_date", "exit_date", "pre_investment", "milestones", "deal_lead"].includes(k)) o[k] = num(o[k]);
+  return rows.map(r => { const o = { ...r }; for (const k in o) if (!["company", "fund", "sector", "country", "deal_type", "entry_date", "exit_date", "pre_investment", "milestones", "deal_lead", "board_seat"].includes(k)) o[k] = num(o[k]);
     o.entry = date(r.entry_date); o.exit = date(r.exit_date); o.realized = o.realized || 0; o.unrealized = o.unrealized || 0; return o })
     .filter(r => r.company && isFinite(r.invested));
 }
@@ -327,13 +331,17 @@ function render() {
 
   if (state.inv) {
     html += `<section class="panel"><div class="panel-head"><h2>Portfolio slices</h2><div class="row"><label for="dimSel" class="note">Slice by</label><select id="dimSel">
-      ${[["sector", "Sector"], ["country", "Country"], ["deal_type", "Deal type"], ["status", "Status"], ["entry_year", "Entry year"], ["tvm_range", "Gross TVM range"]].map(([k, l]) => `<option value="${k}"${state.dim === k ? " selected" : ""}>${l}</option>`).join("")}</select></div></div>
+      ${[["sector", "Sector"], ["country", "Country"], ["deal_type", "Deal type"], ["status", "Status"], ["entry_year", "Entry year"], ["tvm_range", "Gross TVM range"], ["deal_lead", "Deal lead"], ["board", "Board seat"]].map(([k, l]) => `<option value="${k}"${state.dim === k ? " selected" : ""}>${l}</option>`).join("")}</select></div></div>
       <div class="grid3"><div><h3>Invested capital mix by fund</h3><div class="chart"><canvas id="cMix"></canvas></div></div><div><h3>Gross TVM</h3><div class="chart"><canvas id="cSliceTvm"></canvas></div></div><div><h3>Number of investments</h3><div class="chart"><canvas id="cCount"></canvas></div></div></div>
       <div class="tbl" id="sliceTbl"></div></section>`;
     html += `<div class="grid2"><section class="panel"><div class="panel-head"><h2>Value creation bridge</h2><select id="vcSel" aria-label="Deals included">
       <option value="all">All deals</option><option value="realized">Realized deals</option>${F.map(f => `<option value="${esc(f.name)}">${esc(f.name)}</option>`).join("")}</select></div>
       <p class="note">Equity gain attributed to EBITDA growth, multiple change and net debt change, at the fund's ownership. Deals without operating data fall into Other.</p><div class="chart tall"><canvas id="cVc"></canvas></div></section>
       <section class="panel"><h2>Deal outcomes</h2><p class="note">Gross TVM against capital invested; hover a point for the company.</p><div class="chart tall"><canvas id="cDeals"></canvas></div></section></div>
+      <section class="panel"><div class="panel-head"><h2>Performance by partner</h2><p class="note">Gross performance of the deals each person led, from the investments file's <code>deal_lead</code> and <code>board_seat</code> columns.</p></div>
+        <div class="tbl" id="leadTbl"></div>
+        <div class="grid2"><div><h3>Gross TVM by deal lead, with and without a board seat</h3><div class="chart"><canvas id="cLeadBoard"></canvas></div></div>
+        <div><h3>Board seat</h3><div class="tbl" id="boardTbl"></div><p class="note" id="boardNote"></p></div></div></section>
       <section class="panel"><h2>Investments</h2><div class="tbl" id="invTbl"></div></section>`;
   } else html += `<div class="panel empty">Load investments &amp; operating data to add portfolio slices, the value creation bridge and deal outcomes.</div>`;
   out.innerHTML = html;
@@ -438,7 +446,7 @@ function renderCompanies(P, F, asOf) {
     <label class="row note" for="coFlag"><input type="checkbox" id="coFlag"${state.coFlagOnly ? " checked" : ""}> Needs check-in only</label></div></div>
     <p class="note">Descriptions and milestones come from the optional <code>pre_investment</code>, <code>founded</code> and <code>milestones</code> columns of the investments file. Exits come from the cash data.</p></section>
     <div class="cards">${shown.map(c => `<article class="co${c.flag ? " flagged" : ""}">
-      <div class="co-head"><div><h3>${esc(c.company)}</h3><div class="tags">${[c.fund, c.sector, c.country, c.deal_type].filter(Boolean).map(esc).join(" · ")}</div></div><span class="status-chip">${c.status}</span></div>
+      <div class="co-head"><div><h3>${esc(c.company)}</h3><div class="tags">${[c.fund, c.sector, c.country, c.deal_type, c.board !== "Unknown" && (c.board === "Yes" ? "Board seat" : "No board seat")].filter(Boolean).map(esc).join(" · ")}</div></div><span class="status-chip">${c.status}</span></div>
       <div class="figs"><span>Invested <b>${c.entry ? ym(c.entry) : "–"}</b></span><span>Cost <b>${fm(c.invested)}</b></span><span>Value <b>${fm(c.tv)}</b></span><span>Gross <b>${fx(c.tvm)}</b></span><span>Held <b>${c.held != null ? span(c.held) : "–"}</b></span></div>
       <h4>Before the investment</h4>${preHtml(c)}
       <h4>Since the investment</h4>${sinceHtml(c)}
@@ -506,13 +514,15 @@ function renderTeam(P, F, asOf) {
     </article>`).join("")}</div>`;
 }
 
+function boardOf(v) { const t = String(v ?? "").trim().toLowerCase(); return /^(y|yes|true|1)$/.test(t) ? "Yes" : /^(n|no|false|0)$/.test(t) ? "No" : "Unknown" }
 function dealView(asOf) {
   return state.inv.map(d => {
     const tv = d.realized + d.unrealized, tvm = tv / d.invested, end = d.exit || asOf;
     const irr = d.entry ? xirr([{ d: d.entry, a: -d.invested }, { d: end, a: tv }]) : NaN;
     const range = tvm < 1 ? "< 1.0x" : tvm < 2 ? "1.0x – 2.0x" : tvm < 3 ? "2.0x – 3.0x" : "3.0x +";
     return { ...d, tv, tvm, irr, loss: Math.max(0, d.invested - tv), status: d.unrealized > 0 ? (d.realized > 0 ? "Partially realized" : "Unrealized") : "Realized",
-      entry_year: d.entry ? String(d.entry.getFullYear()) : "Unknown", tvm_range: range };
+      entry_year: d.entry ? String(d.entry.getFullYear()) : "Unknown", tvm_range: range,
+      deal_lead: String(d.deal_lead || "").trim() || "Unspecified", board: boardOf(d.board_seat) };
   });
 }
 
@@ -541,6 +551,24 @@ function renderGross(F, fundColor, asOf) {
   document.getElementById("sliceTbl").innerHTML = `<table><thead><tr><th>${esc(document.querySelector(`#dimSel option[value="${dim}"]`).textContent)}</th><th>Deals</th><th>Invested</th><th>Realized</th><th>Unrealized</th><th>Total value</th><th>Losses</th><th>Gross TVM</th><th>Gross IRR</th><th>Loss ratio</th><th>% of invested</th></tr></thead><tbody>
     ${C.map((c, i) => [c, byCat[i]]).concat([["Total", tot]]).map(([c, a]) => `<tr${c === "Total" ? ' class="total"' : ""}><td>${esc(c)}</td><td>${a.n}</td><td>${fm(a.inv)}</td><td>${fm(a.real)}</td><td>${fm(a.unr)}</td><td>${fm(a.tv)}</td><td>${fm(a.loss)}</td><td>${fx(a.tvm)}</td><td>${fp(a.irr)}</td><td>${fp(a.loss / a.inv)}</td><td>${fp(a.inv / tot.inv)}</td></tr>`).join("")}</tbody></table>`;
 
+  // Performance by partner. Everyone who led a deal is listed; titles come from the staff file when loaded.
+  const titleOf = n => (state.team || []).find(t => t.name === n)?.title || "";
+  const leads = [...new Set(D.map(d => d.deal_lead))].map(n => ({ n, a: agg(D.filter(d => d.deal_lead === n)), R: agg(D.filter(d => d.deal_lead === n && d.status === "Realized")),
+    seats: D.filter(d => d.deal_lead === n && d.board === "Yes").length })).sort((a, b) => b.a.inv - a.a.inv);
+  document.getElementById("leadTbl").innerHTML = `<table><thead><tr><th>Deal lead</th><th>Deals</th><th>Board seats</th><th>Invested</th><th>Realized</th><th>Unrealized</th><th>Total value</th><th>Gross TVM</th><th>Gross IRR</th><th>Realized TVM</th><th>Loss ratio</th><th>% of invested</th></tr></thead><tbody>
+    ${leads.map(({ n, a, R, seats }) => `<tr><td>${esc(n)}${titleOf(n) ? ` <span class="tags">· ${esc(titleOf(n))}</span>` : ""}</td><td>${a.n}</td><td>${seats} of ${a.n}</td><td>${fm(a.inv)}</td><td>${fm(a.real)}</td><td>${fm(a.unr)}</td><td>${fm(a.tv)}</td><td>${fx(a.tvm)}</td><td>${fp(a.irr)}</td><td>${R.n ? fx(R.tvm) : "–"}</td><td>${fp(a.loss / a.inv)}</td><td>${fp(a.inv / tot.inv)}</td></tr>`).join("")}
+    <tr class="total"><td>Total</td><td>${tot.n}</td><td>${D.filter(d => d.board === "Yes").length} of ${tot.n}</td><td>${fm(tot.inv)}</td><td>${fm(tot.real)}</td><td>${fm(tot.unr)}</td><td>${fm(tot.tv)}</td><td>${fx(tot.tvm)}</td><td>${fp(tot.irr)}</td><td>${fx(agg(D.filter(d => d.status === "Realized")).tvm)}</td><td>${fp(tot.loss / tot.inv)}</td><td>100.0%</td></tr></tbody></table>`;
+  const seatGroups = ["Yes", "No", "Unknown"].map(k => [k, D.filter(d => d.board === k)]).filter(([, g]) => g.length);
+  document.getElementById("boardTbl").innerHTML = `<table><thead><tr><th>Board seat</th><th>Deals</th><th>Invested</th><th>Gross TVM</th><th>Gross IRR</th><th>Loss ratio</th></tr></thead><tbody>
+    ${seatGroups.map(([k, g]) => { const a = agg(g); return `<tr><td>${k}</td><td>${a.n}</td><td>${fm(a.inv)}</td><td>${fx(a.tvm)}</td><td>${fp(a.irr)}</td><td>${fp(a.loss / a.inv)}</td></tr>` }).join("")}</tbody></table>`;
+  document.getElementById("boardNote").textContent = seatGroups.some(([k]) => k === "Unknown") ? "Deals without a Yes/No in the board_seat column are counted as Unknown." : "";
+  const boardSet = (k, col) => ({ label: k === "Yes" ? "Board seat" : "No board seat", backgroundColor: css(col), borderRadius: 4, borderSkipped: "start",
+    data: leads.map(l => { const g = D.filter(d => d.deal_lead === l.n && d.board === k); return g.length ? agg(g).tvm : null }),
+    counts: leads.map(l => D.filter(d => d.deal_lead === l.n && d.board === k).length) });
+  charts.push(new Chart(document.getElementById("cLeadBoard"), { type: "bar", data: { labels: leads.map(l => l.n), datasets: [boardSet("Yes", "--q1"), boardSet("No", "--q3")] },
+    options: { scales: { x: { grid: { display: false }, ticks: { autoSkip: false, font: { size: 11 } } }, y: { beginAtZero: true, ticks: { callback: v => fx(v, 1) }, grid: { color: c => c.tick.value === 1 ? css("--ink-3") : css("--rule") } } },
+      plugins: { legend: { position: "bottom", labels: { boxWidth: 10 } }, tooltip: { callbacks: { label: c => `${c.dataset.label}: ${fx(c.raw)} across ${c.dataset.counts[c.dataIndex]} deal${c.dataset.counts[c.dataIndex] > 1 ? "s" : ""}` } } } } }));
+
   // Value creation: per deal at 100%, EBITDA effect at entry multiple, multiple effect on exit EBITDA, debt paydown; scaled by ownership.
   const sc = state.vcScope, V = D.filter(d => sc === "all" ? true : sc === "realized" ? d.status === "Realized" : d.fund === sc);
   let e = 0, m = 0, n = 0, inv = 0, tv = 0;
@@ -565,9 +593,9 @@ function renderGross(F, fundColor, asOf) {
     options: { scales: { x: { title: { display: true, text: "Invested ($M)" }, beginAtZero: true }, y: { title: { display: true, text: "Gross TVM" }, beginAtZero: true, ticks: { callback: v => fx(v, 1) }, grid: { color: c => c.tick.value === 1 ? css("--ink-3") : css("--rule") } } },
       plugins: { legend: { position: "bottom", labels: { boxWidth: 10 } }, tooltip: { callbacks: { label: c => `${c.raw.d.company}: ${fm(c.raw.x)} → ${fx(c.raw.y)} (${c.raw.d.status})` } } } } }));
 
-  document.getElementById("invTbl").innerHTML = `<table><thead><tr><th>Company</th><th>Fund</th><th>Sector</th><th>Entry</th><th>Exit</th><th>Invested</th><th>Realized</th><th>Unrealized</th><th>Gross TVM</th><th>Gross IRR</th><th>Rev CAGR</th><th>EV/EBITDA in → out</th></tr></thead><tbody>
+  document.getElementById("invTbl").innerHTML = `<table><thead><tr><th>Company</th><th>Fund</th><th>Sector</th><th>Lead</th><th>Board</th><th>Entry</th><th>Exit</th><th>Invested</th><th>Realized</th><th>Unrealized</th><th>Gross TVM</th><th>Gross IRR</th><th>Rev CAGR</th><th>EV/EBITDA in → out</th></tr></thead><tbody>
     ${D.sort((a, b) => (a.entry || 0) - (b.entry || 0)).map(d => { const yrs = ((d.exit || asOf) - d.entry) / 31557600000, cagr = Math.pow(d.revenue_exit / d.revenue_entry, 1 / yrs) - 1;
-      return `<tr><td>${esc(d.company)}</td><td style="font-family:var(--body)">${esc(d.fund)}</td><td style="font-family:var(--body)">${esc(d.sector || "")}</td><td>${d.entry ? d.entry.toISOString().slice(0, 10) : "–"}</td><td>${d.exit ? d.exit.toISOString().slice(0, 10) : "–"}</td><td>${fm(d.invested)}</td><td>${fm(d.realized)}</td><td>${fm(d.unrealized)}</td><td>${fx(d.tvm)}</td><td>${fp(d.irr)}</td><td>${fp(cagr)}</td><td>${fx(d.tev_entry / d.ebitda_entry, 1)} → ${fx(d.tev_exit / d.ebitda_exit, 1)}</td></tr>` }).join("")}</tbody></table>`;
+      return `<tr><td>${esc(d.company)}</td><td style="font-family:var(--body)">${esc(d.fund)}</td><td style="font-family:var(--body)">${esc(d.sector || "")}</td><td style="font-family:var(--body)">${esc(d.deal_lead)}</td><td style="font-family:var(--body)">${d.board}</td><td>${d.entry ? d.entry.toISOString().slice(0, 10) : "–"}</td><td>${d.exit ? d.exit.toISOString().slice(0, 10) : "–"}</td><td>${fm(d.invested)}</td><td>${fm(d.realized)}</td><td>${fm(d.unrealized)}</td><td>${fx(d.tvm)}</td><td>${fp(d.irr)}</td><td>${fp(cagr)}</td><td>${fx(d.tev_entry / d.ebitda_entry, 1)} → ${fx(d.tev_exit / d.ebitda_exit, 1)}</td></tr>` }).join("")}</tbody></table>`;
 }
 
 // ---------- wiring ----------

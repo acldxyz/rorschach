@@ -153,7 +153,9 @@ for fund, vint, size in FUNDS:
             ownership_entry=round(own, 3), ownership_exit=round(own, 3),
             founded=founded, pre_investment=pre, milestones=miles,
             # Newer tech and health deals in Fund III go to the principal, who joined in 2019.
-            deal_lead="Priya Raman" if vint == 2021 and sec in ("Information Technology", "Health Care") else LEAD[sec]))
+            deal_lead="Priya Raman" if vint == 2021 and sec in ("Information Technology", "Health Care") else LEAD[sec],
+            # Control deals come with a board seat; growth stakes and club take-privates only when the cheque is large.
+            board_seat="Yes" if dtype not in ("Growth Equity", "Take-private") or inv >= 110 else "No"))
     # Management fees: 2% of commitment through year 5, then 1.5% of invested.
     d = start
     last_exit = max((dt.date.fromisoformat(str(x['exit_date'])) for x in invs if x['fund'] == fund and x['exit_date']), default=REPORT)
