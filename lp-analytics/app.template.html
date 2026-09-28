@@ -67,6 +67,13 @@ tr.total td { font-weight: 600; border-top: 2px solid var(--ink-3) }
 .grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 520px), 1fr)); gap: 20px }
 .grid3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); gap: 16px }
 .chart { position: relative; height: 280px; min-width: 0 } .chart.tall { height: 340px }
+.bm { display: grid; gap: 8px; border-top: 1px solid var(--rule); padding-top: 12px }
+.bm-title { font-family: var(--display); font-weight: 600; font-size: 15px }
+.drop-inline { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: center; padding: 6px 12px; position: relative }
+.bm a { color: var(--accent) }
+.bm td input { width: 5.5em; font: 13px var(--mono); text-align: right; color: var(--ink); background: var(--bg); border: 1px solid var(--rule); border-radius: 3px; padding: 3px 5px }
+.bm td input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px }
+.bm th.grp { text-align: center; border-bottom: 1px solid var(--ink-3) }
 .errors { color: var(--bad); font-size: 13px; margin: 0 }
 .empty { color: var(--ink-3); padding: 24px; text-align: center }
 @media (prefers-reduced-motion: reduce) { * { transition-duration: .01s !important } }
@@ -92,7 +99,15 @@ tr.total td { font-weight: 600; border-top: 2px solid var(--ink-3) }
     <div class="loaders">
       <label class="drop" data-kind="cf"><b>Fund cash flows</b><span class="note">Contributions, distributions and NAV per fund. CSV or XLSX.</span><input type="file" id="fileCf" accept=".csv,.xlsx,.xls"><span class="status">Not loaded</span></label>
       <label class="drop" data-kind="inv"><b>Investments &amp; operating data</b><span class="note">One row per portfolio company. Optional; powers the gross charts.</span><input type="file" id="fileInv" accept=".csv,.xlsx,.xls"><span class="status">Not loaded</span></label>
-      <label class="drop" data-kind="bm"><b>Benchmark quartiles</b><span class="note">Top, median and bottom quartile by vintage. Optional.</span><input type="file" id="fileBm" accept=".csv,.xlsx,.xls"><span class="status">Not loaded</span></label>
+    </div>
+    <div class="bm">
+      <div class="panel-head">
+        <div class="row"><label for="bmSrc"><b class="bm-title">Benchmark</b></label>
+          <select id="bmSrc"><option value="sample">Sample (illustrative)</option><option value="carta">Carta</option><option value="cambridge">Cambridge Associates</option><option value="custom">Supply your own</option></select></div>
+        <label class="drop drop-inline" data-kind="bm" id="bmUpload"><span>Upload quartiles (CSV or XLSX)</span><input type="file" id="fileBm" accept=".csv,.xlsx,.xls"><span class="status">Not loaded</span></label>
+      </div>
+      <p class="note" id="bmNote"></p>
+      <div class="tbl" id="bmGrid"></div>
     </div>
     <p class="errors" id="errors" role="alert"></p>
     <details>
@@ -114,7 +129,15 @@ benchmarks:  vintage, metric (TVPI|IRR|DPI), top, median, bottom</pre>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script>
 const SAMPLE = /*SAMPLE*/null;
-const state = { cf: null, inv: null, bm: null, gp: "", dim: "sector", vcScope: "all" };
+const BM_SOURCES = {
+  sample: { note: "Illustrative quartiles made up for the sample funds. Not market data." },
+  carta: { note: "Enter quartiles from Carta's published fund performance data. Carta's benchmarks are drawn mainly from venture funds on its platform, so they suit VC more than buyout.", link: "https://carta.com/data/", linkText: "Carta data" },
+  cambridge: { note: "Enter quartiles from Cambridge Associates' private investment benchmarks. Detailed quartile tables usually need a subscription or a request to CA.", link: "https://www.cambridgeassociates.com/private-investment-benchmarks/", linkText: "Cambridge Associates benchmarks" },
+  custom: { note: "Upload a file (vintage, metric, top, median, bottom) or type figures into the grid." },
+};
+// Figures typed or uploaded per source stay in this browser only.
+const bmStore = { load(k) { try { return JSON.parse(localStorage.getItem("bm:" + k)) || {} } catch { return {} } }, save(k, v) { try { localStorage.setItem("bm:" + k, JSON.stringify(v)) } catch {} } };
+const state = { cf: null, inv: null, bm: null, bmSrc: "sample", bmSample: null, gp: "", dim: "sector", vcScope: "all" };
 let charts = [];
 
 // ---------- parsing ----------
@@ -216,7 +239,7 @@ function render() {
   const F = fundStats(state.cf), fundColor = Object.fromEntries(F.map((f, i) => [f.name, series(i)]));
   const asOf = new Date(Math.max(...F.map(f => f.asOf)));
   document.getElementById("asOf").textContent = "As of " + asOf.toISOString().slice(0, 10) + " · USD millions";
-  const bm = state.bm || {};
+  const bm = hasBm(state.bm) ? state.bm : {}, bmOn = hasBm(state.bm);
   const q = (f, m, v) => { const r = quartile(v, bm[f.vintage]?.[m]); return r ? `<span class="pill q${r}">Q${r}</span>` : `<span class="pill na">–</span>` };
   const T = F.reduce((t, f) => ({ paid: t.paid + f.paid, dist: t.dist + f.dist, nav: t.nav + f.nav, size: t.size + (f.size || 0) }), { paid: 0, dist: 0, nav: 0, size: 0 });
   const allFlows = F.flatMap(f => f.rows.map(r => ({ d: r.date, a: r.amount })).concat(f.nav ? [{ d: f.asOf, a: f.nav }] : [])).sort((a, b) => a.d - b.d);
@@ -227,7 +250,7 @@ function render() {
   <tr class="total"><td>Total / pooled</td><td></td><td>${fm(T.size, 0)}</td><td>${fm(T.paid)}</td><td>${fm(T.dist)}</td><td>${fm(T.nav)}</td><td>${fx((T.dist + T.nav) / T.paid)}</td><td>${fx(T.dist / T.paid)}</td><td>${fx(T.nav / T.paid)}</td><td>${fp(xirr(allFlows))}</td><td></td></tr>
   </tbody></table></div></section>`;
 
-  html += `<section class="panel"><div class="panel-head"><h2>Net relative performance</h2><p class="note">${state.bm ? "Bands show benchmark quartiles for each fund's vintage; the marker is the fund." : "Load benchmark quartiles to draw the bands."}</p></div>
+  html += `<section class="panel"><div class="panel-head"><h2>Net relative performance</h2><p class="note">${bmOn ? `Bands show ${esc(document.querySelector("#bmSrc option:checked").textContent)} quartiles for each fund's vintage; the marker is the fund.` : "Pick a benchmark source and fill its quartiles to draw the bands."}</p></div>
     <div class="grid3"><div><h3>Net TVPI</h3><div class="chart"><canvas id="cTvpi"></canvas></div></div><div><h3>Net IRR</h3><div class="chart"><canvas id="cIrr"></canvas></div></div><div><h3>DPI</h3><div class="chart"><canvas id="cDpi"></canvas></div></div></div></section>`;
 
   html += `<div class="grid2"><section class="panel"><h2>J-curve</h2><p class="note">Cumulative net cash flow to LPs, by quarter since each fund's first call.</p><div class="chart tall"><canvas id="cJ"></canvas></div></section>
@@ -259,7 +282,7 @@ function render() {
     const hiV = Math.max(...F.map(x => x[k]).filter(isFinite), ...B.filter(Boolean).map(b => b.top));
     const floor = m === "IRR" ? Math.min(lo, -0.05) : 0, ceil = hiV * (m === "IRR" ? 1.35 : 1.25);
     const band = (name, col, fn) => ({ type: "bar", label: name, data: B.map(b => b ? fn(b) : null), backgroundColor: css(col), borderColor: css("--panel"), borderWidth: 1, barPercentage: .7, categoryPercentage: .8, order: 2 });
-    const ds = state.bm ? [band("1st quartile", "--q1", b => [b.top, ceil]), band("2nd quartile", "--q2", b => [b.median, b.top]), band("3rd quartile", "--q3", b => [b.bottom, b.median]), band("4th quartile", "--q4", b => [floor, b.bottom])] : [];
+    const ds = bmOn ? [band("1st quartile", "--q1", b => [b.top, ceil]), band("2nd quartile", "--q2", b => [b.median, b.top]), band("3rd quartile", "--q3", b => [b.bottom, b.median]), band("4th quartile", "--q4", b => [floor, b.bottom])] : [];
     ds.push({ type: "line", label: "Fund", data: F.map(x => x[k]), showLine: false, pointStyle: "rectRot", pointRadius: 8, pointHoverRadius: 10, backgroundColor: css("--accent"), borderColor: css("--panel"), borderWidth: 2, order: 1 });
     charts.push(new Chart(document.getElementById(id), { data: { labels, datasets: ds }, options: {
       scales: { x: { stacked: true, grid: { display: false } }, y: { stacked: false, min: floor, max: ceil, ticks: { callback: v => f(v, m === "IRR" ? 0 : 1) }, grid: { color: css("--rule") } } },
@@ -358,7 +381,8 @@ async function load(kind, file) {
   const err = document.getElementById("errors"); err.textContent = "";
   try {
     const rows = await readFile(file);
-    state[kind] = kind === "cf" ? normCf(rows) : kind === "inv" ? normInv(rows) : normBm(rows);
+    if (kind === "bm") { if (state.bmSrc === "sample") { state.bmSrc = "custom"; document.getElementById("bmSrc").value = "custom" } state.bm = normBm(rows); bmStore.save(state.bmSrc, state.bm); renderBm() }
+    else state[kind] = kind === "cf" ? normCf(rows) : normInv(rows);
     setStatus(kind, `${file.name} · ${kind === "bm" ? Object.keys(state.bm).length + " vintages" : state[kind].length + " rows"}`, "ok");
     render();
   } catch (e) { err.textContent = e.message; setStatus(kind, "Could not read file", "err") }
@@ -371,15 +395,36 @@ document.querySelectorAll(".drop").forEach(el => {
   el.addEventListener("drop", e => { e.preventDefault(); el.classList.remove("over"); e.dataTransfer.files[0] && load(kind, e.dataTransfer.files[0]) });
 });
 document.getElementById("sampleBtn").addEventListener("click", () => {
-  state.cf = normCf(parseCSV(SAMPLE.cf)); state.inv = normInv(parseCSV(SAMPLE.inv)); state.bm = normBm(parseCSV(SAMPLE.bm));
-  setStatus("cf", `Sample · ${state.cf.length} rows`, "ok"); setStatus("inv", `Sample · ${state.inv.length} companies`, "ok"); setStatus("bm", "Sample · illustrative quartiles", "ok");
+  state.cf = normCf(parseCSV(SAMPLE.cf)); state.inv = normInv(parseCSV(SAMPLE.inv)); state.bmSample = normBm(parseCSV(SAMPLE.bm)); state.bmSrc = "sample"; document.getElementById("bmSrc").value = "sample"; state.bm = state.bmSample; renderBm();
+  setStatus("cf", `Sample · ${state.cf.length} rows`, "ok"); setStatus("inv", `Sample · ${state.inv.length} companies`, "ok"); 
   document.getElementById("gpTitle").textContent = "Northbrook Harbor Partners (sample)";
   render();
 });
 document.getElementById("clearBtn").addEventListener("click", () => {
-  Object.assign(state, { cf: null, inv: null, bm: null }); ["cf", "inv", "bm"].forEach(k => setStatus(k, "Not loaded"));
-  document.querySelectorAll(".drop input").forEach(i => i.value = ""); document.getElementById("gpTitle").textContent = "Track Record Analyzer"; render();
+  Object.assign(state, { cf: null, inv: null }); ["cf", "inv"].forEach(k => setStatus(k, "Not loaded"));
+  document.querySelectorAll(".drop input").forEach(i => i.value = ""); document.getElementById("gpTitle").textContent = "Track Record Analyzer"; renderBm(); render();
 });
+function hasBm(b) { return b && Object.values(b).some(v => Object.values(v).some(q => [q.top, q.median, q.bottom].some(isFinite))) }
+function renderBm() {
+  const src = state.bmSrc, S = BM_SOURCES[src];
+  state.bm = src === "sample" ? state.bmSample : bmStore.load(src);
+  document.getElementById("bmNote").innerHTML = esc(S.note) + (S.link ? ` <a href="${S.link}" target="_blank" rel="noopener">${esc(S.linkText)} ↗</a>` : "");
+  document.getElementById("bmUpload").hidden = src === "sample";
+  const vint = [...new Set([...(state.cf ? fundStats(state.cf).map(f => f.vintage) : []), ...Object.keys(state.bm || {}).map(Number)])].filter(isFinite).sort();
+  const M = [["TVPI", "x"], ["IRR", "%"], ["DPI", "x"]], P = ["top", "median", "bottom"];
+  const val = (v, m, k) => { const x = state.bm?.[v]?.[m]?.[k]; return isFinite(x) ? (m === "IRR" ? +(x * 100).toFixed(2) : x) : "" };
+  document.getElementById("bmGrid").innerHTML = !vint.length ? `<p class="note">Load fund cash flows to list their vintages here.</p>` :
+    `<table><thead><tr><th rowspan="2">Vintage</th>${M.map(([m, u]) => `<th class="grp" colspan="3">${m} (${u})</th>`).join("")}</tr>
+    <tr>${M.map(() => P.map(k => `<th>${k === "top" ? "Top Q" : k === "median" ? "Median" : "Bottom Q"}</th>`).join("")).join("")}</tr></thead>
+    <tbody>${vint.map(v => `<tr><td>${v}</td>${M.map(([m]) => P.map(k => `<td><input id="bm-${v}-${m}-${k}" data-v="${v}" data-m="${m}" data-k="${k}" inputmode="decimal" aria-label="${v} ${m} ${k}" value="${val(v, m, k)}"${src === "sample" ? " readonly" : ""}></td>`).join("")).join("")}</tr>`).join("")}</tbody></table>`;
+}
+document.getElementById("bmGrid").addEventListener("change", e => {
+  const t = e.target; if (!t.dataset.m || state.bmSrc === "sample") return;
+  const b = bmStore.load(state.bmSrc), x = num(t.value), m = t.dataset.m;
+  ((b[t.dataset.v] ??= {})[m] ??= {})[t.dataset.k] = isFinite(x) ? (m === "IRR" ? x / 100 : x) : null;
+  bmStore.save(state.bmSrc, b); state.bm = b; render();
+});
+document.getElementById("bmSrc").addEventListener("change", e => { state.bmSrc = e.target.value; renderBm(); render() });
 document.addEventListener("change", e => { if (e.target.id === "dimSel") { state.dim = e.target.value; render() } if (e.target.id === "vcSel") { state.vcScope = e.target.value; render() } });
 matchMedia("(prefers-color-scheme: dark)").addEventListener("change", render);
 new MutationObserver(render).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
