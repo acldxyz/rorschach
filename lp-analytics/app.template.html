@@ -86,6 +86,13 @@ tr.total td { font-weight: 600; border-top: 2px solid var(--ink-3) }
 .bm th.grp { text-align: center; border-bottom: 1px solid var(--ink-3) }
 .errors { color: var(--bad); font-size: 13px; margin: 0 }
 .empty { color: var(--ink-3); padding: 24px; text-align: center }
+.viewbar { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: end; justify-content: space-between; border-bottom: 1px solid var(--rule) }
+.viewbar .tabs { border-bottom: 0 }
+.exports { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding-bottom: 6px }
+#dlMsg:empty { display: none }
+.dl-row { display: flex; justify-content: flex-end; margin-bottom: -4px }
+.dl { font: 600 11px var(--body); letter-spacing: .04em; color: var(--ink-3); background: none; border: 1px solid transparent; border-radius: 4px; padding: 2px 8px }
+.dl:hover, .dl:focus-visible { color: var(--accent); border-color: var(--rule) }
 .tabs { display: flex; flex-wrap: wrap; gap: 4px; border-bottom: 1px solid var(--rule) }
 .tabs button { border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: none; padding: 8px 14px; color: var(--ink-2); font: 600 14px var(--display) }
 .tabs button[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--accent) }
@@ -193,11 +200,16 @@ benchmarks:  vintage, metric (TVPI|IRR|DPI), top, median, bottom</pre>
     </details>
   </section>
 
+  <div class="viewbar">
   <nav class="tabs" role="tablist" aria-label="Views">
     <button type="button" role="tab" id="tab-record" data-view="record" aria-selected="true">Track record</button>
     <button type="button" role="tab" id="tab-companies" data-view="companies" aria-selected="false">Portfolio companies <span id="flagCount"></span></button>
     <button type="button" role="tab" id="tab-team" data-view="team" aria-selected="false">Team &amp; partners</button>
   </nav>
+  <div class="exports" id="exportBar"><span class="note">Download everything:</span>
+    <button type="button" id="dlXlsx">Excel workbook</button><button type="button" id="dlHtml">HTML report</button></div>
+  </div>
+  <p class="note" id="dlMsg" role="status"></p>
   <div id="out" class="wrap" style="padding:0;margin:0;max-width:none" role="tabpanel"></div>
 </div>
 
@@ -375,7 +387,8 @@ const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).
 const series = i => css(`--s${(i % 8) + 1}`);
 
 // ---------- render ----------
-function render() {
+function render() { renderView(); decorateDownloads() }
+function renderView() {
   charts.forEach(c => c.destroy()); charts = [];
   document.querySelectorAll(".tabs [role=tab]").forEach(b => b.setAttribute("aria-selected", String(b.dataset.view === state.view)));
   document.getElementById("out").setAttribute("aria-labelledby", "tab-" + state.view);
@@ -444,7 +457,7 @@ function render() {
 
   Chart.defaults.font.family = css("--body"); Chart.defaults.color = css("--ink-2"); Chart.defaults.borderColor = css("--rule");
   Chart.defaults.plugins.tooltip.backgroundColor = css("--ink"); Chart.defaults.plugins.tooltip.titleColor = css("--bg"); Chart.defaults.plugins.tooltip.bodyColor = css("--bg");
-  Chart.defaults.maintainAspectRatio = false; Chart.defaults.animation = matchMedia("(prefers-reduced-motion: reduce)").matches ? false : { duration: 350 };
+  Chart.defaults.maintainAspectRatio = false; Chart.defaults.animation = state.capturing || matchMedia("(prefers-reduced-motion: reduce)").matches ? false : { duration: 350 };
 
   // Relative performance: quartile bands as overlaid floating bars, fund as a marker.
   [["cTvpi", "TVPI", "tvpi", fx], ["cIrr", "IRR", "irr", fp], ["cDpi", "DPI", "dpi", fx]].forEach(([id, m, k, f]) => {
@@ -956,6 +969,143 @@ if (["#companies", "#team"].includes(location.hash)) state.view = location.hash.
 document.addEventListener("change", e => { if (e.target.id === "coFund") { state.coFund = e.target.value; render() } if (e.target.id === "coFlag") { state.coFlagOnly = e.target.checked; render() } if (e.target.id === "dimSel") { state.dim = e.target.value; render() } if (e.target.id === "scopeSel") { state.scope = e.target.value; render() } if (e.target.id === "gpFund") { state.gpFund = e.target.value; render() } if (e.target.id === "gpWin") { state.gpWin = e.target.value; render() } });
 matchMedia("(prefers-color-scheme: dark)").addEventListener("change", render);
 new MutationObserver(render).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+// ---------- downloads ----------
+// Inside the claude.ai viewer, files go through the downloads capability (the viewer confirms each
+// save). Opened as a plain local file there is no window.claude, so fall back to a normal link.
+const downloadsCap = window.claude?.use ? window.claude.use("downloads").catch(() => null) : Promise.resolve(null);
+const EXT_MIME = { csv: "text/csv", png: "image/png", xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", html: "text/html" };
+function dlMsg(t, warn) { const m = document.getElementById("dlMsg"); m.textContent = t; m.className = "note" + (warn ? " warn-text" : "") }
+async function saveFile(filename, data) {
+  const dl = await downloadsCap;
+  if (dl) {
+    try { await dl.save({ filename, data }); dlMsg(`Saved ${filename}.`) }
+    catch (e) { dlMsg(e?.code === "declined" ? "Download cancelled." : e?.code === "rate_limited" ? "Another download is waiting for confirmation." : `Could not download ${filename}.`, e?.code !== "declined") }
+    return;
+  }
+  if (window.claude) { dlMsg("Downloads are not available in this view.", true); return }
+  const blob = data instanceof Blob ? data : new Blob([data], { type: EXT_MIME[filename.split(".").pop()] || "application/octet-stream" });
+  const a = Object.assign(document.createElement("a"), { href: URL.createObjectURL(blob), download: filename });
+  document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+  dlMsg(`Downloaded ${filename}.`);
+}
+const slug = t => String(t).toLowerCase().replace(/&/g, "and").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 80);
+const fileBase = () => `${slug(document.getElementById("gpTitle").textContent)}-${(document.getElementById("asOf").textContent.match(/\d{4}-\d{2}-\d{2}/) || [""])[0]}`;
+const cellText = el => { const i = el.querySelector("input, select"); return (i ? (i.tagName === "SELECT" ? i.selectedOptions[0]?.textContent : i.value) : el.innerText).replace(/\s+/g, " ").trim() };
+const tableRows = t => [...t.rows].map(r => [...r.cells].flatMap(c => [cellText(c), ...Array(Math.max(0, (c.colSpan || 1) - 1)).fill("")]));
+const csvOf = rows => rows.map(r => r.map(v => /[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v).join(",")).join("\r\n");
+// Name a table or chart after the heading nearest above it: its own h3 if it has one, else its panel's h2.
+function titleFor(el) {
+  const sec = el.closest("section, .panel"), h2 = sec?.querySelector("h2")?.textContent.trim() || "";
+  let n = el; while (n && n !== sec) { let p = n.previousElementSibling; while (p) { if (/^H[34]$/.test(p.tagName)) return h2 && p.textContent.trim() !== h2 ? `${h2} - ${p.textContent.trim()}` : p.textContent.trim(); p = p.previousElementSibling } n = n.parentElement }
+  return h2 || "table";
+}
+function chartPng(canvas) {
+  // Charts draw on a transparent canvas; paint the panel colour behind so the PNG reads on its own.
+  const c = document.createElement("canvas"); c.width = canvas.width; c.height = canvas.height;
+  const x = c.getContext("2d"); x.fillStyle = css("--panel"); x.fillRect(0, 0, c.width, c.height); x.drawImage(canvas, 0, 0); return c;
+}
+function decorateDownloads() {
+  document.querySelectorAll("#out .tbl, .bm .tbl").forEach(box => {
+    const t = box.querySelector("table"); if (!t || box.previousElementSibling?.classList.contains("dl-row")) return;
+    const row = document.createElement("div"); row.className = "dl-row";
+    row.innerHTML = `<button type="button" class="dl" aria-label="Download ${esc(titleFor(box))} as CSV">CSV</button>`;
+    row.firstChild.onclick = () => saveFile(`${fileBase()}-${slug(titleFor(box))}.csv`, csvOf(tableRows(t)));
+    box.before(row);
+  });
+  document.querySelectorAll("#out .chart").forEach(box => {
+    const cv = box.querySelector("canvas"); if (!cv) return;
+    const row = document.createElement("div"); row.className = "dl-row";
+    row.innerHTML = `<button type="button" class="dl" aria-label="Download ${esc(titleFor(box))} chart as PNG">PNG</button>`;
+    row.firstChild.onclick = () => chartPng(cv).toBlob(b => b && saveFile(`${fileBase()}-${slug(titleFor(box))}.png`, b), "image/png");
+    box.before(row);
+  });
+}
+// Render each tab in turn, without animation, and hand every section to fn(view, label).
+async function eachView(fn) {
+  const prev = state.view; state.capturing = true;
+  try { for (const [v, label] of [["record", "Track record"], ["companies", "Portfolio companies"], ["team", "Team & partners"]]) {
+    state.view = v; render(); await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r))); await fn(v, label) } }
+  finally { state.capturing = false; state.view = prev; render() }
+}
+// Turn a formatted cell ("$1,054.7M", "12.3%", "1.57x") back into a number with a matching Excel format.
+function typedCell(t) {
+  const sym = state.cur.sym.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), sy = state.cur.sym.replace(/"/g, "");
+  let m = t.match(new RegExp(`^(-?)${sym}([\\d,]+(?:\\.\\d+)?)([MK]?)\\*?$`));
+  if (m) { const k = m[3] === "M" ? 1e6 : m[3] === "K" ? 1e3 : 1, v = (m[1] ? -1 : 1) * parseFloat(m[2].replace(/,/g, "")) * k;
+    return { t: "n", v, z: `"${sy}"#,##0${k === 1 ? "" : ".0"}${k === 1e6 ? ',,"M"' : k === 1e3 ? ',"K"' : ""}` } }
+  if ((m = t.match(/^(-?[\d,]*\.?\d+)%$/))) return { t: "n", v: parseFloat(m[1].replace(/,/g, "")) / 100, z: "0.0%" };
+  if ((m = t.match(/^(-?\d*\.?\d+)x$/))) return { t: "n", v: parseFloat(m[1]), z: '0.00"x"' };
+  if (/^-?[\d,]+(\.\d+)?$/.test(t) && !/^0\d/.test(t)) return { t: "n", v: parseFloat(t.replace(/,/g, "")) };
+  return t ? { t: "s", v: t } : null;
+}
+function sheetFrom(rows, widths) {
+  const ws = {}; let maxC = 0;
+  rows.forEach((r, i) => r.forEach((v, j) => { const c = typeof v === "number" ? { t: "n", v } : i === 0 ? (v ? { t: "s", v } : null) : typedCell(String(v ?? "")); if (c) ws[XLSX.utils.encode_cell({ r: i, c: j })] = c; maxC = Math.max(maxC, j) }));
+  ws["!ref"] = XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: Math.max(0, rows.length - 1), c: maxC } });
+  ws["!cols"] = widths || Array.from({ length: maxC + 1 }, (_, j) => ({ wch: Math.min(60, Math.max(8, ...rows.map(r => String(r[j] ?? "").length + 2))) }));
+  return ws;
+}
+// Excel caps sheet names at 31 characters: keep the most specific part of the title (the sub-heading
+// after " - ") and cut at a word boundary rather than mid-word.
+function sheetName(title, prefix = "") {
+  const clean = title.replace(/[\[\]:*?\/\\]/g, " ").replace(/\s+/g, " ").trim(), part = clean.includes(" - ") ? clean.split(" - ").pop() : clean;
+  let n = prefix + part; if (n.length > 31) { n = n.slice(0, 31); n = n.slice(0, n.lastIndexOf(" ") > 15 ? n.lastIndexOf(" ") : 31) }
+  return n.replace(/[\s,·-]+$/, "") || "Sheet";
+}
+function addSheet(wb, name, ws) {
+  let n = name.slice(0, 31) || "Sheet", k = 2;
+  while (wb.SheetNames.includes(n)) n = `${n.slice(0, 27)} (${k++})`;
+  XLSX.utils.book_append_sheet(wb, ws, n);
+}
+function chartRows(ch) {
+  const ds = ch.data.datasets.filter(d => !d.hidden);
+  if (ch.data.labels?.length) return [["", ...ds.map(d => d.label || "Value")], ...ch.data.labels.map((l, i) => [Array.isArray(l) ? l.join(" ") : l, ...ds.map(d => { const v = d.data[i]; return Array.isArray(v) ? `${v[0]} to ${v[1]}` : v ?? "" })])];
+  return [["Series", "Label", "X", "Y"], ...ds.flatMap(d => d.data.map(p => [d.label || "", p.q || p.d?.company || "", p.x, p.y]))];
+}
+const cardRows = cards => { const heads = new Set(); const rows = cards.map(c => { const o = { Name: c.querySelector("h3")?.textContent.trim(), Details: c.querySelector(".tags")?.textContent.replace(/\s+/g, " ").trim(), Figures: c.querySelector(".figs")?.innerText.replace(/\s+/g, " ").trim() };
+    let cur = null; [...c.children].forEach(el => { if (el.tagName === "H4") { cur = el.textContent.trim(); heads.add(cur); o[cur] = "" } else if (cur && !el.classList.contains("trends")) o[cur] += (o[cur] ? "\n" : "") + (el.tagName === "OL" ? [...el.children].map(li => li.innerText.replace(/\s+/g, " ").trim()).join("\n") : el.innerText.trim()) });
+    c.querySelectorAll(".trends > div").forEach(d => { const k = d.querySelector("h4")?.textContent.trim(); if (k) { heads.add(k); o[k] = d.querySelector(".tags")?.textContent.trim() || "" } });
+    return o }); const cols = ["Name", "Details", "Figures", ...heads]; return [cols, ...rows.map(o => cols.map(k => o[k] ?? ""))] };
+document.getElementById("dlXlsx").addEventListener("click", async () => {
+  if (!state.cf) return dlMsg("Load data first.", true);
+  if (typeof XLSX === "undefined") return dlMsg("The spreadsheet library did not load, so the workbook cannot be built.", true);
+  dlMsg("Building workbook…");
+  const wb = XLSX.utils.book_new(), kpis = [["View", "Section", "Figure", "Description"]];
+  await eachView((v, label) => {
+    document.querySelectorAll("#out .tbl table").forEach(t => addSheet(wb, sheetName(titleFor(t.closest(".tbl"))), sheetFrom(tableRows(t))));
+    charts.forEach(ch => addSheet(wb, sheetName(titleFor(ch.canvas.closest(".chart")), "Chart · "), sheetFrom(chartRows(ch))));
+    document.querySelectorAll("#out .kpis > div, #out .hc > div").forEach(k => kpis.push([label, k.closest("section")?.querySelector("h2")?.textContent.trim() || "", k.querySelector("b")?.textContent.trim() || "", [...k.querySelectorAll("span")].map(s => s.textContent.trim()).filter(Boolean).join(" ")]));
+    const cards = [...document.querySelectorAll("#out article.co")];
+    if (cards.length) addSheet(wb, v === "team" ? "Partner bios" : "Company profiles", sheetFrom(cardRows(cards)));
+  });
+  if (kpis.length > 1) addSheet(wb, "Key figures", sheetFrom(kpis));
+  // Key figures first: it is the summary a reader opens to.
+  wb.SheetNames.unshift(wb.SheetNames.pop());
+  await saveFile(`${fileBase()}.xlsx`, new Uint8Array(XLSX.write(wb, { type: "array", bookType: "xlsx" })));
+});
+document.getElementById("dlHtml").addEventListener("click", async () => {
+  if (!state.cf) return dlMsg("Load data first.", true);
+  dlMsg("Building report…");
+  const parts = [];
+  await eachView((v, label) => {
+    const src = document.getElementById("out"), clone = src.cloneNode(true);
+    const cvs = [...src.querySelectorAll("canvas")], cls = [...clone.querySelectorAll("canvas")];
+    cls.forEach((c, i) => { const img = document.createElement("img"); img.src = chartPng(cvs[i]).toDataURL("image/png"); img.alt = titleFor(cvs[i].closest(".chart")); img.style.cssText = "width:100%;height:auto"; c.parentElement.style.height = "auto"; c.replaceWith(img) });
+    clone.querySelectorAll(".dl-row, #coFlag").forEach(n => n.remove());
+    clone.querySelectorAll("select").forEach((sel, i) => { const orig = src.querySelectorAll("select")[i]; const sp = document.createElement("b"); sp.textContent = orig.selectedOptions[0]?.textContent || ""; sel.replaceWith(sp) });
+    clone.querySelectorAll("details").forEach(d => d.open = true);
+    parts.push(`<h2 class="view-h">${esc(label)}</h2>${clone.innerHTML}`);
+  });
+  const cssText = [...document.querySelectorAll("style")].map(s => s.textContent).join("\n");
+  const title = `${document.getElementById("gpTitle").textContent} · ${document.getElementById("asOf").textContent}`;
+  const doc = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${esc(title)}</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+Condensed:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>${cssText}\n.view-h{font-size:22px;margin:24px 0 0;padding-top:16px;border-top:2px solid var(--ink)}</style></head>
+<body><div class="wrap"><header><div><h1>${esc(document.getElementById("gpTitle").textContent)}</h1><p class="sub">Track record report</p></div><div class="meta">${esc(document.getElementById("asOf").textContent)}</div></header>
+${parts.join("\n")}</div></body></html>`;
+  await saveFile(`${fileBase()}-report.html`, doc);
+});
+
 // Open on the sample so the first view shows what the tool does.
 document.getElementById("sampleBtn").click();
 </script>
