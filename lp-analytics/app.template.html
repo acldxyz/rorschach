@@ -96,8 +96,9 @@ tr.total td { font-weight: 600; border-top: 2px solid var(--ink-3) }
 .alert.bad { border-color: var(--bad); background: color-mix(in srgb, var(--bad) 10%, var(--panel)) }
 .alert.bad b { color: var(--bad) }
 .pill.rw-bad { background: var(--bad); color: var(--panel) } .pill.rw-warn { background: var(--warn); color: var(--panel) } .pill.rw-ok { color: var(--good); border: 1px solid var(--rule) }
+.warn-text, .co p.warn-text, td.warn-text { color: var(--warn) }
 .trends { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px }
-.trends > div { min-width: 0; display: grid; gap: 2px }
+.trends > div { min-width: 0; display: grid; gap: 2px; grid-template-rows: auto 1fr auto; align-items: start }  /* labels wrap to different heights; keep the charts on one baseline */
 .spark { width: 100%; height: 56px; display: block }
 .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 440px), 1fr)); gap: 16px }
 .co { background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 16px; display: grid; gap: 10px; align-content: start; min-width: 0 }
@@ -154,7 +155,7 @@ tr.total td { font-weight: 600; border-top: 2px solid var(--ink-3) }
     <div class="loaders">
       <label class="drop" data-kind="cf"><b>Fund cash flows</b><span class="note">Contributions, distributions and NAV per fund. CSV or XLSX.</span><input type="file" id="fileCf" accept=".csv,.xlsx,.xls"><span class="status">Not loaded</span></label>
       <label class="drop" data-kind="inv"><b>Portfolio companies</b><span class="note">One row per company: stage, cheques, valuations, ownership. Optional; powers the gross charts.</span><input type="file" id="fileInv" accept=".csv,.xlsx,.xls"><span class="status">Not loaded</span></label>
-      <label class="drop" data-kind="hist"><b>Company history</b><span class="note">One row per funding round and per quarterly report: ownership, cash on hand, burn. Optional; powers runway and round tracking.</span><input type="file" id="fileHist" accept=".csv,.xlsx,.xls"><span class="status">Not loaded</span></label>
+      <label class="drop" data-kind="hist"><b>Company history</b><span class="note">One row per funding round and per quarterly report: ownership, cash, burn, revenue, gross margin. Optional; powers runway and round tracking.</span><input type="file" id="fileHist" accept=".csv,.xlsx,.xls"><span class="status">Not loaded</span></label>
       <label class="drop" data-kind="team"><b>Firm staff</b><span class="note">Everyone at the firm with their title; background for partners. Optional; powers headcount and partner bios.</span><input type="file" id="fileTeam" accept=".csv,.xlsx,.xls"><span class="status">Not loaded</span></label>
     </div>
     <div class="figs-row">
@@ -183,7 +184,8 @@ investments: company, fund, sector, stage (Seed|Series A|...), entry_date, exit_
              ownership_entry, ownership_current, founded, pre_investment,
              milestones ("2019-06: text | 2021-03: text"), deal_lead, board_seat (Yes|No)
 history:     company, date, round (blank on report rows), post_money, amount_raised,
-             fund_invested, ownership, cash_on_hand, monthly_burn
+             fund_invested, ownership, cash_on_hand, monthly_burn,
+             revenue (for the quarter), gross_profit, or gross_margin (0.62 or 62%)
 team:        name, title, level (optional), joined, focus, prior, education, boards
              one row per person at the firm; background fields are only needed for partners
 benchmarks:  vintage, metric (TVPI|IRR|DPI), top, median, bottom</pre>
@@ -275,11 +277,13 @@ function levelOf(level, title) {
   if (/associate|analyst|intern/.test(t)) return "junior";
   return "other";
 }
-const MONEY_HIST = ["post_money", "amount_raised", "fund_invested", "cash_on_hand", "monthly_burn"];
+const MONEY_HIST = ["post_money", "amount_raised", "fund_invested", "cash_on_hand", "monthly_burn", "revenue", "gross_profit"];
+// Gross margin may arrive as 0.62, 62 or "62%"; anything above 1.5 is read as a percentage.
+const pctIn = v => { const x = num(String(v ?? "").replace("%", "")); return isFinite(x) ? (Math.abs(x) > 1.5 ? x / 100 : x) : NaN };
 function normHist(rows) {
   need(rows, ["company", "date"], "Company history");
   return rows.map(r => { const o = { company: String(r.company).trim(), date: date(r.date), round: String(r.round || "").trim(), ownership: num(r.ownership) };
-    MONEY_HIST.forEach(k => o[k] = num(r[k])); return o }).filter(r => r.company && r.date);
+    MONEY_HIST.forEach(k => o[k] = num(r[k])); o.gross_margin = pctIn(r.gross_margin); return o }).filter(r => r.company && r.date);
 }
 function normTeam(rows) {
   need(rows, ["name"], "Team");
@@ -419,6 +423,8 @@ function render() {
       <section class="panel"><div class="panel-head"><h2>Time to write-off</h2><p class="note">Write-off = exited below 0.25x gross. Time runs from the fund's entry to the exit date.</p></div>
         <div class="kpis" id="woKpis"></div>
         <div class="grid2"><div><h3>Write-offs by years from entry</h3><div class="chart"><canvas id="cWo"></canvas></div></div><div><h3>By entry round</h3><div class="tbl" id="woTbl"></div></div></div></section>
+      ${state.hist ? `<section class="panel"><div class="panel-head"><h2>Gross margin</h2><p class="note">From the company history file: gross profit ÷ revenue each quarter, for companies reporting revenue.</p></div>
+        <div class="grid2"><div><h3>Median gross margin by sector</h3><div class="chart tall"><canvas id="cGm"></canvas></div></div><div><h3>Latest quarter, companies still held</h3><div class="tbl" id="gmTbl"></div><p class="note" id="gmNote"></p></div></div></section>` : ""}
       ${state.hist ? `<section class="panel"><div class="panel-head"><h2>Round progression</h2><p class="note">From the company history file. A round counts once the company has raised again, exited, or had 24 months to do so.</p></div><div class="tbl" id="progTbl"></div></section>` : ""}
       <section class="panel"><h2>Deal outcomes</h2><p class="note">Gross multiple (log scale) against capital invested. Write-offs sit on the bottom line; hover a point for the company.</p><div class="chart tall"><canvas id="cDeals"></canvas></div></section>
       <section class="panel"><div class="panel-head"><h2>Performance by partner</h2><p class="note">Gross performance of the deals each person led, from the investments file's <code>deal_lead</code> and <code>board_seat</code> columns.</p></div>
@@ -513,17 +519,20 @@ function companyProfiles(asOf) {
 }
 // Small inline SVG trend: stretched to its box, so strokes are non-scaling and raises are drawn as
 // vertical rules rather than dots (dots would distort into ellipses).
-function spark(pts, { step = false, marks = [], t0, t1, label }) {
+function spark(pts, { step = false, marks = [], t0, t1, label, domain }) {
   if (!pts.length) return "";
-  const W = 240, H = 56, P = 3, a = +t0, b = Math.max(+t1, a + 1), vmax = Math.max(...pts.map(p => p.v)) || 1;
-  const X = d => (P + (W - 2 * P) * ((+d - a) / (b - a))).toFixed(1), Y = v => (H - P - (H - 2 * P) * (v / vmax)).toFixed(1);
+  const W = 240, H = 56, P = 3, a = +t0, b = Math.max(+t1, a + 1);
+  const [lo, hi] = domain || [Math.min(0, ...pts.map(p => p.v)), Math.max(...pts.map(p => p.v)) || 1];
+  const X = d => (P + (W - 2 * P) * ((+d - a) / (b - a))).toFixed(1), Y = v => (H - P - (H - 2 * P) * ((v - lo) / (hi - lo || 1))).toFixed(1);
   let line = ""; pts.forEach((p, i) => { line += i ? (step ? `H${X(p.d)}V${Y(p.v)}` : `L${X(p.d)},${Y(p.v)}`) : `M${X(p.d)},${Y(p.v)}` });
   if (step) line += `H${X(t1)}`;
-  const area = `${line}V${H - P}H${X(pts[0].d)}Z`;
+  const area = `${line}V${Y(Math.max(lo, 0))}H${X(pts[0].d)}Z`;
   return `<svg class="spark" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="${esc(label)}">
     ${marks.map(m => `<line x1="${X(m)}" x2="${X(m)}" y1="0" y2="${H}" style="stroke:var(--ink-3);stroke-dasharray:2 3" vector-effect="non-scaling-stroke"/>`).join("")}
     <path d="${area}" style="fill:var(--accent-soft);stroke:none"/><path d="${line}" style="fill:none;stroke:var(--accent);stroke-width:1.5" vector-effect="non-scaling-stroke"/></svg>`;
 }
+const ptsTxt = d => `${d >= 0 ? "+" : "−"}${Math.abs(d * 100).toFixed(1)} pts`;
+const GM_SLIP = 0.05;  // a five-point fall in gross margin inside a year is worth a question to the GP
 function trendsHtml(c, asOf) {
   const h = c.hist; if (!h.has) return "";
   const t0 = c.entry || h.own[0]?.date, t1 = c.exit || asOf, marks = h.rounds.filter(r => r.date > t0).map(r => r.date);
@@ -531,9 +540,13 @@ function trendsHtml(c, asOf) {
   const ownPts = h.own.filter(r => r.date >= t0).map(r => ({ d: r.date, v: r.ownership }));
   const rw = h.runway, last = h.last;
   const cashLabel = last ? `${fm(last.cash_on_hand)} at ${ym(last.date)}${h.raisedSince > 0 ? ` + ${fm(h.raisedSince)} raised since` : ""}${isFinite(rw) && c.status !== "Realized" ? ` · ${rw >= 36 ? "36+ months" : rw < 1.5 ? "under 2 months" : Math.round(rw) + " months"} runway at ${fm(last.monthly_burn)}/mo burn` : ""}` : "No cash reports";
+  const gmPts = h.gmRows.filter(r => r.d >= t0), gl = h.gmLast;
+  const gmLabel = gl ? `${fp(gl.v, 0)} at ${ym(gl.d)}${isFinite(h.gmChange) ? ` (${ptsTxt(h.gmChange)} over 12 months)` : ""}${gl.rev > 0 ? ` · ${fm(gl.rev)} revenue that quarter` : ""}`
+    : h.reports.length ? "No revenue reported (pre-revenue)" : "No revenue reported";
   const ownLabel = ownPts.length ? `${fp(ownPts[0].v)} → ${fp(ownPts[ownPts.length - 1].v)}` : "–";
   return `<div class="trends"><div><h4>Cash on hand</h4><p class="tags">${cashLabel}</p>${spark(cashPts, { marks, t0, t1, label: "Cash on hand over time" }) || `<p class="muted">No cash reports received.</p>`}</div>
-    <div><h4>Fund ownership</h4><p class="tags">${ownLabel}</p>${spark(ownPts, { step: true, marks, t0, t1, label: "Fund ownership over time" })}</div></div>
+    <div><h4>Fund ownership</h4><p class="tags">${ownLabel}</p>${spark(ownPts, { step: true, marks, t0, t1, label: "Fund ownership over time" })}</div>
+    <div><h4>Gross margin</h4><p class="tags">${gmLabel}</p>${spark(gmPts, { marks, t0, t1, label: "Gross margin over time", domain: [Math.min(0, ...gmPts.map(p => p.v)), 1] }) || ""}</div></div>
     ${marks.length ? `<p class="tags">Dashed lines mark each raise after entry.</p>` : ""}`;
 }
 function renderCompanies(P, F, asOf) {
@@ -554,6 +567,7 @@ function renderCompanies(P, F, asOf) {
     let h = items.length ? `<ol>${items.map(m => `<li class="${c.derived.includes(m) ? "derived" : ""}"><time>${m.d ? ym(m.d) : "—"}</time><span>${esc(m.text)}</span></li>`).join("")}</ol>` : "";
     if (c.lowRunway) h += `<div class="alert bad"><b>Low runway.</b> ${fm(c.hist.cashNow)} of cash${c.hist.raisedSince > 0 ? ` (including ${fm(c.hist.raisedSince)} raised after the ${ym(c.hist.last.date)} report)` : ""} at ${fm(c.hist.last.monthly_burn)} a month is about ${c.hist.runway.toFixed(1)} months (reported ${ym(c.hist.last.date)}). Ask the GP about financing plans and reserves.</div>`;
     else if (c.status !== "Realized" && isFinite(c.hist.runway) && c.hist.runway < WATCH_RUNWAY) h += `<p class="tags">Runway under ${WATCH_RUNWAY} months (${c.hist.runway.toFixed(1)}); a raise is likely due.</p>`;
+    if (c.status !== "Realized" && c.hist.gmChange <= -GM_SLIP) h += `<p class="tags warn-text">Gross margin down ${Math.abs(c.hist.gmChange * 100).toFixed(1)} points over the last 12 months.</p>`;
     if (c.noReports) h += `<div class="alert"><b>No cash reports.</b> The history file has no cash-on-hand figures for this company since the ${ym(c.entry)} investment.</div>`;
     else if (c.status !== "Realized" && c.reportAge >= STALE_REPORT_MONTHS) h += `<p class="tags">Last cash report is ${span(c.reportAge)} old.</p>`;
     if (!c.reported.length && !c.derived.some(m => m.round && m.d > c.entry) && c.status !== "Realized" && c.entry) {
@@ -582,10 +596,10 @@ function runwayTable(P, asOf) {
   const L = P.filter(c => c.status !== "Realized" && isFinite(c.hist.runway)).sort((a, b) => a.hist.runway - b.hist.runway);
   if (!L.length) return "";
   return `<section class="panel"><div class="panel-head"><h2>Runway watchlist</h2><p class="note">Held companies, shortest runway first. Runway = latest cash ÷ monthly burn. * includes money raised after the last cash report.</p></div>
-    <div class="tbl"><table><thead><tr><th>Company</th><th>Fund</th><th>Latest round</th><th>Last raise</th><th>Cash</th><th>Monthly burn</th><th>Runway</th><th>Reported</th><th>Fund ownership</th></tr></thead><tbody>
+    <div class="tbl"><table><thead><tr><th>Company</th><th>Fund</th><th>Latest round</th><th>Last raise</th><th>Cash</th><th>Monthly burn</th><th>Runway</th><th>Reported</th><th>Gross margin</th><th>12-mo change</th><th>Fund ownership</th></tr></thead><tbody>
     ${L.map(c => { const r = c.hist.rounds[c.hist.rounds.length - 1], rw = c.hist.runway, own = c.hist.own[c.hist.own.length - 1];
       return `<tr><td>${esc(c.company)}</td><td style="font-family:var(--body)">${esc(fundShort(c.fund))}</td><td style="font-family:var(--body)">${r ? esc(r.round) : "–"}</td><td>${r ? ym(r.date) : "–"}</td><td>${fm(c.hist.cashNow)}${c.hist.raisedSince > 0 ? "*" : ""}</td><td>${fm(c.hist.last.monthly_burn)}</td>
-        <td><span class="pill ${rw < LOW_RUNWAY ? "rw-bad" : rw < WATCH_RUNWAY ? "rw-warn" : "rw-ok"}">${rw >= 36 ? "36+" : rw.toFixed(1)} mo</span></td><td>${ym(c.hist.last.date)}</td><td>${own ? fp(own.ownership) : "–"}</td></tr>` }).join("")}</tbody></table></div></section>`;
+        <td><span class="pill ${rw < LOW_RUNWAY ? "rw-bad" : rw < WATCH_RUNWAY ? "rw-warn" : "rw-ok"}">${rw >= 36 ? "36+" : rw.toFixed(1)} mo</span></td><td>${ym(c.hist.last.date)}</td><td>${c.hist.gmLast ? fp(c.hist.gmLast.v, 0) : "–"}</td><td${c.hist.gmChange <= -GM_SLIP ? ' class="warn-text"' : ""}>${isFinite(c.hist.gmChange) ? ptsTxt(c.hist.gmChange) : "–"}</td><td>${own ? fp(own.ownership) : "–"}</td></tr>` }).join("")}</tbody></table></div></section>`;
 }
 
 // ---------- investment team ----------
@@ -672,7 +686,11 @@ function dealView(asOf) {
     const last = reports[reports.length - 1], since = last ? rounds.filter(r => r.date > last.date && isFinite(r.amount_raised)) : [];
     const raisedSince = since.reduce((t, r) => t + r.amount_raised, 0), cashNow = last ? last.cash_on_hand + raisedSince : NaN;
     const runway = last && last.monthly_burn > 0 ? cashNow / last.monthly_burn : NaN;
-    const hist = { has: h.length > 0, rounds, reports, last, runway, cashNow, raisedSince, since, own: h.filter(r => isFinite(r.ownership)) };
+    const gmRows = h.map(r => ({ d: r.date, v: isFinite(r.gross_margin) ? r.gross_margin : r.revenue > 0 && isFinite(r.gross_profit) ? r.gross_profit / r.revenue : NaN, rev: r.revenue })).filter(r => isFinite(r.v));
+    const gmLast = gmRows[gmRows.length - 1];
+    // Year-ago point: the report closest to 12 months before the latest, if one exists within two months of it.
+    const gmAgo = gmLast && gmRows.filter(r => Math.abs(monthsBetween(r.d, gmLast.d) - 12) <= 2).sort((a, b) => Math.abs(monthsBetween(a.d, gmLast.d) - 12) - Math.abs(monthsBetween(b.d, gmLast.d) - 12))[0];
+    const hist = { has: h.length > 0, rounds, reports, last, runway, cashNow, raisedSince, since, gmRows, gmLast, gmChange: gmAgo ? gmLast.v - gmAgo.v : NaN, own: h.filter(r => isFinite(r.ownership)) };
     const tv = d.realized + d.unrealized, tvm = tv / d.invested, end = d.exit || asOf;
     const irr = d.entry ? xirr([{ d: d.entry, a: -d.invested }, { d: end, a: tv }]) : NaN;
     const status = d.unrealized > 0 ? (d.realized > 0 ? "Partially realized" : "Unrealized") : "Realized";
@@ -747,6 +765,24 @@ function renderGross(F, fundColor, asOf) {
   const stRows = [...new Set(D.map(d => d.stage))].sort((a, b) => STAGE_ORDER.indexOf(a) - STAGE_ORDER.indexOf(b)).map(st => { const g = D.filter(d => d.stage === st), w = W.filter(x => x.stage === st), done = g.filter(d => d.status === "Realized");
     return `<tr><td>${esc(st)}</td><td>${g.length}</td><td>${w.length}</td><td>${fp(w.length / g.length, 0)}</td><td>${done.length ? fp(w.length / done.length, 0) : "–"}</td><td>${moTxt(median(w.map(x => x.mo)))}</td><td>${fm(w.reduce((t, x) => t + x.invested, 0))}</td></tr>` });
   document.getElementById("woTbl").innerHTML = `<table><thead><tr><th>Entry round</th><th>Deals</th><th>Write-offs</th><th>Of all deals</th><th>Of exited deals</th><th>Median time</th><th>Capital written off</th></tr></thead><tbody>${stRows.join("")}</tbody></table>`;
+
+  // Gross margin: median across companies reporting that quarter, per sector. A sector needs two
+  // companies in a quarter to plot a point, so one company's quarter is never shown as a "median".
+  if (state.hist && document.getElementById("cGm")) {
+    const qk = d => `${d.getFullYear()} Q${Math.floor(d.getMonth() / 3) + 1}`;
+    const secs = [...new Set(D.filter(d => d.hist.gmRows.length).map(d => d.sector || "Unspecified"))].sort();
+    const qs = [...new Set(D.flatMap(d => d.hist.gmRows.map(r => qk(r.d))))].sort();
+    charts.push(new Chart(document.getElementById("cGm"), { type: "line", data: { labels: qs, datasets: secs.map((sec, i) => ({ label: sec, borderColor: series(i), backgroundColor: series(i), borderWidth: 2, pointRadius: 0, pointHoverRadius: 4, spanGaps: true, tension: 0,
+      data: qs.map(q => { const v = D.filter(d => (d.sector || "Unspecified") === sec).flatMap(d => d.hist.gmRows.filter(r => qk(r.d) === q).map(r => r.v)); return v.length >= 2 ? median(v) : null }) })) },
+      options: { interaction: { mode: "index", intersect: false }, scales: { x: { grid: { display: false }, ticks: { maxTicksLimit: 10, autoSkip: true } }, y: { ticks: { callback: v => fp(v, 0) } } },
+        plugins: { legend: { position: "bottom", labels: { boxWidth: 10 } }, tooltip: { callbacks: { label: c => `${c.dataset.label}: ${fp(c.raw, 0)}` } } } } }));
+    const held = D.filter(d => d.status !== "Realized" && d.hist.gmLast);
+    document.getElementById("gmTbl").innerHTML = `<table><thead><tr><th>Sector</th><th>Companies</th><th>Median margin</th><th>Median 12-mo change</th><th>Improving</th><th>Slipping</th></tr></thead><tbody>
+      ${secs.map(sec => { const g = held.filter(d => (d.sector || "Unspecified") === sec); if (!g.length) return ""; const ch = g.map(d => d.hist.gmChange).filter(isFinite);
+        return `<tr><td>${esc(sec)}</td><td>${g.length}</td><td>${fp(median(g.map(d => d.hist.gmLast.v)), 0)}</td><td>${ch.length ? ptsTxt(median(ch)) : "–"}</td><td>${ch.filter(x => x > 0.01).length}</td><td>${ch.filter(x => x < -0.01).length}</td></tr>` }).join("")}</tbody></table>`;
+    const slip = held.filter(d => d.hist.gmChange <= -GM_SLIP).sort((a, b) => a.hist.gmChange - b.hist.gmChange);
+    document.getElementById("gmNote").innerHTML = slip.length ? `Down ${GM_SLIP * 100} points or more in 12 months: ${slip.map(d => `${esc(d.company)} (${ptsTxt(d.hist.gmChange)})`).join(", ")}.` : `No held company's margin fell ${GM_SLIP * 100} points or more over the last 12 months.`;
+  }
 
   // Round progression from the history file: did companies raise the next round, and how fast?
   if (state.hist && document.getElementById("progTbl")) {
