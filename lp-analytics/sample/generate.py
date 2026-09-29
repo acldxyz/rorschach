@@ -1,203 +1,260 @@
-"""Builds the mock data set for the LP analytics app. Deterministic (seeded) so the
-sample files are reproducible. All names are fictional."""
-import csv, random, datetime as dt
-random.seed(7)
+"""Builds the mock venture data set for the LP analytics app.
+
+Each company is simulated round by round (valuation step-ups, dilution, the fund's follow-on
+cheques, failures and exits), so valuations, ownership, milestones and the fund cash flows all
+agree with one another. All names are fictional. The seed is searched once so the three funds
+land in plausible ranges for their vintages; the search is deterministic.
+"""
+import csv, math, random, datetime as dt
+
 REPORT = dt.date(2025, 12, 31)
-GP = "Northbrook Harbor Partners"
-FUNDS = [("Northbrook Harbor Fund I", 2014, 600), ("Northbrook Harbor Fund II", 2017, 900),
-         ("Northbrook Harbor Fund III", 2021, 1400)]
-SECTORS = ["Industrials", "Health Care", "Information Technology", "Consumer Discretionary", "Financials", "Business Services"]
-COUNTRIES = ["United States"] * 5 + ["Canada", "United Kingdom", "Germany"]
-DEALS = ["Buyout"] * 4 + ["Growth Equity", "Carve-out", "Take-private"]
-NAMES = iter("""Atlas Precision|Brightwater Health|Cinder Analytics|Dovetail Foods|Everline Insurance|Falcon Ridge Logistics|
-Granite Payroll|Harbor Dental Group|Ironclad Controls|Juniper Software|Keystone Pet Care|Lumen Diagnostics|Meridian Freight|
-Northwind Labs|Orchard Home Brands|Pinecrest Staffing|Quarry Materials|Redwood Clinics|Summit Data|Tidewater Marine|
-Upland Outdoors|Vantage Payments|Westbrook Fluid Systems|Yardline Sports|Zephyr Cloud|Alder Specialty Chem|Beacon Vet|
-Copperleaf Security|Driftwood Learning|Elmstone Testing""".replace("\n", "").split("|"))
+GP = "Lanternfish Ventures"
+FUNDS = [("Lanternfish Ventures I", 2014, 150, 20), ("Lanternfish Ventures II", 2017, 225, 24),
+         ("Lanternfish Ventures III", 2021, 300, 22)]
+STAGES = ["Seed", "Series A", "Series B", "Series C", "Series D", "Series E"]
+ENTRY_POST = {"Seed": (8, 20), "Series A": (30, 70), "Series B": (100, 250)}
+ENTRY_OWN = {"Seed": (0.08, 0.14), "Series A": (0.12, 0.20), "Series B": (0.05, 0.09)}
+FAIL = [0.30, 0.22, 0.15, 0.10, 0.08, 0.06]
 
-
-# Per-company profile: sector, deal type, founded year, pre-investment description, and
-# milestones as (months after entry, text). Blank fields are deliberate: they exercise the
-# app's fallbacks (near-inception, no description, too early, check-in flag).
-P = {
- "Atlas Precision": ("Industrials", "Buyout", 1988, "Family-owned maker of aerospace fasteners in Ohio, ~€70M revenue, single plant, founder seeking succession.", [(9, "Hired first outside CEO"), (20, "Opened second plant in Texas"), (38, "Lost largest customer contract; restructured cost base")]),
- "Brightwater Health": ("Health Care", "Growth Equity", 2009, "Regional home-health provider in five states, growing ~20% a year, founder-led with minority angel investors.", [(12, "Entered three new states"), (30, "Launched value-based care contracts with two payers"), (54, "Recapitalised; firm took partial liquidity")]),
- "Cinder Analytics": ("Information Technology", "Growth Equity", 2011, "Hospital revenue-cycle analytics software, ~200 customers, break-even, seed and Series A backed.", [(10, "Moved product to subscription pricing"), (26, "Acquired a coding-audit tool"), (48, "Crossed 600 hospital customers")]),
- "Dovetail Foods": ("Consumer Discretionary", "Buyout", 1972, "Private-label snack maker supplying grocers in the Northeast, flat sales, underinvested plants.", [(8, "New CEO from a national food brand"), (24, "Automated two packaging lines"), (47, "Won national grocery private-label contract")]),
- "Everline Insurance": ("Financials", "Carve-out", 1995, "Specialty commercial insurance brokerage unit of a larger carrier, no standalone systems.", [(12, "Completed separation from parent; new IT stack"), (30, "Five bolt-on agency acquisitions"), (60, "Reached €50M EBITDA")]),
- "Falcon Ridge Logistics": ("Industrials", "Buyout", 2001, "Asset-light freight brokerage focused on refrigerated loads in the Southeast.", [(14, "Launched digital load-matching platform"), (30, "Added cross-border Mexico lane")]),
- "Granite Payroll": ("Business Services", "Carve-out", 2004, "Payroll processing division for small businesses, carved out of a regional bank.", [(10, "Standalone brand launched"), (28, "Migrated clients to cloud platform")]),
- "Harbor Dental Group": ("Health Care", "Buyout", 2008, "Dental service organisation with 18 practices in Florida.", [(12, "Grew to 45 practices through acquisitions"), (36, "Added orthodontics service line"), (56, "Reached 110 practices across four states")]),
- "Ironclad Controls": ("Industrials", "Buyout", 1981, "Maker of industrial flow-control valves sold through distributors, founder retiring.", [(15, "Built direct sales team for OEM accounts"), (40, "Acquired European valve maker"), (70, "Opened plant in Mexico")]),
- "Juniper Software": ("Information Technology", "Growth Equity", 2017, "", [(12, "Launched first commercial product"), (30, "Reached €10M ARR"), (52, "Growth stalled; sold to strategic buyer below cost")]),
- "Keystone Pet Care": ("Consumer Discretionary", "Buyout", 1999, "Chain of 40 pet grooming and boarding locations in the Mid-Atlantic.", [(12, "Opened 15 new locations"), (40, "Launched membership programme")]),
- "Lumen Diagnostics": ("Health Care", "Carve-out", 1990, "Clinical lab testing unit of a diagnostics conglomerate, 12 labs.", [(18, "Standalone operation complete"), (32, "COVID testing volumes lifted revenue 3x"), (60, "Repositioned toward specialty oncology testing")]),
- "Meridian Freight": ("Industrials", "Buyout", 1994, "Less-than-truckload carrier in the Midwest, 30 terminals.", [(20, "Terminal network rationalised to 24"), (48, "Fuel costs compressed margins")]),
- "Northwind Labs": ("Health Care", "Buyout", 2006, "Contract research organisation for early-stage biotech, ~€150M revenue.", [(12, "Added preclinical imaging capability"), (36, "Won multi-year sponsor contract with top-10 pharma"), (72, "Sold to strategic acquirer")]),
- "Orchard Home Brands": ("Consumer Discretionary", "Buyout", 1985, "Home fragrance and candle brand sold mainly through department stores.", [(10, "Shifted mix to direct-to-consumer online"), (30, "Entered mass retail with a second brand"), (66, "Sold to consumer products company")]),
- "Pinecrest Staffing": ("Business Services", "Take-private", 1998, "Publicly listed light-industrial staffing firm trading below book value.", []),
- "Quarry Materials": ("Industrials", "Take-private", 1964, "Listed aggregates and ready-mix producer with 22 quarries in the Mountain West.", [(14, "Acquired four quarries from a competitor"), (40, "Raised prices on infrastructure-bill demand")]),
- "Redwood Clinics": ("Health Care", "Take-private", 2003, "Listed urgent-care operator, 60 clinics, under activist pressure.", [(18, "Closed 12 underperforming clinics"), (48, "Partial sale of Arizona clinics returned capital")]),
- "Summit Data": ("Information Technology", "Buyout", 2012, "", [(24, "Migrated customers to new data platform")]),
- "Tidewater Marine": ("Industrials", "Carve-out", 1979, "", []),
- "Upland Outdoors": ("Consumer Discretionary", "Buyout", 2002, "Outdoor apparel brand with 30 stores and wholesale to specialty retailers.", [(9, "Pandemic demand doubled online sales"), (30, "Opened 12 stores"), (48, "Dividend recap returned part of capital")]),
- "Vantage Payments": ("Financials", "Growth Equity", 2016, "Payments processor for independent medical practices, ~€40M revenue.", [(12, "Launched patient financing product"), (36, "Processed €5B annual volume"), (51, "Sold to a larger payments company")]),
- "Westbrook Fluid Systems": ("Industrials", "Growth Equity", 2010, "Designer of water-treatment skids for municipal utilities.", [(18, "Won first federal infrastructure contract")]),
- "Yardline Sports": ("Consumer Discretionary", "Buyout", 2005, "Operator of 25 youth sports facilities in Texas and Oklahoma.", [(12, "Opened six facilities"), (30, "Launched tournament events business")]),
- "Zephyr Cloud": ("Information Technology", "Take-private", 2009, "Listed cloud backup software company with slowing growth.", [(8, "Cut 15% of workforce"), (24, "Launched ransomware protection add-on")]),
- "Alder Specialty Chem": ("Industrials", "Growth Equity", 1997, "Maker of specialty coatings additives, family-owned, growing into EV battery market.", [(10, "Opened pilot plant for battery materials")]),
- "Beacon Vet": ("Health Care", "Take-private", 2012, "Listed veterinary hospital group, 80 hospitals.", [(14, "Added 20 hospitals through acquisitions")]),
- "Copperleaf Security": ("Information Technology", "Growth Equity", 2023, "", [(9, "First enterprise customer signed")]),
- "Driftwood Learning": ("Business Services", "Buyout", 2000, "Corporate compliance training provider with 1,200 enterprise clients.", []),
- "Elmstone Testing": ("Industrials", "Buyout", 1993, "Materials testing and inspection labs serving construction and energy clients.", []),
+SECTORS = {
+    "Enterprise Software": (["Relay", "Tandem", "Ledgerline", "Quorum", "Brightdesk", "Clearpath", "Keystone", "Waypoint", "Northstar", "Mosaic", "Beacon"], ["", " Software", " HQ", " Cloud"],
+        ["workflow software for {who}", "a system of record for {who}", "procurement automation for {who}"], ["mid-size manufacturers", "hospital finance teams", "law firms", "logistics operators", "insurance carriers"]),
+    "Fintech": (["Tally", "Coinwise", "Ferry", "Plinth", "Vault", "Kiteline", "Sable", "Cadence", "Harbor"], [" Pay", " Money", " Finance", ""],
+        ["payments infrastructure for {who}", "a spend-management card for {who}", "embedded lending for {who}"], ["independent restaurants", "freelancers", "construction subcontractors", "online marketplaces"]),
+    "Healthcare": (["Juniper", "Vela", "Tidewell", "Halcyon", "Meadow", "Kinetic", "Lumen", "Orchid"], [" Health", " Care", " Bio", " Clinics"],
+        ["virtual care for {who}", "remote monitoring for {who}", "a care-navigation platform for {who}"], ["chronic kidney patients", "new mothers", "rural clinics", "employers' health plans"]),
+    "Consumer": (["Pebble", "Marigold", "Wren", "Cobble", "Fable", "Parcel", "Saffron", "Tinker"], ["", " & Co", " Home", " Kids"],
+        ["a subscription brand for {who}", "a resale marketplace for {who}", "a mobile app for {who}"], ["new parents", "home cooks", "outdoor hobbyists", "college students"]),
+    "Climate": (["Verdant", "Gridwise", "Solace", "Carbonline", "Tern", "Aurora", "Windward", "Terra"], [" Energy", " Power", " Systems", " Materials"],
+        ["battery management software for {who}", "low-carbon cement for {who}", "heat-pump installation for {who}"], ["utility-scale storage", "commercial builders", "homeowners", "municipal fleets"]),
+    "Developer Tools": (["Forge", "Stackwise", "Pylon", "Lattice", "Nimbus", "Cobalt", "Kernel", "Glyph"], [" Labs", " AI", " Dev", " Data"],
+        ["observability tooling for {who}", "a data pipeline service for {who}", "model-evaluation tooling for {who}"], ["platform engineering teams", "machine-learning teams", "mobile developers", "data engineers"]),
 }
-
-
-# Fictional investment team. Deal leads are assigned by sector so each partner has a coherent book.
+PRODUCT_MILESTONES = {
+    "Enterprise Software": ["Signed first Fortune 500 customer", "Crossed $10M ARR", "Launched second product line", "Opened London office"],
+    "Fintech": ["Obtained money-transmitter licences in all US states", "Processed $1B in annual volume", "Launched credit product", "Partnered with a top-10 bank"],
+    "Healthcare": ["Won first health-plan contract", "Cleared FDA 510(k)", "Expanded to 20 states", "Reached 100,000 patients"],
+    "Consumer": ["Reached 1M app downloads", "Launched in 400 retail doors", "Turned contribution-margin positive", "Expanded to Canada and the UK"],
+    "Climate": ["Commissioned first commercial plant", "Signed offtake agreement with a utility", "Won a federal DOE grant", "Installed 10,000th system"],
+    "Developer Tools": ["Open-source project passed 20,000 GitHub stars", "Launched paid cloud tier", "Crossed $5M ARR", "Signed first enterprise contract"],
+}
 TEAM = [
- dict(name="Margaret Ellison", title="Co-Founder & Managing Partner", joined=2013, focus="Industrials; Business Services",
-      prior="Partner at a mid-market buyout firm (2004-2013); operations consultant at a global strategy firm", education="BS Mechanical Engineering, Purdue; MBA, Wharton",
-      boards="Chairs the firm's investment committee"),
- dict(name="David Okafor", title="Co-Founder & Managing Partner", joined=2013, focus="Health Care",
-      prior="Principal at a health care growth equity fund (2006-2013); hospital system strategy lead", education="BA Economics, Howard; MBA, Kellogg",
-      boards="Leads the firm's health care practice"),
- dict(name="Sarah Lindqvist", title="Partner", joined=2015, focus="Information Technology; Financials",
-      prior="Vice President in a bank's technology M&A group (2008-2015)", education="BA Mathematics, Wellesley; MBA, Columbia",
-      boards=""),
- dict(name="James Whitaker", title="Partner", joined=2016, focus="Consumer Discretionary",
-      prior="CFO of a specialty retailer (2010-2016); audit at a Big Four firm", education="BBA Accounting, Notre Dame; CPA",
-      boards=""),
- dict(name="Priya Raman", title="Principal", joined=2019, focus="Information Technology; Health Care",
-      prior="", education="BS Computer Science, Georgia Tech; MBA, Stanford", boards=""),
+    dict(name="Rachel Moreno", title="Founding General Partner", joined=2013, focus="Enterprise Software; Developer Tools",
+         prior="Founder and CEO of a data-infrastructure startup acquired in 2012; product lead at a large software company", education="BS Computer Science, Carnegie Mellon",
+         boards="Chairs the investment committee"),
+    dict(name="Daniel Asante", title="Founding General Partner", joined=2013, focus="Fintech; Consumer",
+         prior="Partner at a multi-stage venture firm (2006-2013); investment banker covering payments", education="BA Economics, Duke; MBA, Harvard", boards=""),
+    dict(name="Mei Tanaka", title="General Partner", joined=2016, focus="Healthcare",
+         prior="Physician and co-founder of a digital-health company; clinical fellow at a teaching hospital", education="MD, Johns Hopkins; BS Biology, UC Berkeley", boards=""),
+    dict(name="Oliver Grant", title="Partner", joined=2019, focus="Climate",
+         prior="Head of strategy at a utility-scale solar developer (2012-2019)", education="MS Energy Systems, Stanford", boards=""),
+    dict(name="Sofia Reyes", title="Principal", joined=2020, focus="Developer Tools; Enterprise Software", prior="", education="BS Electrical Engineering, MIT", boards=""),
 ]
-# The rest of the firm: name and title only. Levels are inferred from titles by the app.
-STAFF = [("Tom Castellano", "Vice President"), ("Aisha Bello", "Principal"), ("Grace Liu", "Senior Associate"),
-         ("Marcus Dunn", "Associate"), ("Hannah Pruitt", "Associate"), ("Leo Fischer", "Analyst"), ("Nadia Karim", "Analyst"),
-         ("Robert Haines", "Chief Financial Officer"), ("Elena Sorokina", "Controller"), ("Chris Adebayo", "Head of Investor Relations"),
-         ("Maria Delgado", "Chief Compliance Officer"), ("Kevin Tran", "Fund Accountant"), ("Julia Brenner", "Office Manager")]
+STAFF = [("Ben Whitfield", "Principal"), ("Anika Shah", "Senior Associate"), ("Luke Porter", "Associate"), ("Zara Idris", "Associate"),
+         ("Noah Kim", "Analyst"), ("Paula Jensen", "Chief Financial Officer"), ("Isaac Muller", "Fund Controller"),
+         ("Hana Novak", "Head of Platform"), ("Grace Obi", "Head of Talent"), ("Victor Lang", "Operations Manager")]
 TEAM += [dict(name=n, title=t, joined="", focus="", prior="", education="", boards="") for n, t in STAFF]
-LEAD = {"Industrials": "Margaret Ellison", "Business Services": "Margaret Ellison", "Health Care": "David Okafor",
-        "Information Technology": "Sarah Lindqvist", "Financials": "Sarah Lindqvist", "Consumer Discretionary": "James Whitaker"}
+LEAD = {"Enterprise Software": "Rachel Moreno", "Developer Tools": "Rachel Moreno", "Fintech": "Daniel Asante", "Consumer": "Daniel Asante",
+        "Healthcare": "Mei Tanaka", "Climate": "Oliver Grant"}
+
 
 def qend(d):
     m = ((d.month - 1) // 3 + 1) * 3
-    nxt = dt.date(d.year + (m == 12), m % 12 + 1, 1)
-    return nxt - dt.timedelta(days=1)
+    return dt.date(d.year + (m == 12), m % 12 + 1, 1) - dt.timedelta(days=1)
+
 
 def add_months(d, n):
     y, m = divmod(d.month - 1 + n, 12)
     return qend(dt.date(d.year + y, m + 1, 1))
 
-cfs, invs = [], []
-for fund, vint, size in FUNDS:
-    start = dt.date(vint, 3, 31)
-    n = {2014: 10, 2017: 11, 2021: 9}[vint]
-    deployable = size * 0.88
-    weights = [random.uniform(0.6, 1.4) for _ in range(n)]
-    ws = sum(weights)
-    flows = {}
-    def flow(d, k, a):
-        if d <= REPORT: flows[(d, k)] = flows.get((d, k), 0) + a
-    unreal_total = 0
-    for i in range(n):
-        inv = round(deployable * weights[i] / ws, 1)
-        entry = add_months(start, int(i * 48 / n) + random.randint(0, 3))
-        if entry > REPORT: entry = add_months(REPORT, -3)
-        if fund.endswith("III") and i == n - 1: entry = dt.date(2025, 6, 30)  # a deal too recent to have milestones
-        hold = random.randint(42, 96)
-        exit_d = add_months(entry, hold)
-        age = (REPORT - entry).days / 365.25
-        # Outcome drawn once; realized deals exit at it, live deals mark partway there.
-        moic = random.choice([0.0, 0.4, 0.9, 1.5, 1.9, 2.3, 2.7, 3.2, 4.1, 5.5]) * random.uniform(0.85, 1.15)
-        realized_flag = exit_d <= REPORT
-        if realized_flag:
-            realized, unreal = inv * moic, 0.0
-        else:
-            prog = min(1, age / (hold / 12))
-            mark = 1 + (moic - 1) * prog * 0.8 if moic >= 1 else 1 - (1 - moic) * prog
-            partial = inv * mark * (0.25 if age > 4 and random.random() < 0.5 else 0)
-            realized, unreal = partial, inv * mark - partial
-        realized, unreal = round(realized, 1), round(unreal, 1)
-        flow(entry, "Contribution", -inv)
-        if realized:
-            flow(exit_d if realized_flag else add_months(REPORT, -6), "Distribution", realized)
-        unreal_total += unreal
-        rev0 = round(inv * random.uniform(1.2, 3.0), 1)
-        margin0 = random.uniform(0.12, 0.28)
-        e0 = rev0 * margin0
-        mult0 = random.uniform(8.5, 13.5)
-        tev0 = e0 * mult0
-        nd0 = tev0 * random.uniform(0.40, 0.60)
-        eq0 = tev0 - nd0
-        own = min(0.95, inv / eq0) if eq0 > 0 else 0.8
-        eq0 = inv / own
-        nd0 = tev0 - eq0
-        tv = realized + unreal
-        eq1 = max(tv / own, 0.1)
-        years = max(1, (min(exit_d, REPORT) - entry).days / 365.25)
-        rev1 = rev0 * (1 + random.uniform(-0.05, 0.16)) ** years
-        margin1 = max(0.03, margin0 + random.uniform(-0.05, 0.06))
-        e1 = rev1 * margin1
-        nd1 = max(0, nd0 * random.uniform(0.35, 1.05))
-        mult1 = (eq1 + nd1) / e1
-        if mult1 < 3:  # deal failed: equity wiped, multiple compressed, debt stays
-            mult1 = max(3.0, mult1); nd1 = mult1 * e1 - eq1
-        name = next(NAMES); sec, dtype, founded, pre, ms = P[name]; random.choice(SECTORS); random.choice(DEALS)  # draws kept so other values are unchanged
-        last = min(exit_d, REPORT)
-        miles = " | ".join(f"{add_months(entry, m).isoformat()[:7]}: {t}" for m, t in ms if add_months(entry, m) <= last)
-        invs.append(dict(company=name, fund=fund, sector=sec, country=random.choice(COUNTRIES),
-            deal_type=dtype, entry_date=entry, exit_date=exit_d if realized_flag else "",
-            invested=inv, realized=realized, unrealized=unreal,
-            revenue_entry=round(rev0, 1), revenue_exit=round(rev1, 1), ebitda_entry=round(e0, 1), ebitda_exit=round(e1, 1),
-            tev_entry=round(tev0, 1), tev_exit=round(mult1 * e1, 1), net_debt_entry=round(nd0, 1), net_debt_exit=round(nd1, 1),
-            ownership_entry=round(own, 3), ownership_exit=round(own, 3),
-            founded=founded, pre_investment=pre, milestones=miles,
-            # Newer tech and health deals in Fund III go to the principal, who joined in 2019.
-            deal_lead="Priya Raman" if vint == 2021 and sec in ("Information Technology", "Health Care") else LEAD[sec],
-            # Control deals come with a board seat; growth stakes and club take-privates only when the cheque is large.
-            board_seat="Yes" if dtype not in ("Growth Equity", "Take-private") or inv >= 110 else "No"))
-    # Management fees: 2% of commitment through year 5, then 1.5% of invested.
-    d = start
-    last_exit = max((dt.date.fromisoformat(str(x['exit_date'])) for x in invs if x['fund'] == fund and x['exit_date']), default=REPORT)
-    live = any(x['fund'] == fund and x['unrealized'] for x in invs)
-    while d <= (REPORT if live else last_exit):
-        yrs = (d - start).days / 365.25
-        fee = size * 0.02 / 4 if yrs < 5 else deployable * 0.015 / 4 * max(0.3, 1 - (yrs - 5) / 8)
-        flow(d, "Contribution", -round(fee, 2))
-        d = add_months(d, 3)
-    # Carry: 20% of distributions once cumulative distributions exceed paid-in.
-    paid = dist = 0.0
-    for (d, k) in sorted(flows):
-        a = flows[(d, k)]
-        if k == "Contribution": paid += -a
-        else:
-            gross = a
-            excess = max(0, dist + gross - paid) - max(0, dist - paid)
-            net = gross - 0.2 * excess
-            flows[(d, k)] = round(net, 2); dist += net
-    gain = max(0, dist + unreal_total - paid)
-    flows[(REPORT, "NAV")] = round(unreal_total - 0.2 * min(gain, unreal_total) * 0.9, 2)
-    for (d, k), a in sorted(flows.items()):
-        cfs.append(dict(fund=fund, vintage=vint, fund_size=size, date=d, type=k, amount=a))
 
-# Files carry full currency amounts (not millions) so the app's unit scaling is exercised.
+def money(x):
+    return f"${x / 1000:.1f}B" if x >= 1000 else f"${x:.0f}M"
+
+
+def simulate(seed):
+    rnd = random.Random(seed)
+    used, invs, cfs = set(), [], []
+    for fund, vint, size, n in FUNDS:
+        start = dt.date(vint, 3, 31)
+        deals = []
+        for i in range(n):
+            sec = rnd.choice(list(SECTORS))
+            pre, suf, what, who = SECTORS[sec]
+            while True:
+                name = rnd.choice(pre) + rnd.choice(suf)
+                if name not in used: used.add(name); break
+            stage = rnd.choices(["Seed", "Series A", "Series B"], [0.5, 0.35, 0.15])[0]
+            entry = add_months(start, int(i * 42 / n) + rnd.randint(0, 3))
+            if fund.endswith("III") and i == n - 1: entry = dt.date(2025, 6, 30)  # too recent for milestones
+            post = rnd.uniform(*ENTRY_POST[stage]); own = rnd.uniform(*ENTRY_OWN[stage])
+            si = STAGES.index(stage)
+            founded = entry.year - (rnd.randint(0, 1) if stage == "Seed" else rnd.randint(2, 4) if stage == "Series A" else rnd.randint(4, 7))
+            checks = [(entry, own * post)]
+            rounds = [dict(d=entry, name=stage, post=post, raised=post * rnd.uniform(0.18, 0.28), fund=own * post, own=own)]
+            ms, d, follow_ons, exit_d, exit_type, proceeds, last_round = [], entry, 0, None, "", 0.0, (entry, stage, post)
+            entry_post, entry_own = post, own
+            while True:
+                d = add_months(d, rnd.randint(14, 30))
+                if d > REPORT: break
+                if rnd.random() < FAIL[min(si, 5)]:
+                    exit_d = d
+                    if rnd.random() < 0.6:
+                        exit_type, proceeds = "Shut down", 0.0
+                        ms.append((d, "Wound down; remaining assets sold"))
+                    else:
+                        v = post * rnd.uniform(0.1, 0.5); exit_type, proceeds = "M&A", own * v
+                        ms.append((d, f"Acqui-hired by a larger competitor for {money(v)}"))
+                    break
+                if si >= 2 and rnd.random() < 0.18:
+                    ipo = post > 1500 and rnd.random() < 0.5
+                    v = post * rnd.uniform(1.1, 2.6)
+                    exit_d, exit_type, proceeds = d, "IPO" if ipo else "M&A", own * v
+                    ms.append((d, f"{'IPO at a' if ipo else 'Acquired by a strategic buyer at a'} {money(v)} valuation"))
+                    break
+                if rnd.random() < 0.35:
+                    ms.append((add_months(d, -rnd.randint(4, 9)), rnd.choice(PRODUCT_MILESTONES[sec])))
+                step = rnd.uniform(0.6, 0.95) if rnd.random() < 0.12 else math.exp(rnd.gauss(0.85, 0.55))
+                si = min(si + 1, 5); post *= step
+                dil = rnd.uniform(0.15, 0.25)
+                # Follow on pro rata into companies that stepped up, at most twice: reserves go to winners.
+                fund_in = 0.0
+                if step >= 1.6 and follow_ons < 2 and si <= 4:
+                    fund_in = own * post * dil; checks.append((d, fund_in)); follow_ons += 1
+                else:
+                    own *= 1 - dil
+                # Raises live in the company history file now; milestones keep product and exit events.
+                rounds.append(dict(d=d, name=STAGES[si] + (" (down round)" if step < 1 else ""), post=post, raised=post * dil, fund=fund_in, own=own))
+                last_round = (d, STAGES[si] + (" (down round)" if step < 1 else ""), post)
+            if exit_d:
+                unreal, cur_post = 0.0, None
+            else:
+                age = (REPORT - last_round[0]).days / 365.25
+                mark = 1.0 if age < 1.5 else 0.85 if age < 3 else 0.6  # stale marks get haircut
+                unreal, cur_post = own * post * mark, post
+            deals.append(dict(rounds=rounds, end=exit_d or REPORT, failed=exit_type == "Shut down" or (exit_type == "M&A" and proceeds < own * post * 0.6), name=name, sec=sec, stage=stage, entry=entry, founded=founded, checks=checks, exit_d=exit_d, exit_type=exit_type,
+                              proceeds=proceeds, unreal=unreal, entry_post=entry_post, latest_post=post if not exit_d else None,
+                              latest_round=last_round[1] if not exit_d else "", entry_own=entry_own, own=own, ms=sorted(ms),
+                              pre=f"{rnd.choice(what).format(who=rnd.choice(who)).capitalize()}. " + (
+                                  "Pre-revenue, founding team of three with a working prototype." if stage == "Seed" else
+                                  f"About ${rnd.randint(1, 4)}M ARR and {rnd.randint(15, 60)} paying customers." if stage == "Series A" else
+                                  f"About ${rnd.randint(8, 20)}M ARR, growing {rnd.randint(80, 160)}% a year.")))
+        # Size cheques to the fund: ~82% of commitment invested, the rest fees and expenses.
+        k = 0.82 * size / sum(c for dl in deals for _, c in dl["checks"])
+        for dl in deals:
+            dl["checks"] = [(d, c * k) for d, c in dl["checks"]]
+            for key in ("proceeds", "unreal", "entry_own", "own"): dl[key] *= k
+            for r in dl["rounds"]: r["fund"] *= k; r["own"] *= k; r["raised"] = max(r["raised"], r["fund"] * 1.25)
+        flows = {}
+        def flow(d, kind, a):
+            if d <= REPORT: flows[(d, kind)] = flows.get((d, kind), 0) + a
+        for dl in deals:
+            for d, c in dl["checks"]: flow(d, "Contribution", -c)
+            if dl["exit_d"] and dl["proceeds"]: flow(dl["exit_d"], "Distribution", dl["proceeds"])
+        d = start
+        while d <= REPORT:
+            yrs = (d - start).days / 365.25
+            flow(d, "Contribution", -(size * 0.025 / 4 if yrs < 5 else size * 0.015 / 4 * max(0.3, 1 - (yrs - 5) / 8)))
+            d = add_months(d, 3)
+        paid = dist = 0.0
+        for key in sorted(flows):
+            a = flows[key]
+            if key[1] == "Contribution": paid -= a
+            else:
+                excess = max(0, dist + a - paid) - max(0, dist - paid)
+                flows[key] = a - 0.2 * excess; dist += flows[key]
+        unreal = sum(dl["unreal"] for dl in deals)
+        flows[(REPORT, "NAV")] = unreal - 0.2 * min(max(0, dist + unreal - paid), unreal)
+        for (d, kind), a in sorted(flows.items()):
+            cfs.append(dict(fund=fund, vintage=vint, fund_size=size, date=d, type=kind, amount=a))
+        for dl in deals: dl["fund"], dl["vint"], dl["size"] = fund, vint, size
+        invs += deals
+    return invs, cfs
+
+
+def gross(invs, fund):
+    D = [d for d in invs if d["fund"] == fund]
+    inv = sum(c for d in D for _, c in d["checks"])
+    return sum(d["proceeds"] + d["unreal"] for d in D) / inv
+
+
+def acceptable(invs):
+    t = [gross(invs, f[0]) for f in FUNDS]
+    returners = sum(1 for d in invs if d["fund"] == FUNDS[0][0] and d["proceeds"] + d["unreal"] >= FUNDS[0][2])
+    return 2.8 <= t[0] <= 4.5 and 1.9 <= t[1] <= 3.0 and 0.95 <= t[2] <= 1.4 and returners >= 1
+
+
+seed = next(s for s in range(1, 5000) if acceptable(simulate(s)[0]))
+invs, cfs = simulate(seed)
+
+# Blank the reported history of a few long-held companies so the app's check-in flag has cases to show.
+stale = [d for d in invs if not d["exit_d"] and len(d["rounds"]) == 1 and (REPORT - d["entry"]).days > 400][:3]
+for d in stale: d["ms"] = []
+for d in [d for d in invs if d["stage"] != "Seed"][2::9]: d["pre"] = ""  # missing descriptions
+
 M = 1_000_000
-for r in cfs: r["amount"] = round(r["amount"] * M); r["fund_size"] = r["fund_size"] * M; r["currency"] = "EUR"
-for r in invs:
-    for k in ("invested", "realized", "unrealized", "revenue_entry", "revenue_exit", "ebitda_entry", "ebitda_exit", "tev_entry", "tev_exit", "net_debt_entry", "net_debt_exit"):
-        r[k] = round(r[k] * M)
+rows = []
+for d in invs:
+    lead = "Sofia Reyes" if d["vint"] == 2021 and d["sec"] in ("Developer Tools", "Enterprise Software") and d["stage"] == "Seed" else LEAD[d["sec"]]
+    invested = sum(c for _, c in d["checks"])
+    last = min(d["exit_d"] or REPORT, REPORT)
+    rows.append(dict(company=d["name"], fund=d["fund"], sector=d["sec"], country="United States", stage=d["stage"],
+        entry_date=d["entry"], exit_date=d["exit_d"] or "", exit_type=d["exit_type"],
+        invested=round(invested * M), initial_investment=round(d["checks"][0][1] * M),
+        realized=round(d["proceeds"] * M), unrealized=round(d["unreal"] * M),
+        entry_post_money=round(d["entry_post"] * M), latest_post_money=round(d["latest_post"] * M) if d["latest_post"] else "",
+        latest_round=d["latest_round"], ownership_entry=round(d["entry_own"], 4), ownership_current=round(d["own"], 4) if not d["exit_d"] else "",
+        founded=d["founded"], pre_investment=d["pre"],
+        milestones=" | ".join(f"{m.isoformat()[:7]}: {t}" for m, t in d["ms"] if d["entry"] < m <= last),
+        deal_lead=lead, board_seat="Yes" if d["entry_own"] >= 0.10 else "No"))
+# Company history: every raise, plus a quarterly report of cash and burn. Burn is set per financing
+# so cash runs down toward the next event: companies that later raised still had some cash left,
+# companies that failed ran it to zero, and live companies sit anywhere on their runway today.
+hist = []
+hrnd = random.Random(seed + 1)
+for d in invs:
+    rs = d["rounds"]
+    for r in rs:
+        hist.append(dict(company=d["name"], date=r["d"], round=r["name"], post_money=round(r["post"] * M), amount_raised=round(r["raised"] * M),
+                         fund_invested=round(r["fund"] * M), ownership=round(r["own"], 4), cash_on_hand="", monthly_burn=""))
+    if d in stale: continue  # the GP has not sent reports on these; the app should notice
+    cash = 0.0
+    for i, r in enumerate(rs):
+        nxt = rs[i + 1]["d"] if i + 1 < len(rs) else d["end"]
+        cash += r["raised"]
+        months = max(3, (nxt.year - r["d"].year) * 12 + nxt.month - r["d"].month)
+        if i + 1 < len(rs): burn = cash / (months * hrnd.uniform(1.15, 1.6))
+        elif d["failed"]: burn = cash / (months * hrnd.uniform(0.9, 1.0))
+        else: burn = cash / (months * 1.25 + hrnd.uniform(1, 28))  # still operating: some runway left today
+        q = add_months(r["d"], 3)
+        while q <= nxt and q <= REPORT:
+            cash = max(0.0, cash - burn * 3)
+            # Only the final financing reports on the data date itself; an earlier one would log pre-raise cash.
+            if q < nxt or (nxt == REPORT and i == len(rs) - 1):
+                hist.append(dict(company=d["name"], date=q, round="", post_money="", amount_raised="", fund_invested="",
+                                 ownership=round(r["own"], 4), cash_on_hand=round(cash * M), monthly_burn=round(burn * M)))
+            burn *= 1.03
+            q = add_months(q, 3)
+hist.sort(key=lambda h: (h["company"], h["date"], h["round"] == ""))
 
-def write(name, rows):
+cf_rows = [dict(fund=r["fund"], vintage=r["vintage"], fund_size=r["fund_size"] * M, date=r["date"], type=r["type"],
+                amount=round(r["amount"] * M), currency="USD") for r in cfs]
+
+
+def write(name, rs):
     with open(name, "w", newline="") as f:
-        w = csv.DictWriter(f, fieldnames=list(rows[0])); w.writeheader(); w.writerows(rows)
-write("cash_flows.csv", cfs)
-write("investments.csv", invs)
-# Illustrative quartile breakpoints by vintage (not a real data provider's figures).
-bm = [dict(vintage=2014, metric="TVPI", top=2.35, median=1.85, bottom=1.45), dict(vintage=2014, metric="IRR", top=0.21, median=0.145, bottom=0.09),
-      dict(vintage=2014, metric="DPI", top=1.95, median=1.40, bottom=0.95), dict(vintage=2017, metric="TVPI", top=2.20, median=1.70, bottom=1.35),
-      dict(vintage=2017, metric="IRR", top=0.24, median=0.16, bottom=0.10), dict(vintage=2017, metric="DPI", top=1.20, median=0.70, bottom=0.35),
-      dict(vintage=2021, metric="TVPI", top=1.45, median=1.18, bottom=1.00), dict(vintage=2021, metric="IRR", top=0.17, median=0.09, bottom=0.01),
-      dict(vintage=2021, metric="DPI", top=0.25, median=0.07, bottom=0.00)]
+        w = csv.DictWriter(f, fieldnames=list(rs[0])); w.writeheader(); w.writerows(rs)
+
+
+write("cash_flows.csv", cf_rows)
+write("investments.csv", rows)
+# Illustrative venture quartiles by vintage (made up; not any data provider's figures).
+bm = []
+for v, q in {2014: dict(TVPI=(3.0, 2.0, 1.3), IRR=(0.25, 0.15, 0.07), DPI=(2.0, 1.0, 0.4)),
+             2017: dict(TVPI=(2.6, 1.8, 1.3), IRR=(0.28, 0.18, 0.09), DPI=(0.9, 0.35, 0.1)),
+             2021: dict(TVPI=(1.3, 1.0, 0.85), IRR=(0.08, 0.0, -0.06), DPI=(0.05, 0.0, 0.0))}.items():
+    for m, (top, med, bot) in q.items(): bm.append(dict(vintage=v, metric=m, top=top, median=med, bottom=bot))
 write("benchmarks.csv", bm)
 write("team.csv", TEAM)
-print(len(cfs), len(invs))
+write("company_history.csv", hist)
+print("seed", seed, "companies", len(rows), "gross TVM", [round(gross(invs, f[0]), 2) for f in FUNDS])
