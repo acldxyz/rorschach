@@ -70,6 +70,15 @@ tr.total td { font-weight: 600; border-top: 2px solid var(--ink-3) }
 .grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 520px), 1fr)); gap: 20px }
 .grid3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); gap: 16px }
 .chart { position: relative; height: 280px; min-width: 0 } .chart.tall { height: 340px } .chart.xtall { height: 460px }
+.mapper { border-color: var(--accent); gap: 10px }
+.mtable td { white-space: normal; vertical-align: top } .mtable td:first-child { font-weight: 600 }
+.mtable select { max-width: 16em }
+.msamp { font: 12px var(--mono); color: var(--ink-2); max-width: 28em }
+.mchip { display: inline-block; font: 600 11px var(--body); padding: 1px 7px; border-radius: 999px; border: 1px solid var(--rule); color: var(--ink-2); white-space: nowrap }
+.mchip.ai { border-color: var(--accent); color: var(--accent) } .mchip.ai.low { border-color: var(--warn); color: var(--warn) }
+.mtypes { display: flex; flex-wrap: wrap; gap: 6px 18px } .mtypes label { font-size: 13px }
+.mopts { gap: 8px 20px } .mopts input:not([type]) { font: 13px var(--body); padding: 4px 6px; border: 1px solid var(--rule); border-radius: 4px; background: var(--bg); color: var(--ink) }
+.mnote { margin: 0 }
 .figs-row { display: flex; flex-wrap: wrap; gap: 8px 24px; align-items: center; border-top: 1px solid var(--rule); padding-top: 12px }
 .seg { display: inline-flex; border: 1px solid var(--rule); border-radius: 4px; overflow: hidden }
 .seg button { border: 0; border-radius: 0; padding: 5px 12px }
@@ -155,6 +164,8 @@ tr.total td { font-weight: 600; border-top: 2px solid var(--ink-3) }
     <div class="panel-head">
       <h2 id="loadH">Data</h2>
       <div class="row">
+        <button id="wsSave" type="button">Save workspace</button>
+        <button id="wsOpenBtn" type="button">Open workspace</button><input type="file" id="wsOpen" accept=".json,application/json" hidden>
         <button class="primary" id="sampleBtn" type="button">Load sample data</button>
         <button id="clearBtn" type="button">Clear</button>
       </div>
@@ -165,6 +176,7 @@ tr.total td { font-weight: 600; border-top: 2px solid var(--ink-3) }
       <label class="drop" data-kind="hist"><b>Company history</b><span class="note">One row per funding round and per quarterly report: ownership, cash, burn, revenue, gross margin. Optional; powers runway and round tracking.</span><input type="file" id="fileHist" accept=".csv,.xlsx,.xls"><span class="status">Not loaded</span></label>
       <label class="drop" data-kind="team"><b>Firm staff</b><span class="note">Everyone at the firm with their title; background for partners. Optional; powers headcount and partner bios.</span><input type="file" id="fileTeam" accept=".csv,.xlsx,.xls"><span class="status">Not loaded</span></label>
     </div>
+    <div class="mapper panel" id="mapper" hidden></div>
     <div class="figs-row">
       <div class="row"><label for="inUnit" class="note">Amounts in files are in</label>
         <select id="inUnit"><option value="1">full units</option><option value="1000">thousands</option><option value="1000000">millions</option></select></div>
@@ -183,7 +195,7 @@ tr.total td { font-weight: 600; border-top: 2px solid var(--ink-3) }
     <p class="errors" id="errors" role="alert"></p>
     <details>
       <summary>File formats</summary>
-      <p class="note">Headers are case-insensitive. Set the unit your files use above (full amounts, thousands or millions); the app picks millions, thousands or full figures for display from the size of the funds. Add a <code>currency</code> column (ISO code, e.g. EUR) to the cash flows; investment amounts are read in their fund's currency. Contributions negative, distributions positive, NAV is the reported value at a date (the latest NAV per fund is used).</p>
+      <p class="note">Column names don't have to match: each upload opens a matching step that recognises common labels, can ask Claude about the rest, and remembers what you confirm. A workspace file saves everything you have loaded so you can pick it up later. Headers are case-insensitive. Set the unit your files use above (full amounts, thousands or millions); the app picks millions, thousands or full figures for display from the size of the funds. Add a <code>currency</code> column (ISO code, e.g. EUR) to the cash flows; investment amounts are read in their fund's currency. Contributions negative, distributions positive, NAV is the reported value at a date (the latest NAV per fund is used).</p>
 <pre>cash_flows:  fund, vintage, fund_size, date, type (Contribution|Distribution|NAV), amount, currency
 investments: company, fund, sector, stage (Seed|Series A|...), entry_date, exit_date,
              exit_type (IPO|M&A|Shut down), invested (all cheques), initial_investment,
@@ -225,23 +237,11 @@ const BM_SOURCES = {
 };
 // Figures typed or uploaded per source stay in this browser only.
 const bmStore = { load(k) { try { return JSON.parse(localStorage.getItem("bm:" + k)) || {} } catch { return {} } }, save(k, v) { try { localStorage.setItem("bm:" + k, JSON.stringify(v)) } catch {} } };
-const state = { cur: { sym: "$", unit: { div: 1, suffix: "", word: "" } }, curMode: "local", inUnit: 1, rates: (() => { try { return JSON.parse(localStorage.getItem("fx-rates")) || {} } catch { return {} } })(), isSample: false, view: "record", coFund: "all", coFlagOnly: false, cf: null, inv: null, bm: null, bmSrc: "sample", bmSample: null, gp: "", dim: "stage", gpFund: "all", gpWin: "16", scope: "all" };
+const state = { cur: { sym: "$", unit: { div: 1, suffix: "", word: "" } }, curMode: "local", inUnit: 1, rates: (() => { try { return JSON.parse(localStorage.getItem("fx-rates")) || {} } catch { return {} } })(), isSample: false, raw: {}, samplingOff: false, view: "record", coFund: "all", coFlagOnly: false, cf: null, inv: null, bm: null, bmSrc: "sample", bmSample: null, gp: "", dim: "stage", gpFund: "all", gpWin: "16", scope: "all" };
 let charts = [];
 
 // ---------- parsing ----------
-function parseCSV(text) {
-  const rows = []; let row = [], f = "", q = false;
-  for (let i = 0; i < text.length; i++) {
-    const c = text[i];
-    if (q) { if (c === '"') { if (text[i + 1] === '"') { f += '"'; i++ } else q = false } else f += c }
-    else if (c === '"') q = true;
-    else if (c === ",") { row.push(f); f = "" }
-    else if (c === "\n" || c === "\r") { if (c === "\r" && text[i + 1] === "\n") i++; row.push(f); rows.push(row); row = []; f = "" }
-    else f += c;
-  }
-  if (f || row.length) { row.push(f); rows.push(row) }
-  return toObjects(rows.filter(r => r.some(x => x.trim() !== "")));
-}
+function parseCSV(text) { return toObjects(parseCSVRows(text)) }
 function toObjects(rows) {
   const h = rows[0].map(k => String(k).trim().toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, ""));
   return rows.slice(1).map(r => Object.fromEntries(h.map((k, i) => [k, r[i] ?? ""])));
@@ -252,13 +252,6 @@ function date(v) {
   if (typeof v === "number") return new Date(Math.round((v - 25569) * 864e5));
   if (!v) return null; const d = new Date(String(v).trim() + (/^\d{4}-\d\d-\d\d$/.test(String(v).trim()) ? "T00:00:00" : ""));
   return isNaN(d) ? null : d;
-}
-async function readFile(file) {
-  if (/\.xlsx?$/i.test(file.name)) {
-    const wb = XLSX.read(await file.arrayBuffer(), { cellDates: true });
-    return toObjects(XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, raw: true, defval: "" }));
-  }
-  return parseCSV(await file.text());
 }
 function need(rows, cols, label) {
   const miss = cols.filter(c => !(c in (rows[0] || {})));
@@ -911,14 +904,8 @@ function renderGross(F, fundColor, asOf) {
 function setStatus(kind, text, cls) { const s = document.querySelector(`.drop[data-kind="${kind}"] .status`); s.textContent = text; s.className = "status " + (cls || "") }
 async function load(kind, file) {
   const err = document.getElementById("errors"); err.textContent = "";
-  try {
-    const rows = await readFile(file);
-    if (kind === "cf") state.isSample = false;
-    if (kind === "bm") { if (state.bmSrc === "sample") { state.bmSrc = "custom"; document.getElementById("bmSrc").value = "custom" } state.bm = normBm(rows); bmStore.save(state.bmSrc, state.bm); renderBm() }
-    else state[kind] = kind === "cf" ? normCf(rows) : kind === "team" ? normTeam(rows) : kind === "hist" ? normHist(rows) : normInv(rows);
-    setStatus(kind, `${file.name} · ${kind === "bm" ? Object.keys(state.bm).length + " vintages" : state[kind].length + " rows"}`, "ok");
-    render();
-  } catch (e) { err.textContent = e.message; setStatus(kind, "Could not read file", "err") }
+  try { setStatus(kind, "Matching columns…"); await startMapping(kind, file); if (M) document.getElementById("mapper").scrollIntoView({ block: "nearest" }) }
+  catch (e) { err.textContent = e.message; setStatus(kind, "Could not read file", "err") }
 }
 document.querySelectorAll(".drop").forEach(el => {
   const kind = el.dataset.kind, input = el.querySelector("input");
@@ -928,7 +915,8 @@ document.querySelectorAll(".drop").forEach(el => {
   el.addEventListener("drop", e => { e.preventDefault(); el.classList.remove("over"); e.dataTransfer.files[0] && load(kind, e.dataTransfer.files[0]) });
 });
 document.getElementById("sampleBtn").addEventListener("click", () => {
-  state.cf = normCf(parseCSV(SAMPLE.cf)); state.inv = normInv(parseCSV(SAMPLE.inv)); state.bmSample = normBm(parseCSV(SAMPLE.bm)); state.team = normTeam(parseCSV(SAMPLE.team)); state.hist = normHist(parseCSV(SAMPLE.hist)); setStatus("hist", `Sample · ${state.hist.length} rows`, "ok"); setStatus("team", `Sample · ${state.team.length} people`, "ok"); state.bmSrc = "sample"; document.getElementById("bmSrc").value = "sample"; state.bm = state.bmSample; renderBm();
+  state.raw = { cf: parseCSV(SAMPLE.cf), inv: parseCSV(SAMPLE.inv), hist: parseCSV(SAMPLE.hist), team: parseCSV(SAMPLE.team) };
+  state.cf = normCf(state.raw.cf); state.inv = normInv(state.raw.inv); state.bmSample = normBm(parseCSV(SAMPLE.bm)); state.team = normTeam(parseCSV(SAMPLE.team)); state.hist = normHist(parseCSV(SAMPLE.hist)); setStatus("hist", `Sample · ${state.hist.length} rows`, "ok"); setStatus("team", `Sample · ${state.team.length} people`, "ok"); state.bmSrc = "sample"; document.getElementById("bmSrc").value = "sample"; state.bm = state.bmSample; renderBm();
   setStatus("cf", `Sample · ${state.cf.length} rows`, "ok"); setStatus("inv", `Sample · ${state.inv.length} companies`, "ok"); 
   document.getElementById("gpTitle").textContent = "Lanternfish Ventures (sample)";
   state.isSample = true; state.inUnit = 1; document.getElementById("inUnit").value = "1";
@@ -939,7 +927,7 @@ document.getElementById("curCtl").addEventListener("click", e => { const b = e.t
 document.getElementById("curCtl").addEventListener("change", e => { const c = e.target.dataset.rate; if (!c) return; const x = num(e.target.value);
   if (x > 0) state.rates[c] = x; else delete state.rates[c]; try { localStorage.setItem("fx-rates", JSON.stringify(state.rates)) } catch {} render() });
 document.getElementById("clearBtn").addEventListener("click", () => {
-  Object.assign(state, { cf: null, inv: null, team: null, hist: null, isSample: false }); ["cf", "inv", "team", "hist"].forEach(k => setStatus(k, "Not loaded"));
+  Object.assign(state, { cf: null, inv: null, team: null, hist: null, isSample: false, raw: {} }); M = null; renderMapper(); ["cf", "inv", "team", "hist"].forEach(k => setStatus(k, "Not loaded"));
   document.querySelectorAll(".drop input").forEach(i => i.value = ""); document.getElementById("gpTitle").textContent = "Venture Track Record"; renderBm(); render();
 });
 function hasBm(b) { return b && Object.values(b).some(v => Object.values(v).some(q => [q.top, q.median, q.bottom].some(isFinite))) }
@@ -969,6 +957,372 @@ if (["#companies", "#team"].includes(location.hash)) state.view = location.hash.
 document.addEventListener("change", e => { if (e.target.id === "coFund") { state.coFund = e.target.value; render() } if (e.target.id === "coFlag") { state.coFlagOnly = e.target.checked; render() } if (e.target.id === "dimSel") { state.dim = e.target.value; render() } if (e.target.id === "scopeSel") { state.scope = e.target.value; render() } if (e.target.id === "gpFund") { state.gpFund = e.target.value; render() } if (e.target.id === "gpWin") { state.gpWin = e.target.value; render() } });
 matchMedia("(prefers-color-scheme: dark)").addEventListener("change", render);
 new MutationObserver(render).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+// ---------- column mapping ----------
+// Every GP and administrator labels the same things differently. Uploads go through three steps:
+// a synonym list (free, instant), Claude for whatever is left (on the viewer's own account, only
+// when they ask), then a review screen where the viewer confirms. The confirmed mapping is saved
+// against the file's column headers, so next quarter's file from the same source maps itself.
+const normH = s => String(s ?? "").toLowerCase().replace(/\(.*?\)/g, " ").replace(/[^a-z0-9]+/g, "");
+const F = (key, label, desc, syn, req) => ({ key, label, desc, syn: syn.split(" "), req: !!req });
+const FIELDS = {
+  cf: [
+    F("fund", "Fund", "Fund or vehicle name", "fund fundname vehicle partnership investmententity entity portfolio"),
+    F("date", "Date", "Date of the cash flow or valuation", "date transactiondate activitydate tradedate effectivedate valuedate cashflowdate calldate noticedate duedate period periodend asof asofdate", 1),
+    F("type", "Transaction type", "Kind of flow: call, distribution or NAV/valuation", "type transactiontype cashflowtype flowtype category activity activitytype activitydescription transactioncategory transactiondescription transaction description"),
+    F("amount", "Amount", "Signed or unsigned amount of the flow", "amount value cashflow netcashflow netamount lpamount amountusd transactionamount"),
+    F("contributions", "Contributions (own column)", "Capital called/contributed, when calls have their own column", "contributions contribution capitalcalls capitalcall calls drawdowns drawdown paidin contributed capitalcontributed called"),
+    F("distributions", "Distributions (own column)", "Distributions, when they have their own column", "distributions distribution distributed proceeds"),
+    F("nav", "NAV (own column)", "Net asset value / capital account balance", "nav netassetvalue capitalaccount capitalaccountbalance endingcapitalaccount endingbalance fairvalue residualvalue reportedvalue"),
+    F("vintage", "Vintage", "Fund vintage year", "vintage vintageyear"),
+    F("fund_size", "Fund size", "Total fund commitments", "fundsize size totalcommitments totalfundsize targetsize fundcommitments"),
+    F("currency", "Currency", "ISO currency code", "currency ccy currencycode"),
+  ],
+  inv: [
+    F("company", "Company", "Portfolio company name", "company companyname portfoliocompany investment investmentname issuer name asset", 1),
+    F("fund", "Fund", "Fund that holds the investment", "fund fundname vehicle", 1),
+    F("sector", "Sector", "Sector or industry", "sector industry vertical subsector"),
+    F("stage", "Stage at entry", "Round the fund entered at (Seed, Series A...)", "stage entrystage roundatentry entryround initialround stageatentry series"),
+    F("entry_date", "Entry date", "Date of first investment", "entrydate initialinvestmentdate investmentdate dateofinvestment firstinvestment firstinvestmentdate dateinvested initialdate"),
+    F("exit_date", "Exit date", "Date fully realized", "exitdate realizationdate datesold exitedon"),
+    F("exit_type", "Exit type", "IPO, M&A, shut down...", "exittype exitroute outcome exitmethod"),
+    F("invested", "Invested", "Total capital invested (all cheques)", "invested totalinvested cost costbasis investedcapital amountinvested totalcost capitalinvested", 1),
+    F("initial_investment", "Initial investment", "First cheque only", "initialinvestment initialcheck firstcheck initialcost"),
+    F("realized", "Realized", "Proceeds received", "realized realizedvalue realizedproceeds proceeds distributions"),
+    F("unrealized", "Unrealized", "Current fair value of what is still held", "unrealized unrealizedvalue fairvalue fmv carryingvalue remainingvalue residualvalue currentvalue"),
+    F("entry_post_money", "Entry post-money", "Post-money valuation at entry", "entrypostmoney entryvaluation postmoneyatentry entrypost entryvalue"),
+    F("latest_post_money", "Latest post-money", "Most recent round's post-money", "latestpostmoney currentvaluation lastroundvaluation latestvaluation currentpost lastpostmoney"),
+    F("latest_round", "Latest round", "Most recent round name", "latestround lastround currentstage currentround"),
+    F("ownership_entry", "Ownership at entry", "Fund ownership at entry", "ownershipentry entryownership initialownership ownershipatentry"),
+    F("ownership_current", "Ownership now", "Current fully diluted ownership", "ownership currentownership fullydilutedownership fdownership ownershipcurrent"),
+    F("founded", "Founded", "Year founded", "founded yearfounded foundedyear foundingyear"),
+    F("pre_investment", "Description", "What the company did before the investment", "description businessdescription companydescription preinvestment overview"),
+    F("milestones", "Milestones", "Events since investment", "milestones updates keyevents"),
+    F("deal_lead", "Deal lead", "Partner who led the deal", "deallead lead leadpartner dealpartner sponsor partner"),
+    F("board_seat", "Board seat", "Whether the firm holds a board seat", "boardseat board boardrole boardposition"),
+    F("country", "Country", "Company headquarters country", "country hq headquarters geography region"),
+  ],
+  hist: [
+    F("company", "Company", "Portfolio company name", "company companyname portfoliocompany investment name", 1),
+    F("date", "Date", "Report or round date", "date period periodend quarter quarterend asof asofdate reportdate", 1),
+    F("round", "Round", "Round name on financing rows", "round series financinground roundname event"),
+    F("post_money", "Post-money", "Round post-money valuation", "postmoney postmoneyvaluation valuation postvaluation"),
+    F("amount_raised", "Amount raised", "Round size", "amountraised roundsize raised newmoney"),
+    F("fund_invested", "Fund invested", "The fund's cheque in the round", "fundinvested ourinvestment fundamount invested participation"),
+    F("ownership", "Ownership", "Fund ownership after the row's date", "ownership fdownership fullydilutedownership ownershippct"),
+    F("cash_on_hand", "Cash on hand", "Company cash balance", "cash cashonhand cashbalance cashandequivalents"),
+    F("monthly_burn", "Monthly burn", "Net cash burn per month", "monthlyburn burn burnrate netburn monthlynetburn"),
+    F("revenue", "Revenue", "Revenue for the quarter", "revenue sales netrevenue quarterlyrevenue totalrevenue"),
+    F("gross_profit", "Gross profit", "Gross profit for the quarter", "grossprofit"),
+    F("gross_margin", "Gross margin", "Gross margin (%)", "grossmargin gm grossmarginpct"),
+    F("net_income", "Net income", "Net income for the quarter", "netincome netloss netprofit netincomeloss earnings"),
+    F("profit_margin", "Profit margin", "Net margin (%)", "profitmargin netmargin"),
+  ],
+  team: [
+    F("name", "Name", "Person's name", "name fullname person employee", 1),
+    F("title", "Title", "Job title", "title role position jobtitle"),
+    F("level", "Level", "Partner / mid / junior / back office", "level seniority grade"),
+    F("joined", "Joined", "Year joined", "joined yearjoined startyear startdate joineddate"),
+    F("focus", "Focus", "Sector focus", "focus sectorfocus coverage"),
+    F("prior", "Prior experience", "Background before joining", "prior priorexperience background experience previousroles"),
+    F("education", "Education", "Degrees", "education degrees school"),
+    F("boards", "Notes", "Board seats or other notes", "boards boardseats notes"),
+  ],
+  bm: [
+    F("vintage", "Vintage", "Vintage year", "vintage vintageyear year", 1),
+    F("metric", "Metric", "TVPI, IRR or DPI", "metric measure", 1),
+    F("top", "Top quartile", "Upper-quartile breakpoint", "top topquartile upperquartile q1 75th p75 firstquartile", 1),
+    F("median", "Median", "Median", "median p50 50th", 1),
+    F("bottom", "Bottom quartile", "Lower-quartile breakpoint", "bottom bottomquartile lowerquartile q3 25th p25 thirdquartile", 1),
+  ],
+};
+const KIND_LABEL = { cf: "fund cash flows", inv: "portfolio companies", hist: "company history", team: "firm staff", bm: "benchmark quartiles" };
+// Transaction labels seen on capital account statements and administrator exports.
+const TYPE_SYN = {
+  Contribution: "contribution contributions capitalcall capitalcalls call calls drawdown drawdownnotice capitalcontribution paidin managementfee managementfees fee fees fundexpenses expenses investment deemedcontribution",
+  Distribution: "distribution distributions dist returnofcapital proceeds realizedgain gain dividend income interest recallabledistribution recallable capitalgain realizedproceeds",
+  NAV: "nav netassetvalue valuation capitalaccount capitalaccountbalance endingbalance endingcapitalaccount endingcapitalbalance closingbalance closingcapitalaccount closingcapitalbalance endingnav fairvalue residualvalue reportedvalue",
+};
+const typeFromSyn = raw => { const n = normH(raw); for (const [t, s] of Object.entries(TYPE_SYN)) if (s.split(" ").includes(n)) return t; return null };
+const MONEY_OF = { cf: ["amount", "contributions", "distributions", "nav", "fund_size"], inv: MONEY_INV, hist: MONEY_HIST, team: [], bm: [] };
+const PCT_OF = { inv: ["ownership_entry", "ownership_current"], hist: ["ownership", "gross_margin", "profit_margin"] };
+const DATE_OF = { cf: ["date"], inv: ["entry_date", "exit_date"], hist: ["date"] };
+
+function parseCSVRows(text) {
+  const rows = []; let row = [], f = "", q = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (q) { if (c === '"') { if (text[i + 1] === '"') { f += '"'; i++ } else q = false } else f += c }
+    else if (c === '"') q = true;
+    else if (c === ",") { row.push(f); f = "" }
+    else if (c === "\n" || c === "\r") { if (c === "\r" && text[i + 1] === "\n") i++; row.push(f); rows.push(row); row = []; f = "" }
+    else f += c;
+  }
+  if (f || row.length) { row.push(f); rows.push(row) }
+  return rows.filter(r => r.some(x => String(x).trim() !== ""));
+}
+async function readSheets(file) {
+  if (/\.xlsx?$/i.test(file.name)) {
+    if (typeof XLSX === "undefined") throw new Error("The spreadsheet library did not load, so XLSX files cannot be read. Try a CSV.");
+    const wb = XLSX.read(await file.arrayBuffer(), { cellDates: true });
+    return Object.fromEntries(wb.SheetNames.map(n => [n, XLSX.utils.sheet_to_json(wb.Sheets[n], { header: 1, raw: true, defval: "" }).filter(r => r.some(x => String(x).trim() !== ""))]).filter(([, a]) => a.length));
+  }
+  return { Sheet1: parseCSVRows(await file.text()) };
+}
+// The header row is the first row that is mostly non-empty text; title rows above it are skipped.
+function guessHeaderRow(aoa) {
+  for (let i = 0; i < Math.min(aoa.length, 15); i++) {
+    const cells = aoa[i].filter(c => String(c).trim() !== ""), text = cells.filter(c => typeof c === "string" && !/^[-$€£(]?[\d.,]+%?\)?$/.test(c.trim()));
+    if (cells.length >= 2 && text.length >= Math.max(2, cells.length * 0.6)) return i;
+  }
+  return 0;
+}
+function localMatch(kind, headers) {
+  const used = new Set();
+  return headers.map(h => { const n = normH(h); const f = FIELDS[kind].find(f => !used.has(f.key) && (n === f.key.replace(/_/g, "") || f.syn.includes(n)));
+    if (f) { used.add(f.key); return { field: f.key, how: "name" } } return { field: "", how: "" } });
+}
+function unitsHint(headers) { const t = headers.join(" ").toLowerCase(); return /\b(000s|000's|thousands|in 000|\(000\)|k\))/.test(t) ? 1000 : /\b(millions|mm|\$m\b|in m\b)/.test(t) ? 1e6 : null }
+function parseDateOrder(v, order) {
+  if (v instanceof Date) return isNaN(v) ? null : v;
+  if (typeof v === "number") return v > 1800 && v < 2200 ? new Date(v, 11, 31) : new Date(Math.round((v - 25569) * 864e5));
+  const s = String(v ?? "").trim(); if (!s) return null;
+  let m;
+  if ((m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/))) return new Date(+m[1], +m[2] - 1, +m[3]);
+  if ((m = s.match(/^(?:Q([1-4])[\s'-]*(\d{2,4})|(\d{4})[\s-]*Q([1-4])|([1-4])Q[\s'-]*(\d{2,4}))$/i))) {
+    const q = +(m[1] || m[4] || m[5]); let y = +(m[2] || m[3] || m[6]); if (y < 100) y += 2000; return new Date(y, q * 3, 0);
+  }
+  if ((m = s.match(/^(\d{1,2})[/.-](\d{1,2})[/.-](\d{2,4})$/))) {
+    let a = +m[1], b = +m[2], y = +m[3]; if (y < 100) y += 2000;
+    const dmy = order === "dmy" || (order !== "mdy" && a > 12);
+    return dmy ? new Date(y, b - 1, a) : new Date(y, a - 1, b);
+  }
+  if (/^\d{4}$/.test(s)) return new Date(+s, 11, 31);
+  const d = new Date(s); return isNaN(d) ? null : d;
+}
+const isoDate = d => d ? `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}` : "";
+const metricOf = v => { const n = normH(v); return /irr/.test(n) ? "IRR" : /dpi/.test(n) ? "DPI" : /tvpi|moic|tvm|multiple/.test(n) ? "TVPI" : /rvpi/.test(n) ? "RVPI" : String(v).trim().toUpperCase() };
+
+// Turn the sheet plus a confirmed mapping into rows in the app's own column names.
+function applyMapping(m) {
+  const { kind } = m, aoa = m.sheets[m.sheet], data = aoa.slice(m.headerRow + 1);
+  const col = {}; m.cols.forEach((c, i) => { if (c.field) col[c.field] = i });
+  const get = (r, k) => col[k] != null ? r[col[k]] : undefined;
+  const out = [];
+  for (const r of data) {
+    if (!r.some(x => String(x).trim() !== "")) continue;
+    const o = {};
+    FIELDS[kind].forEach(f => { const v = get(r, f.key); if (v !== undefined) o[f.key] = v instanceof Date ? v : typeof v === "string" ? v.trim() : v });
+    if (m.constFund && !o.fund) o.fund = m.constFund;
+    (DATE_OF[kind] || []).forEach(k => { if (k in o) o[k] = isoDate(parseDateOrder(o[k], m.dateOrder)) });
+    (PCT_OF[kind] || []).forEach(k => { if (k in o && String(o[k]).trim() !== "") o[k] = pctIn(o[k]) });
+    if (kind === "cf") {
+      const base = { fund: String(o.fund ?? "").trim(), vintage: o.vintage ?? "", fund_size: o.fund_size ?? "", currency: o.currency ?? "", date: o.date };
+      if (!base.date) continue;
+      if (o.amount !== undefined && String(o.amount).trim() !== "") {
+        const a = num(o.amount); if (!isFinite(a) || a === 0) { /* skip empty flows */ }
+        else {
+          const raw = o.type ?? "", t = o.type !== undefined ? (m.typeMap[raw] || typeFromSyn(raw)) : a < 0 ? "Contribution" : "Distribution";
+          if (t && t !== "Ignore") out.push({ ...base, type: t, amount: t === "Contribution" ? -Math.abs(a) : t === "Distribution" ? Math.abs(a) : a });
+        }
+      }
+      [["contributions", "Contribution", -1], ["distributions", "Distribution", 1], ["nav", "NAV", 0]].forEach(([k, t, s]) => {
+        const a = num(o[k]); if (isFinite(a) && a !== 0) out.push({ ...base, type: t, amount: s ? s * Math.abs(a) : a }) });
+      continue;
+    }
+    if (kind === "bm") { o.metric = metricOf(o.metric); if (o.metric === "IRR") ["top", "median", "bottom"].forEach(k => o[k] = pctIn(o[k])) }
+    out.push(o);
+  }
+  return out;
+}
+function missingRequired(m) {
+  const have = new Set(m.cols.map(c => c.field).filter(Boolean));
+  const miss = FIELDS[m.kind].filter(f => f.req && !have.has(f.key) && !(f.key === "fund" && m.constFund)).map(f => f.label);
+  if (m.kind === "cf" && !have.has("amount") && !["contributions", "distributions", "nav"].some(k => have.has(k))) miss.push("Amount (or Contributions / Distributions / NAV columns)");
+  if (m.kind === "cf" && !have.has("fund") && !m.constFund) miss.push("Fund (a column, or type the fund name)");
+  return miss;
+}
+
+// Saved mappings: keyed by the kind plus the file's normalised headers. They hold labels only,
+// never figures, so browser storage is fine; they also travel in the workspace file.
+const mapStore = { all() { try { return JSON.parse(localStorage.getItem("col-maps")) || {} } catch { return {} } },
+  put(k, v) { const a = this.all(); a[k] = v; try { localStorage.setItem("col-maps", JSON.stringify(a)) } catch {} },
+  merge(obj) { const a = { ...this.all(), ...obj }; try { localStorage.setItem("col-maps", JSON.stringify(a)) } catch {} } };
+const sigOf = (kind, headers) => kind + ":" + headers.map(normH).join("|");
+
+const sampleCap = window.claude?.use ? window.claude.use("sample").catch(() => null) : Promise.resolve(null);
+let M = null;  // the mapping in progress
+
+async function startMapping(kind, file) {
+  const sheets = await readSheets(file), names = Object.keys(sheets);
+  if (!names.length) throw new Error(`${file.name} has no rows.`);
+  const sheet = names[0], headerRow = guessHeaderRow(sheets[sheet]);
+  const m = { kind, fileName: file.name, sheets, sheet, headerRow, dateOrder: "auto", typeMap: {}, constFund: "", notes: "", remember: true };
+  buildCols(m);
+  const headers = m.cols.map(c => c.header);
+  // A file already in the app's own format needs no questions.
+  const exact = headers.every(h => !h || FIELDS[kind].some(f => f.key.replace(/_/g, "") === normH(h)));
+  const saved = mapStore.all()[sigOf(kind, headers)];
+  if (saved) { Object.assign(m, { dateOrder: saved.dateOrder, typeMap: saved.typeMap || {}, constFund: saved.constFund || "" }); m.cols.forEach((c, i) => { c.field = saved.fields[i] || ""; c.how = c.field ? "saved" : "" }) }
+  if ((exact || saved) && !missingRequired(m).length && !unmappedTypes(m).length) return finishMapping(m, saved ? "saved column mapping" : "");
+  M = m; renderMapper();
+}
+function buildCols(m) {
+  const aoa = m.sheets[m.sheet], headers = (aoa[m.headerRow] || []).map(h => String(h ?? "").trim());
+  const width = Math.max(headers.length, ...aoa.slice(m.headerRow + 1, m.headerRow + 30).map(r => r.length));
+  const local = localMatch(m.kind, headers);
+  m.cols = Array.from({ length: width }, (_, i) => ({ header: headers[i] || `Column ${i + 1}`, field: local[i]?.field || "", how: local[i]?.how || "", conf: "", reason: "",
+    samples: aoa.slice(m.headerRow + 1).map(r => r[i]).filter(v => String(v ?? "").trim() !== "").slice(0, 3).map(v => v instanceof Date ? isoDate(v) : String(v)) }));
+  const u = unitsHint(headers); if (u && m.kind !== "team" && m.kind !== "bm") m.unitsHint = u;
+}
+function typeCol(m) { const i = m.cols.findIndex(c => c.field === "type"); return i }
+function distinctTypes(m) { const i = typeCol(m); if (m.kind !== "cf" || i < 0) return []; return [...new Set(m.sheets[m.sheet].slice(m.headerRow + 1).map(r => String(r[i] ?? "").trim()).filter(Boolean))].slice(0, 60) }
+function unmappedTypes(m) { return distinctTypes(m).filter(v => !m.typeMap[v] && !typeFromSyn(v)) }
+
+function renderMapper() {
+  const box = document.getElementById("mapper"), m = M;
+  if (!m) { box.hidden = true; box.innerHTML = ""; return }
+  const names = Object.keys(m.sheets), types = distinctTypes(m), miss = missingRequired(m), un = unmappedTypes(m);
+  const hasFundCol = m.cols.some(c => c.field === "fund"), needFund = FIELDS[m.kind].some(f => f.key === "fund");
+  const chip = c => c.how === "name" ? `<span class="mchip">matched by name</span>` : c.how === "saved" ? `<span class="mchip">saved</span>` : c.how === "claude" ? `<span class="mchip ai ${c.conf}">Claude · ${esc(c.conf || "?")}</span>` : c.how === "you" ? `<span class="mchip">you</span>` : "";
+  box.hidden = false;
+  box.innerHTML = `<div class="panel-head"><h3>Match columns: ${esc(m.fileName)} → ${KIND_LABEL[m.kind]}</h3>
+      <div class="row">${names.length > 1 ? `<label for="mSheet" class="note">Sheet</label><select id="mSheet">${names.map(n => `<option${n === m.sheet ? " selected" : ""}>${esc(n)}</option>`).join("")}</select>` : ""}
+      <label for="mHeader" class="note">Header row</label><select id="mHeader">${m.sheets[m.sheet].slice(0, 15).map((r, i) => `<option value="${i}"${i === m.headerRow ? " selected" : ""}>${i + 1}: ${esc(r.filter(x => String(x).trim()).slice(0, 3).join(", ").slice(0, 40))}</option>`).join("")}</select></div></div>
+    <p class="note">Check what each column means. Columns matched by name came from a built-in list of common labels.${state.samplingOff ? "" : ` <b>Suggest with Claude</b> sends the column headers and first 25 rows of this sheet to Claude, using your Claude account.`}</p>
+    ${m.notes ? `<p class="alert mnote">${esc(m.notes)}</p>` : ""}
+    <div class="tbl"><table class="mtable"><thead><tr><th>Column in your file</th><th>Example values</th><th>Means</th><th></th></tr></thead><tbody>
+    ${m.cols.map((c, i) => `<tr><td>${esc(c.header)}</td><td class="msamp">${c.samples.map(esc).join(" · ") || "–"}</td>
+      <td><select data-col="${i}" aria-label="Meaning of ${esc(c.header)}"><option value="">Ignore</option>${FIELDS[m.kind].map(f => `<option value="${f.key}"${c.field === f.key ? " selected" : ""}>${esc(f.label)}${f.req ? " *" : ""}</option>`).join("")}</select></td>
+      <td>${chip(c)}${c.reason ? ` <span class="tags">${esc(c.reason)}</span>` : ""}</td></tr>`).join("")}</tbody></table></div>
+    ${types.length ? `<h4>Transaction labels</h4><p class="note">How each label in the type column should count. Calls become negative and distributions positive, whatever sign the file uses.</p>
+      <div class="mtypes">${types.map(v => { const cur = m.typeMap[v] || typeFromSyn(v) || ""; return `<label class="row">${esc(v)} <select data-type="${esc(v)}"><option value=""${!cur ? " selected" : ""}>Choose…</option>${["Contribution", "Distribution", "NAV", "Ignore"].map(t => `<option${cur === t ? " selected" : ""}>${t}</option>`).join("")}</select></label>` }).join("")}</div>` : ""}
+    <div class="row mopts">
+      ${needFund && !hasFundCol ? `<label class="row note" for="mFund">Fund name for every row <input id="mFund" value="${esc(m.constFund)}" placeholder="e.g. Fund III"></label>` : ""}
+      ${DATE_OF[m.kind] ? `<label class="row note" for="mDate">Dates like 03/04/2021 are <select id="mDate"><option value="auto"${m.dateOrder === "auto" ? " selected" : ""}>detect</option><option value="mdy"${m.dateOrder === "mdy" ? " selected" : ""}>month/day</option><option value="dmy"${m.dateOrder === "dmy" ? " selected" : ""}>day/month</option></select></label>` : ""}
+      ${MONEY_OF[m.kind].length ? `<label class="row note" for="mUnits">Amounts in this file are in <select id="mUnits"><option value="1">full units</option><option value="1000">thousands</option><option value="1000000">millions</option></select></label>` : ""}
+      <label class="row note" for="mRemember"><input type="checkbox" id="mRemember"${m.remember ? " checked" : ""}> Remember for files with these columns</label>
+    </div>
+    ${m.unitsHint && m.unitsHint !== state.inUnit ? `<p class="note warn-text">The headers suggest amounts are in ${m.unitsHint === 1000 ? "thousands" : "millions"}; check the setting above.</p>` : ""}
+    <p class="note ${miss.length || un.length ? "warn-text" : ""}" id="mStatus">${miss.length ? `Still needed: ${miss.map(esc).join(", ")}.` : un.length ? `Choose how to count: ${un.map(esc).join(", ")}.` : "Ready to load."}</p>
+    <div class="row"><button type="button" class="primary" id="mApply"${miss.length || un.length ? " disabled" : ""}>Load ${KIND_LABEL[m.kind]}</button>
+      <button type="button" id="mClaude" hidden>Suggest with Claude</button><button type="button" id="mStop" hidden>Stop</button><button type="button" id="mCancel">Cancel</button><span class="note" id="mAi" role="status"></span></div>`;
+  const u = box.querySelector("#mUnits"); if (u) u.value = String(state.inUnit);
+  sampleCap.then(s => { const b = box.querySelector("#mClaude"); if (b && s && !state.samplingOff) { b.hidden = false; if (miss.length || un.length || m.cols.some(c => !c.field && c.samples.length)) b.classList.add("primary") } });
+}
+document.getElementById("mapper").addEventListener("change", e => {
+  const t = e.target, m = M; if (!m) return;
+  if (t.dataset.col != null) { const c = m.cols[+t.dataset.col]; c.field = t.value; c.how = t.value ? "you" : ""; c.reason = "";
+    m.cols.forEach((o, i) => { if (i !== +t.dataset.col && o.field && o.field === t.value) { o.field = ""; o.how = "" } }) }
+  else if (t.dataset.type != null) m.typeMap[t.dataset.type] = t.value;
+  else if (t.id === "mSheet") { m.sheet = t.value; m.headerRow = guessHeaderRow(m.sheets[m.sheet]); buildCols(m) }
+  else if (t.id === "mHeader") { m.headerRow = +t.value; buildCols(m) }
+  else if (t.id === "mDate") m.dateOrder = t.value;
+  else if (t.id === "mUnits") { state.inUnit = +t.value; document.getElementById("inUnit").value = t.value }
+  else if (t.id === "mRemember") m.remember = t.checked;
+  else if (t.id === "mFund") m.constFund = t.value.trim();
+  renderMapper();
+});
+document.getElementById("mapper").addEventListener("input", e => { if (e.target.id === "mFund" && M) { M.constFund = e.target.value.trim(); const s = document.getElementById("mStatus"), miss = missingRequired(M);
+  s.textContent = miss.length ? `Still needed: ${miss.join(", ")}.` : "Ready to load."; document.getElementById("mApply").disabled = !!miss.length || !!unmappedTypes(M).length } });
+let mCtl = null;
+document.getElementById("mapper").addEventListener("click", async e => {
+  const id = e.target.id, m = M; if (!m) return;
+  if (id === "mCancel") { mCtl?.abort(); M = null; renderMapper(); setStatus(m.kind, "Not loaded"); return }
+  if (id === "mStop") { mCtl?.abort(); return }
+  if (id === "mApply") { try { finishMapping(m) } catch (err) { document.getElementById("mStatus").textContent = err.message; document.getElementById("mStatus").className = "note warn-text" } return }
+  if (id === "mClaude") await askClaude(m);
+});
+async function askClaude(m) {
+  const sample = await sampleCap; if (!sample) return;
+  const ai = document.getElementById("mAi"), btn = document.getElementById("mClaude"), stop = document.getElementById("mStop");
+  const aoa = m.sheets[m.sheet].slice(0, 25).map(r => r.slice(0, 40).map(v => v instanceof Date ? isoDate(v) : String(v ?? "").slice(0, 60)));
+  const distinct = [];
+  m.cols.forEach((c, i) => { const vals = [...new Set(m.sheets[m.sheet].slice(m.headerRow + 1).map(r => String(r[i] ?? "").trim()).filter(Boolean))];
+    if (vals.length && vals.length <= 40 && vals.some(v => !isFinite(num(v)))) distinct.push(`column ${i}: ${JSON.stringify(vals)}`) });
+  const prompt = `You map spreadsheets exported by private-fund GPs and fund administrators onto a fixed schema, so an LP analytics tool can read them. Labels vary between funds; work out what each column means from its header and values.
+
+Target: ${KIND_LABEL[m.kind]}. Fields (key: meaning; * = required):
+${FIELDS[m.kind].map(f => `- ${f.key}${f.req ? "*" : ""}: ${f.desc}`).join("\n")}
+${m.kind === "cf" ? `Cash flows arrive either as one row per transaction (a type column plus an amount), or with contributions, distributions and NAV in separate columns. Map whichever the file uses. Fees and expenses that were called count as Contribution; returns of capital, recallable distributions, dividends and realised gains count as Distribution; capital account balances and valuations count as NAV. Use Ignore for commitments, unfunded commitment, totals and anything that is not a cash flow or valuation.` : ""}
+The first rows of the sheet (row index: cells). The header row may not be row 0:
+${aoa.map((r, i) => `${i}: ${JSON.stringify(r)}`).join("\n")}
+${distinct.length ? `Distinct values in text columns, by column index in the header row:\n${distinct.join("\n")}` : ""}
+The tool currently guesses the header is row ${m.headerRow}.
+
+Reply with only a JSON object in this shape:
+{"header_row": 0, "columns": [{"index": 0, "field": "date", "confidence": "high", "reason": "a few words"}], ${m.kind === "cf" ? `"type_values": {"Capital Call": "Contribution"}, ` : ""}"units": 1, "date_order": "auto", "fund_name": null, "notes": "one or two sentences on anything the user should check, or empty"}
+Rules: column indexes count from 0 within the header row; list every column; use "field": null for columns that fit no field; each field at most once; never map a column you cannot justify from its header or values; confidence is high, medium or low. units is 1, 1000 or 1000000 depending on how the amounts are stated. date_order is "mdy", "dmy" or "auto". fund_name is the fund's name only if the whole file is for one fund and there is no fund column, else null.${m.kind === "cf" ? ` type_values must give Contribution, Distribution, NAV or Ignore for every distinct value of the column you map to type.` : ""}`;
+  mCtl = new AbortController(); btn.disabled = true; stop.hidden = false; ai.textContent = "Claude is reading the columns…";
+  try {
+    const r = await sample.json(prompt, { signal: mCtl.signal });
+    if (!r || !Array.isArray(r.columns)) throw { code: "invalid_json" };
+    if (Number.isInteger(r.header_row) && r.header_row >= 0 && r.header_row < m.sheets[m.sheet].length && r.header_row !== m.headerRow) { m.headerRow = r.header_row; buildCols(m) }
+    const keys = new Set(FIELDS[m.kind].map(f => f.key)), taken = new Set();
+    // Matches from the synonym list and the viewer's own choices stand; Claude fills the gaps.
+    m.cols.forEach(c => { if (c.field && c.how !== "claude") taken.add(c.field) });
+    const rank = { high: 0, medium: 1, low: 2 };
+    [...r.columns].sort((a, b) => (rank[a.confidence] ?? 3) - (rank[b.confidence] ?? 3)).forEach(x => {
+      const c = m.cols[x.index]; if (!c || !x.field || !keys.has(x.field) || taken.has(x.field) || (c.field && c.how !== "claude")) return;
+      c.field = x.field; c.how = "claude"; c.conf = ["high", "medium", "low"].includes(x.confidence) ? x.confidence : "low"; c.reason = String(x.reason || "").slice(0, 80); taken.add(x.field) });
+    if (r.type_values && typeof r.type_values === "object") for (const [k, v] of Object.entries(r.type_values)) if (["Contribution", "Distribution", "NAV", "Ignore"].includes(v) && !m.typeMap[k]) m.typeMap[k] = v;
+    if (["mdy", "dmy"].includes(r.date_order)) m.dateOrder = r.date_order;
+    if ([1, 1000, 1000000].includes(r.units) && r.units !== 1) m.unitsHint = r.units;
+    if (r.fund_name && !m.cols.some(c => c.field === "fund") && !m.constFund) m.constFund = String(r.fund_name).slice(0, 80);
+    m.notes = r.notes ? "Claude: " + String(r.notes).slice(0, 400) : "";
+    renderMapper();
+    document.getElementById("mAi").textContent = "Suggestions added. Check them before loading.";
+  } catch (err) {
+    const msg = { cancelled: "", not_granted: "Claude was not allowed for this page, so map the columns by hand.", sampling_disabled: "Claude is not available on this account.", rate_limited: "Claude is busy or your usage limit was reached. Try again later.",
+      invalid_json: "Claude's answer could not be read. Try again, or map by hand.", refused: "Claude declined this file. Map the columns by hand." }[err?.code] ?? "Claude could not be reached. Try again, or map by hand.";
+    if (["not_granted", "sampling_disabled", "not_declared", "capability_disabled", "capability_removed"].includes(err?.code)) { state.samplingOff = true; document.getElementById("mClaude").hidden = true }
+    ai.textContent = msg;
+  } finally { if (document.getElementById("mClaude")) { document.getElementById("mClaude").disabled = false; document.getElementById("mStop").hidden = true } }
+}
+function finishMapping(m, how) {
+  const rows = applyMapping(m);
+  if (!rows.length) throw new Error("No usable rows after mapping. Check the header row and the date and amount columns.");
+  commitRows(m.kind, rows, m.fileName, how);
+  if (m.remember && how !== "saved column mapping") mapStore.put(sigOf(m.kind, m.cols.map(c => c.header)), { kind: m.kind, fields: m.cols.map(c => c.field), typeMap: m.typeMap, dateOrder: m.dateOrder, constFund: m.constFund, file: m.fileName });
+  M = null; renderMapper();
+}
+function commitRows(kind, rows, fileName, how) {
+  if (kind === "cf") state.isSample = false;
+  if (kind === "bm") { if (state.bmSrc === "sample") { state.bmSrc = "custom"; document.getElementById("bmSrc").value = "custom" } state.bm = normBm(rows); bmStore.save(state.bmSrc, state.bm); renderBm() }
+  else { state[kind] = kind === "cf" ? normCf(rows) : kind === "team" ? normTeam(rows) : kind === "hist" ? normHist(rows) : normInv(rows); state.raw[kind] = rows }
+  setStatus(kind, `${fileName} · ${kind === "bm" ? Object.keys(state.bm).length + " vintages" : state[kind].length + " rows"}${how ? " · " + how : ""}`, "ok");
+  render();
+}
+
+// ---------- workspace ----------
+// One JSON file holds everything needed to pick up where you left off: the loaded rows (already in
+// the app's own columns), benchmark entries, exchange rates, settings and saved column mappings.
+document.getElementById("wsSave").addEventListener("click", () => {
+  if (!state.cf) return dlMsg("Load data first.", true);
+  const ws = { app: "venture-track-record", version: 1, savedAt: new Date().toISOString(), title: document.getElementById("gpTitle").textContent, isSample: state.isSample,
+    raw: state.raw, benchmarks: Object.fromEntries(["carta", "cambridge", "custom"].map(k => [k, bmStore.load(k)])), bmSrc: state.bmSrc,
+    rates: state.rates, curMode: state.curMode, inUnit: state.inUnit, mappings: mapStore.all() };
+  saveFile(`${slug(ws.title)}-workspace.json`, JSON.stringify(ws));
+});
+document.getElementById("wsOpen").addEventListener("change", async e => {
+  const f = e.target.files[0]; e.target.value = ""; if (!f) return;
+  const err = document.getElementById("errors"); err.textContent = "";
+  try {
+    const ws = JSON.parse(await f.text());
+    if (ws.app !== "venture-track-record" || !ws.raw?.cf) throw new Error("That file is not a saved workspace from this tool.");
+    for (const [k, v] of Object.entries(ws.benchmarks || {})) if (v && Object.keys(v).length) bmStore.save(k, v);
+    if (ws.mappings) mapStore.merge(ws.mappings);
+    Object.assign(state, { rates: ws.rates || {}, curMode: ws.curMode || "local", inUnit: ws.inUnit || 1, isSample: !!ws.isSample, raw: ws.raw });
+    document.getElementById("inUnit").value = String(state.inUnit);
+    state.cf = normCf(ws.raw.cf); state.inv = ws.raw.inv ? normInv(ws.raw.inv) : null; state.hist = ws.raw.hist ? normHist(ws.raw.hist) : null; state.team = ws.raw.team ? normTeam(ws.raw.team) : null;
+    ["cf", "inv", "hist", "team"].forEach(k => setStatus(k, state[k] ? `${f.name} · ${state[k].length} rows` : "Not loaded", state[k] ? "ok" : ""));
+    state.bmSrc = ws.bmSrc || "custom"; if (state.bmSrc === "sample") state.bmSample = normBm(parseCSV(SAMPLE.bm));
+    document.getElementById("bmSrc").value = state.bmSrc;
+    document.getElementById("gpTitle").textContent = ws.title || "Venture Track Record";
+    renderBm(); render(); dlMsg(`Opened workspace saved ${String(ws.savedAt || "").slice(0, 10)}.`);
+  } catch (x) { err.textContent = x instanceof SyntaxError ? "That file could not be read as a workspace." : x.message }
+});
+document.getElementById("wsOpenBtn").addEventListener("click", () => document.getElementById("wsOpen").click());
+
 // ---------- downloads ----------
 // Inside the claude.ai viewer, files go through the downloads capability (the viewer confirms each
 // save). Opened as a plain local file there is no window.claude, so fall back to a normal link.
