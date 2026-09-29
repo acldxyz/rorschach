@@ -217,7 +217,7 @@ for d in invs:
     rs = d["rounds"]
     for r in rs:
         hist.append(dict(company=d["name"], date=r["d"], round=r["name"], post_money=round(r["post"] * M), amount_raised=round(r["raised"] * M),
-                         fund_invested=round(r["fund"] * M), ownership=round(r["own"], 4), cash_on_hand="", monthly_burn="", revenue="", gross_profit=""))
+                         fund_invested=round(r["fund"] * M), ownership=round(r["own"], 4), cash_on_hand="", monthly_burn="", revenue="", gross_profit="", net_income=""))
     if d in stale: continue  # the GP has not sent reports on these; the app should notice
     cash = 0.0
     # Quarterly revenue and gross margin. Margins start below the sector's mature level and climb as
@@ -228,12 +228,18 @@ for d in invs:
     rev = {"Seed": 0.0, "Series A": hrnd.uniform(0.25, 1.0), "Series B": hrnd.uniform(2.0, 5.0)}[d["stage"]]
     rev_start = 0 if d["stage"] != "Seed" else hrnd.randint(2, 6)
     growth = hrnd.uniform(0.07, 0.14)
+    # Profit margin (net income / revenue): deeply negative early, closing on a company-specific
+    # floor. From 2022 companies cut costs to extend runway, so margins improve faster and growth slows.
+    pm, pm_floor = hrnd.uniform(-1.3, -0.5), hrnd.uniform(-0.3, 0.08)
     nq = 0
     for i, r in enumerate(rs):
         nxt = rs[i + 1]["d"] if i + 1 < len(rs) else d["end"]
         cash += r["raised"]
-        # Investors price rounds off revenue: keep annualised revenue within 15-35x of the post-money.
-        if i and rev: rev = max(rev, r["post"] / (4 * hrnd.uniform(15, 35)))
+        # Investors price rounds off revenue. If revenue is behind the 15-35x the new post-money
+        # implies, grow into it over the next year rather than jumping on the day of the raise.
+        if i and rev:
+            implied = r["post"] / (4 * hrnd.uniform(15, 35))
+            if implied > rev: growth = min(0.35, max(growth, (implied / rev) ** 0.25 - 1))
         months = max(3, (nxt.year - r["d"].year) * 12 + nxt.month - r["d"].month)
         if i + 1 < len(rs): burn = cash / (months * hrnd.uniform(1.15, 1.6))
         elif d["failed"]: burn = cash / (months * hrnd.uniform(0.9, 1.0))
@@ -246,11 +252,13 @@ for d in invs:
                 nq += 1
                 if nq == rev_start and rev == 0: rev = hrnd.uniform(0.05, 0.2)
                 elif rev: rev *= 1 + (growth * hrnd.uniform(0.5, 1.3) if not d["failed"] else hrnd.uniform(-0.08, 0.03))
-                growth = max(0.02, growth * 0.97)
+                growth = max(0.02, growth * (0.93 if q.year >= 2022 else 0.97))
+                pm += (pm_floor - pm) * (0.13 if q.year >= 2022 else 0.04) + hrnd.gauss(0, 0.03) if not d["failed"] else -hrnd.uniform(0.0, 0.05)
                 gm += (target - gm) * 0.12 + hrnd.gauss(0, 0.015) if not d["failed"] else -hrnd.uniform(0.0, 0.03)
                 hist.append(dict(company=d["name"], date=q, round="", post_money="", amount_raised="", fund_invested="",
                                  ownership=round(r["own"], 4), cash_on_hand=round(cash * M), monthly_burn=round(burn * M),
-                                 revenue=round(rev * M) if rev else "", gross_profit=round(rev * gm * M) if rev else ""))
+                                 revenue=round(rev * M) if rev else "", gross_profit=round(rev * gm * M) if rev else "",
+                                 net_income=round(rev * pm * M) if rev else ""))
             burn *= 1.03
             q = add_months(q, 3)
 # Two live companies whose margins slip over the last year (discounting, or a costlier supplier),

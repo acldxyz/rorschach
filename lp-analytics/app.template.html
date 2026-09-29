@@ -69,7 +69,7 @@ tr.total td { font-weight: 600; border-top: 2px solid var(--ink-3) }
 .grid2 > *, .grid3 > * { min-width: 0 }
 .grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 520px), 1fr)); gap: 20px }
 .grid3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); gap: 16px }
-.chart { position: relative; height: 280px; min-width: 0 } .chart.tall { height: 340px }
+.chart { position: relative; height: 280px; min-width: 0 } .chart.tall { height: 340px } .chart.xtall { height: 460px }
 .figs-row { display: flex; flex-wrap: wrap; gap: 8px 24px; align-items: center; border-top: 1px solid var(--rule); padding-top: 12px }
 .seg { display: inline-flex; border: 1px solid var(--rule); border-radius: 4px; overflow: hidden }
 .seg button { border: 0; border-radius: 0; padding: 5px 12px }
@@ -185,7 +185,8 @@ investments: company, fund, sector, stage (Seed|Series A|...), entry_date, exit_
              milestones ("2019-06: text | 2021-03: text"), deal_lead, board_seat (Yes|No)
 history:     company, date, round (blank on report rows), post_money, amount_raised,
              fund_invested, ownership, cash_on_hand, monthly_burn,
-             revenue (for the quarter), gross_profit, or gross_margin (0.62 or 62%)
+             revenue (for the quarter), gross_profit, or gross_margin (0.62 or 62%),
+             net_income (for the quarter), or profit_margin
 team:        name, title, level (optional), joined, focus, prior, education, boards
              one row per person at the firm; background fields are only needed for partners
 benchmarks:  vintage, metric (TVPI|IRR|DPI), top, median, bottom</pre>
@@ -212,7 +213,7 @@ const BM_SOURCES = {
 };
 // Figures typed or uploaded per source stay in this browser only.
 const bmStore = { load(k) { try { return JSON.parse(localStorage.getItem("bm:" + k)) || {} } catch { return {} } }, save(k, v) { try { localStorage.setItem("bm:" + k, JSON.stringify(v)) } catch {} } };
-const state = { cur: { sym: "$", unit: { div: 1, suffix: "", word: "" } }, curMode: "local", inUnit: 1, rates: (() => { try { return JSON.parse(localStorage.getItem("fx-rates")) || {} } catch { return {} } })(), isSample: false, view: "record", coFund: "all", coFlagOnly: false, cf: null, inv: null, bm: null, bmSrc: "sample", bmSample: null, gp: "", dim: "stage", scope: "all" };
+const state = { cur: { sym: "$", unit: { div: 1, suffix: "", word: "" } }, curMode: "local", inUnit: 1, rates: (() => { try { return JSON.parse(localStorage.getItem("fx-rates")) || {} } catch { return {} } })(), isSample: false, view: "record", coFund: "all", coFlagOnly: false, cf: null, inv: null, bm: null, bmSrc: "sample", bmSample: null, gp: "", dim: "stage", gpFund: "all", gpWin: "16", scope: "all" };
 let charts = [];
 
 // ---------- parsing ----------
@@ -277,13 +278,13 @@ function levelOf(level, title) {
   if (/associate|analyst|intern/.test(t)) return "junior";
   return "other";
 }
-const MONEY_HIST = ["post_money", "amount_raised", "fund_invested", "cash_on_hand", "monthly_burn", "revenue", "gross_profit"];
+const MONEY_HIST = ["post_money", "amount_raised", "fund_invested", "cash_on_hand", "monthly_burn", "revenue", "gross_profit", "net_income"];
 // Gross margin may arrive as 0.62, 62 or "62%"; anything above 1.5 is read as a percentage.
 const pctIn = v => { const x = num(String(v ?? "").replace("%", "")); return isFinite(x) ? (Math.abs(x) > 1.5 ? x / 100 : x) : NaN };
 function normHist(rows) {
   need(rows, ["company", "date"], "Company history");
   return rows.map(r => { const o = { company: String(r.company).trim(), date: date(r.date), round: String(r.round || "").trim(), ownership: num(r.ownership) };
-    MONEY_HIST.forEach(k => o[k] = num(r[k])); o.gross_margin = pctIn(r.gross_margin); return o }).filter(r => r.company && r.date);
+    MONEY_HIST.forEach(k => o[k] = num(r[k])); o.gross_margin = pctIn(r.gross_margin); o.profit_margin = pctIn(r.profit_margin); return o }).filter(r => r.company && r.date);
 }
 function normTeam(rows) {
   need(rows, ["name"], "Team");
@@ -425,6 +426,11 @@ function render() {
         <div class="grid2"><div><h3>Write-offs by years from entry</h3><div class="chart"><canvas id="cWo"></canvas></div></div><div><h3>By entry round</h3><div class="tbl" id="woTbl"></div></div></div></section>
       ${state.hist ? `<section class="panel"><div class="panel-head"><h2>Gross margin</h2><p class="note">From the company history file: gross profit ÷ revenue each quarter, for companies reporting revenue.</p></div>
         <div class="grid2"><div><h3>Median gross margin by sector</h3><div class="chart tall"><canvas id="cGm"></canvas></div></div><div><h3>Latest quarter, companies still held</h3><div class="tbl" id="gmTbl"></div><p class="note" id="gmNote"></p></div></div></section>` : ""}
+      ${state.hist ? `<section class="panel"><div class="panel-head"><h2>Growth vs profitability</h2><div class="row">
+          <label for="gpFund" class="note">Fund</label><select id="gpFund"><option value="all">All funds</option>${F.map(f => `<option value="${esc(f.name)}"${state.gpFund === f.name ? " selected" : ""}>${esc(f.name)}</option>`).join("")}</select>
+          <label for="gpWin" class="note">Period</label><select id="gpWin">${[["8", "Last 8 quarters"], ["16", "Last 16 quarters"], ["all", "All quarters"]].map(([v, l]) => `<option value="${v}"${state.gpWin === v ? " selected" : ""}>${l}</option>`).join("")}</select></div></div>
+        <p class="note">Each point is one quarter: the median year-over-year revenue growth and median profit margin (net income ÷ revenue) across the fund's companies reporting both. Quarters with fewer than ${GP_MIN_N} companies are left out.</p>
+        <div class="chart xtall"><canvas id="cGp"></canvas></div><p class="note" id="gpNote"></p></section>` : ""}
       ${state.hist ? `<section class="panel"><div class="panel-head"><h2>Round progression</h2><p class="note">From the company history file. A round counts once the company has raised again, exited, or had 24 months to do so.</p></div><div class="tbl" id="progTbl"></div></section>` : ""}
       <section class="panel"><h2>Deal outcomes</h2><p class="note">Gross multiple (log scale) against capital invested. Write-offs sit on the bottom line; hover a point for the company.</p><div class="chart tall"><canvas id="cDeals"></canvas></div></section>
       <section class="panel"><div class="panel-head"><h2>Performance by partner</h2><p class="note">Gross performance of the deals each person led, from the investments file's <code>deal_lead</code> and <code>board_seat</code> columns.</p></div>
@@ -532,7 +538,8 @@ function spark(pts, { step = false, marks = [], t0, t1, label, domain }) {
     <path d="${area}" style="fill:var(--accent-soft);stroke:none"/><path d="${line}" style="fill:none;stroke:var(--accent);stroke-width:1.5" vector-effect="non-scaling-stroke"/></svg>`;
 }
 const ptsTxt = d => `${d >= 0 ? "+" : "−"}${Math.abs(d * 100).toFixed(1)} pts`;
-const GM_SLIP = 0.05;  // a five-point fall in gross margin inside a year is worth a question to the GP
+const GM_SLIP = 0.05;
+const GP_MIN_N = 3;  // fewer companies than this and a quarterly "median" is one or two companies' numbers  // a five-point fall in gross margin inside a year is worth a question to the GP
 function trendsHtml(c, asOf) {
   const h = c.hist; if (!h.has) return "";
   const t0 = c.entry || h.own[0]?.date, t1 = c.exit || asOf, marks = h.rounds.filter(r => r.date > t0).map(r => r.date);
@@ -672,6 +679,8 @@ function histByCompany() {
   Object.values(out).forEach(a => a.sort((x, y) => x.date - y.date));
   return out;
 }
+const qKey = d => `${d.getFullYear()} Q${Math.floor(d.getMonth() / 3) + 1}`;
+const qShort = q => `Q${q.slice(-1)} '${q.slice(2, 4)}`;
 const baseRound = n => String(n).replace(/\s*\(.*\)\s*$/, "").trim();
 const LOW_RUNWAY = 6, WATCH_RUNWAY = 12, STALE_REPORT_MONTHS = 6;
 // Venture outcome buckets: the write-off line sits at 0.25x because acqui-hires and wind-downs rarely return more.
@@ -688,9 +697,13 @@ function dealView(asOf) {
     const runway = last && last.monthly_burn > 0 ? cashNow / last.monthly_burn : NaN;
     const gmRows = h.map(r => ({ d: r.date, v: isFinite(r.gross_margin) ? r.gross_margin : r.revenue > 0 && isFinite(r.gross_profit) ? r.gross_profit / r.revenue : NaN, rev: r.revenue })).filter(r => isFinite(r.v));
     const gmLast = gmRows[gmRows.length - 1];
+    // Quarterly revenue growth is year over year: this quarter against the same quarter a year before.
+    const revRows = h.filter(r => r.revenue > 0), revAt = {}; revRows.forEach(r => revAt[qKey(r.date)] = r.revenue);
+    const perf = revRows.map(r => { const q = qKey(r.date), prior = revAt[qKey(new Date(r.date.getFullYear() - 1, r.date.getMonth(), 15))];
+      return { q, d: r.date, growth: prior > 0 ? r.revenue / prior - 1 : NaN, pm: isFinite(r.profit_margin) ? r.profit_margin : isFinite(r.net_income) ? r.net_income / r.revenue : NaN } });
     // Year-ago point: the report closest to 12 months before the latest, if one exists within two months of it.
     const gmAgo = gmLast && gmRows.filter(r => Math.abs(monthsBetween(r.d, gmLast.d) - 12) <= 2).sort((a, b) => Math.abs(monthsBetween(a.d, gmLast.d) - 12) - Math.abs(monthsBetween(b.d, gmLast.d) - 12))[0];
-    const hist = { has: h.length > 0, rounds, reports, last, runway, cashNow, raisedSince, since, gmRows, gmLast, gmChange: gmAgo ? gmLast.v - gmAgo.v : NaN, own: h.filter(r => isFinite(r.ownership)) };
+    const hist = { has: h.length > 0, rounds, reports, last, runway, cashNow, raisedSince, since, perf, gmRows, gmLast, gmChange: gmAgo ? gmLast.v - gmAgo.v : NaN, own: h.filter(r => isFinite(r.ownership)) };
     const tv = d.realized + d.unrealized, tvm = tv / d.invested, end = d.exit || asOf;
     const irr = d.entry ? xirr([{ d: d.entry, a: -d.invested }, { d: end, a: tv }]) : NaN;
     const status = d.unrealized > 0 ? (d.realized > 0 ? "Partially realized" : "Unrealized") : "Realized";
@@ -782,6 +795,41 @@ function renderGross(F, fundColor, asOf) {
         return `<tr><td>${esc(sec)}</td><td>${g.length}</td><td>${fp(median(g.map(d => d.hist.gmLast.v)), 0)}</td><td>${ch.length ? ptsTxt(median(ch)) : "–"}</td><td>${ch.filter(x => x > 0.01).length}</td><td>${ch.filter(x => x < -0.01).length}</td></tr>` }).join("")}</tbody></table>`;
     const slip = held.filter(d => d.hist.gmChange <= -GM_SLIP).sort((a, b) => a.hist.gmChange - b.hist.gmChange);
     document.getElementById("gmNote").innerHTML = slip.length ? `Down ${GM_SLIP * 100} points or more in 12 months: ${slip.map(d => `${esc(d.company)} (${ptsTxt(d.hist.gmChange)})`).join(", ")}.` : `No held company's margin fell ${GM_SLIP * 100} points or more over the last 12 months.`;
+  }
+
+  // Growth vs profitability: one path per fund through (median growth, median margin) by quarter.
+  if (state.hist && document.getElementById("cGp")) {
+    const funds = F.filter(f => state.gpFund === "all" || f.name === state.gpFund);
+    const allQ = [...new Set(D.flatMap(d => d.hist.perf.filter(r => isFinite(r.growth) && isFinite(r.pm)).map(r => r.q)))].sort();
+    const keepQ = new Set(state.gpWin === "all" ? allQ : allQ.slice(-Number(state.gpWin)));
+    const paths = funds.map(f => {
+      const byQ = {}; D.filter(d => d.fund === f.name).forEach(d => d.hist.perf.forEach(r => { if (keepQ.has(r.q) && isFinite(r.growth) && isFinite(r.pm)) (byQ[r.q] ??= []).push(r) }));
+      return { f, pts: Object.keys(byQ).sort().filter(q => byQ[q].length >= GP_MIN_N).map(q => ({ x: median(byQ[q].map(r => r.growth)), y: median(byQ[q].map(r => r.pm)), q, n: byQ[q].length })) };
+    }).filter(p => p.pts.length);
+    // With one fund selected, mark companies that raised in the 12 months to the latest quarter, as a hollow square.
+    let raised = null;
+    if (funds.length === 1 && paths.length) {
+      const lastQ = paths[0].pts[paths[0].pts.length - 1].q;
+      const R = D.filter(d => d.fund === funds[0].name && d.hist.rounds.some(r => r.date > new Date(asOf.getFullYear() - 1, asOf.getMonth(), asOf.getDate())))
+        .map(d => d.hist.perf.find(r => r.q === lastQ)).filter(r => r && isFinite(r.growth) && isFinite(r.pm));
+      if (R.length >= 2) raised = { x: median(R.map(r => r.growth)), y: median(R.map(r => r.pm)), n: R.length, q: lastQ };
+    }
+    const endLabels = { id: "endLabels", afterDatasetsDraw(ch) { const { ctx } = ch; ctx.save(); ctx.font = `12px ${css("--body")}`;
+      ch.data.datasets.forEach((ds, i) => { if (!ds.pathOf || ch.getDatasetMeta(i).hidden) return; const m = ch.getDatasetMeta(i).data; if (!m.length) return;
+        [[0, ds.data[0]], [m.length - 1, ds.data[m.length - 1]]].forEach(([k, pt], j) => { if (j && m.length === 1) return; ctx.fillStyle = ds.borderColor; ctx.fillText(qShort(pt.q), m[k].x + 8, m[k].y - 6) }) });
+      ctx.restore() } };
+    const ds = paths.map(p => ({ label: p.f.name, pathOf: p.f.name, data: p.pts, showLine: true, borderColor: fundColor[p.f.name], backgroundColor: fundColor[p.f.name], borderDash: [4, 4], borderWidth: 1.5, pointRadius: 4, pointHoverRadius: 6, tension: 0.3 }));
+    if (raised) ds.push({ label: "Companies that raised in the last 12 months", data: [raised], pointStyle: "rect", pointRadius: 9, pointHoverRadius: 11, backgroundColor: "transparent", borderColor: fundColor[funds[0].name], borderWidth: 2 });
+    charts.push(new Chart(document.getElementById("cGp"), { type: "scatter", data: { datasets: ds }, plugins: [endLabels],
+      options: { layout: { padding: { right: 40, top: 10 } }, scales: {
+        x: { position: "top", title: { display: true, text: "Median revenue growth (YoY)" }, ticks: { callback: v => fp(v, 0) }, grid: { color: css("--rule") } },
+        y: { title: { display: true, text: "Median profit margin" }, ticks: { callback: v => fp(v, 0) }, grid: { color: c => c.tick.value === 0 ? css("--ink-3") : css("--rule") } } },
+        plugins: { legend: { position: "bottom", labels: { usePointStyle: true, boxWidth: 8, boxHeight: 8 } }, tooltip: { callbacks: { title: c => `${c[0].dataset.label} · ${qShort(c[0].raw.q)}`, label: c => [`Growth ${fp(c.raw.x, 0)} · margin ${fp(c.raw.y, 0)}`, `${c.raw.n} companies`] } } } } }));
+    const first = paths.map(p => { const a = p.pts[0], b = p.pts[p.pts.length - 1]; return `${esc(fundShort(p.f.name))}: ${qShort(a.q)} growth ${fp(a.x, 0)}, margin ${fp(a.y, 0)} → ${qShort(b.q)} growth ${fp(b.x, 0)}, margin ${fp(b.y, 0)}` });
+    const dropped = funds.filter(f => !paths.some(p => p.f === f)).map(f => esc(fundShort(f.name)));
+    document.getElementById("gpNote").innerHTML = (first.length ? first.join(" · ") + "." : "No quarter has enough companies reporting revenue and profit.") + (dropped.length ? ` ${dropped.join(", ")}: not enough companies reporting in this period.` : "")
+      + (raised ? ` Square: the ${raised.n} companies that raised in the last 12 months, ${qShort(raised.q)}: growth ${fp(raised.x, 0)}, margin ${fp(raised.y, 0)}.` : "")
+      + (funds.length === 1 && !raised && paths.length ? " Fewer than two companies raised in the last 12 months, so there is no recently-raised marker." : "");
   }
 
   // Round progression from the history file: did companies raise the next round, and how fast?
@@ -905,7 +953,7 @@ document.getElementById("bmSrc").addEventListener("change", e => { state.bmSrc =
 function setView(v) { state.view = v; render() }
 document.querySelectorAll(".tabs [role=tab]").forEach(b => b.addEventListener("click", () => setView(b.dataset.view)));
 if (["#companies", "#team"].includes(location.hash)) state.view = location.hash.slice(1);
-document.addEventListener("change", e => { if (e.target.id === "coFund") { state.coFund = e.target.value; render() } if (e.target.id === "coFlag") { state.coFlagOnly = e.target.checked; render() } if (e.target.id === "dimSel") { state.dim = e.target.value; render() } if (e.target.id === "scopeSel") { state.scope = e.target.value; render() } });
+document.addEventListener("change", e => { if (e.target.id === "coFund") { state.coFund = e.target.value; render() } if (e.target.id === "coFlag") { state.coFlagOnly = e.target.checked; render() } if (e.target.id === "dimSel") { state.dim = e.target.value; render() } if (e.target.id === "scopeSel") { state.scope = e.target.value; render() } if (e.target.id === "gpFund") { state.gpFund = e.target.value; render() } if (e.target.id === "gpWin") { state.gpWin = e.target.value; render() } });
 matchMedia("(prefers-color-scheme: dark)").addEventListener("change", render);
 new MutationObserver(render).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
 // Open on the sample so the first view shows what the tool does.
