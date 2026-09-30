@@ -62,8 +62,8 @@ th:first-child, td:first-child { text-align: left }
 td { font-family: var(--mono); font-size: 13px } td:first-child { font-family: var(--body); font-weight: 500 }
 tr.total td { font-weight: 600; border-top: 2px solid var(--ink-3) }
 .pill { display: inline-block; min-width: 34px; text-align: center; font: 600 11px var(--body); padding: 2px 6px; border-radius: 999px }
-.pill.q1 { background: var(--q1); color: var(--panel) } .pill.q2 { background: var(--q2); color: var(--panel) }
-.pill.q3 { background: var(--q3); color: var(--ink) } .pill.q4 { background: var(--q4); color: var(--ink) }
+.pill.q1 { background: var(--q1); color: var(--q1-ink, var(--panel)) } .pill.q2 { background: var(--q2); color: var(--q2-ink, var(--panel)) }
+.pill.q3 { background: var(--q3); color: var(--q3-ink, var(--ink)) } .pill.q4 { background: var(--q4); color: var(--q4-ink, var(--ink)) }
 .pill.na { color: var(--ink-3) }
 /* Grid children default to min-width:auto, which lets a wide table inside push the page sideways. */
 .panel { grid-template-columns: minmax(0, 1fr) }
@@ -102,6 +102,14 @@ tr.total td { font-weight: 600; border-top: 2px solid var(--ink-3) }
 .bm a { color: var(--accent) }
 .bm td input { width: 5.5em; font: 13px var(--mono); text-align: right; color: var(--ink); background: var(--bg); border: 1px solid var(--rule); border-radius: 3px; padding: 3px 5px }
 .bm td input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px }
+.brand { display: grid; gap: 8px; border-top: 1px solid var(--rule); padding-top: 12px }
+.brand-row { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center }
+.brand-row label { display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: center; font-size: 13px; color: var(--ink-2) }
+.brand-row input { font: 13px var(--body); padding: 5px 8px; border: 1px solid var(--rule); border-radius: 4px; background: var(--bg); color: var(--ink); width: 22em; max-width: 100% }
+.brand-row #brandFont { width: 13em }
+.brand-row input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px }
+.swatches { display: flex; gap: 3px } .swatches span { width: 18px; height: 18px; border-radius: 3px; border: 1px solid var(--rule) }
+#brandNote:empty { display: none } #brandNote.warn { color: var(--warn) }
 .bm th.grp { text-align: center; border-bottom: 1px solid var(--ink-3) }
 .errors { color: var(--bad); font-size: 13px; margin: 0 }
 .empty { color: var(--ink-3); padding: 24px; text-align: center }
@@ -201,6 +209,16 @@ tr.total td { font-weight: 600; border-top: 2px solid var(--ink-3) }
       </div>
       <p class="note" id="bmNote"></p>
       <div class="tbl" id="bmGrid"></div>
+    </div>
+    <div class="brand">
+      <div class="row"><b class="bm-title">Brand</b><span class="note">Your colours and font, used on screen, in the charts and in the PNG and HTML downloads.</span></div>
+      <div class="brand-row">
+        <label for="brandColors">Colours <input id="brandColors" spellcheck="false" autocomplete="off" placeholder="#0B3D91, #F2A900, #6C757D"></label>
+        <span class="swatches" id="brandSwatches" aria-hidden="true"></span>
+        <label for="brandFont">Font <input id="brandFont" spellcheck="false" autocomplete="off" placeholder="e.g. Inter or Calibri"></label>
+        <button type="button" id="brandReset">Reset</button>
+      </div>
+      <p class="note" id="brandNote" role="status"></p>
     </div>
     <p class="errors" id="errors" role="alert"></p>
     <details>
@@ -1308,6 +1326,102 @@ function commitRows(kind, rows, fileName, how) {
   render();
 }
 
+// ---------- brand ----------
+// The user's own colours and font. The first colour becomes the accent, the second the base of the
+// quartile scale (kept apart so the fund marker stands out against its benchmark bands), and the list
+// in order becomes the chart series (topped up to eight with tints and shades).
+// Everything is written as CSS custom properties, so the page, the charts (which read them through
+// css()) and the HTML report all follow. Kept in this browser and in the workspace file.
+const brandStore = { load() { try { return JSON.parse(localStorage.getItem("brand")) || {} } catch { return {} } }, save(v) { try { localStorage.setItem("brand", JSON.stringify(v)) } catch {} } };
+const LIGHT = { panel: "#ffffff", ink: "#16201e" }, DARK = { panel: "#192120", ink: "#eef2f0" };
+// Any CSS colour (hex with or without #, rgb(), hsl(), a name) to #rrggbb, or null.
+function toHex(s) {
+  const t = /^[0-9a-f]{6}$|^[0-9a-f]{3}$/i.test(s) ? "#" + s : s, x = document.createElement("canvas").getContext("2d");
+  x.fillStyle = "#000001"; x.fillStyle = t; const a = x.fillStyle; x.fillStyle = "#000002"; x.fillStyle = t;
+  return a === x.fillStyle && a.startsWith("#") ? a : null;
+}
+const rgbOf = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));
+const mix = (a, b, t) => "#" + rgbOf(a).map((v, i) => Math.round(v + (rgbOf(b)[i] - v) * t).toString(16).padStart(2, "0")).join("");
+const lum = h => { const [r, g, b] = rgbOf(h).map(v => (v /= 255) <= .03928 ? v / 12.92 : ((v + .055) / 1.055) ** 2.4); return .2126 * r + .7152 * g + .0722 * b };
+const contrast = (a, b) => { const [x, y] = [lum(a), lum(b)].sort((p, q) => q - p); return (x + .05) / (y + .05) };
+// Text on a filled pill: whichever of panel or ink reads better.
+const onFill = (c, T) => contrast(c, T.panel) >= contrast(c, T.ink) ? T.panel : T.ink;
+// Nudge a colour toward the ink until it reads as text on the panel.
+function readable(c, T) { let o = c; for (let t = .1; contrast(o, T.panel) < 3 && t <= 1; t += .1) o = mix(c, T.ink, t); return o }
+function parseColors(text) {
+  const bad = [], out = [];
+  for (const tok of String(text).match(/rgba?\([^)]*\)|hsla?\([^)]*\)|#?[0-9a-f]{6}\b|#[0-9a-f]{3}\b|[a-z]+/gi) || []) { const h = toHex(tok.trim()); h ? out.push(h) : bad.push(tok) }
+  return { colors: [...new Set(out)].slice(0, 8), bad };
+}
+function brandVars(colors, T, dark) {
+  const c = colors, a = c[0], qb = c[1] || c[0], v = {};
+  const extra = [...c.map(x => mix(x, "#ffffff", .45)), ...c.map(x => mix(x, "#000000", .35))];
+  [...c, ...extra].slice(0, 8).forEach((x, i) => v[`--s${i + 1}`] = x);
+  v["--accent"] = readable(a, T); v["--accent-soft"] = mix(a, T.panel, dark ? .8 : .88);
+  // Quartiles run strongest to faintest against the panel, as the default scale does in each theme.
+  const q = dark ? [mix(qb, "#ffffff", .45), qb, mix(qb, T.panel, .45), mix(qb, T.panel, .72)] : [qb, mix(qb, "#ffffff", .35), mix(qb, "#ffffff", .62), mix(qb, "#ffffff", .85)];
+  q.forEach((x, i) => { v[`--q${i + 1}`] = x; v[`--q${i + 1}-ink`] = onFill(x, T) });
+  return Object.entries(v).map(([k, x]) => `${k}: ${x}`).join("; ");
+}
+const fontStack = f => `"${f.replace(/["\\]/g, "")}", system-ui, "Segoe UI", sans-serif`;
+// Tell whether a font can draw on this machine: its text measures differently from both fallbacks.
+function fontAvailable(f) {
+  const x = document.createElement("canvas").getContext("2d"), w = fam => { x.font = `72px ${fam}`; return x.measureText("mmmmmmmmmlli WQ@#0123").width };
+  return ["monospace", "serif"].some(fb => w(`"${f.replace(/["\\]/g, "")}", ${fb}`) !== w(fb));
+}
+// Google Fonts answers a request for weights a family lacks with an error, so try the useful sets in
+// turn. A stylesheet link (unlike fetch) reports that error and is allowed wherever the page's own fonts are.
+async function googleFont(f) {
+  const fam = encodeURIComponent(f).replace(/%20/g, "+");
+  for (const w of [":wght@400;500;600", ":wght@400;600", ":wght@400;700", ""]) {
+    const link = Object.assign(document.createElement("link"), { id: "brandFontLink", rel: "stylesheet", href: `https://fonts.googleapis.com/css2?family=${fam}${w}&display=swap` });
+    const ok = await new Promise(r => { link.onload = () => r(true); link.onerror = () => r(false); setTimeout(() => r(false), 5000); document.head.append(link) });
+    if (ok) return link; link.remove();
+  }
+  return null;
+}
+async function applyBrand(b, { save = true } = {}) {
+  const bad = b.bad || []; state.brand = b = { colors: b.colors || [], font: (b.font || "").trim() };
+  if (save) brandStore.save(b);
+  const note = document.getElementById("brandNote"), msgs = [], warn = [];
+  let el = document.getElementById("brandCss"); if (!el) { el = document.createElement("style"); el.id = "brandCss"; document.head.append(el) }
+  let rules = "";
+  if (b.colors.length) {
+    const L = brandVars(b.colors, LIGHT, false), D = brandVars(b.colors, DARK, true);
+    // Doubled :root outranks the theme rules above whichever way the theme was chosen.
+    rules += `:root:root:root { ${L} }\n@media (prefers-color-scheme: dark) { :root:root:not([data-theme="light"]) { ${D} } }\n:root:root[data-theme="dark"] { ${D} }\n`;
+  }
+  document.getElementById("brandSwatches").innerHTML = b.colors.map(c => `<span style="background:${c}" title="${c}"></span>`).join("");
+  document.getElementById("brandFontLink")?.remove(); state.brandFontHref = null;
+  if (b.font) {
+    rules += `:root:root:root:root { --display: ${fontStack(b.font)}; --body: ${fontStack(b.font)}; --mono: ${fontStack(b.font)} }\n`;
+    if (fontAvailable(b.font)) msgs.push(`${b.font} is installed on this computer.`);
+    else {
+      const link = await googleFont(b.font);
+      if (link) try { await document.fonts.load(`16px ${fontStack(b.font)}`) } catch {}
+      if (state.brand !== b) { link?.remove(); return }  // superseded while loading
+      if (link && fontAvailable(b.font)) { state.brandFontHref = link.href; msgs.push(`${b.font} loaded from Google Fonts.`) }
+      else { document.getElementById("brandFontLink")?.remove(); warn.push(`${b.font} is not installed on this computer and is not on Google Fonts, so text shows in the fallback font. Check the spelling, or install the font.`) }
+    }
+  }
+  el.textContent = rules;
+  if (b.colors.length) msgs.push(`${b.colors.length} colour${b.colors.length > 1 ? "s" : ""}: the first is the accent${b.colors.length > 1 ? ", the second shades the benchmark quartiles" : ""}${b.colors.length < 8 ? "; charts with more series than colours use tints and shades of these" : ""}.`);
+  if (bad.length) warn.push(`Could not read ${bad.map(t => `"${t}"`).join(", ")} as a colour.`);
+  note.textContent = [...warn, ...msgs].join(" "); note.className = "note" + (warn.length ? " warn" : "");
+  if (state.cf) render();
+}
+function brandFromInputs() {
+  const { colors, bad } = parseColors(document.getElementById("brandColors").value);
+  applyBrand({ colors, bad, font: document.getElementById("brandFont").value });
+}
+function showBrand(b) {
+  document.getElementById("brandColors").value = (b.colors || []).join(", ");
+  document.getElementById("brandFont").value = b.font || "";
+}
+["brandColors", "brandFont"].forEach(id => { const i = document.getElementById(id); i.addEventListener("change", brandFromInputs); i.addEventListener("keydown", e => { if (e.key === "Enter") brandFromInputs() }) });
+document.getElementById("brandReset").addEventListener("click", () => { showBrand({}); applyBrand({}) });
+state.brand = brandStore.load(); showBrand(state.brand); if (state.brand.colors?.length || state.brand.font) applyBrand(state.brand, { save: false });
+
 // ---------- workspace ----------
 // One JSON file holds everything needed to pick up where you left off: the loaded rows (already in
 // the app's own columns), benchmark entries, exchange rates, settings and saved column mappings.
@@ -1315,7 +1429,7 @@ document.getElementById("wsSave").addEventListener("click", () => {
   if (!state.cf) return dlMsg("Load data first.", true);
   const ws = { app: "venture-track-record", version: 1, savedAt: new Date().toISOString(), title: document.getElementById("gpTitle").textContent, isSample: state.isSample,
     raw: state.raw, benchmarks: Object.fromEntries(["carta", "cambridge", "custom"].map(k => [k, bmStore.load(k)])), bmSrc: state.bmSrc,
-    rates: state.rates, curMode: state.curMode, inUnit: state.inUnit, mappings: mapStore.all(), scenarios: state.scen ? (({ key, ...r }) => r)(state.scen) : null };
+    rates: state.rates, curMode: state.curMode, inUnit: state.inUnit, mappings: mapStore.all(), brand: { colors: state.brand.colors, font: state.brand.font }, scenarios: state.scen ? (({ key, ...r }) => r)(state.scen) : null };
   saveFile(`${slug(ws.title)}-workspace.json`, JSON.stringify(ws));
 });
 document.getElementById("wsOpen").addEventListener("change", async e => {
@@ -1326,6 +1440,7 @@ document.getElementById("wsOpen").addEventListener("change", async e => {
     if (ws.app !== "venture-track-record" || !ws.raw?.cf) throw new Error("That file is not a saved workspace from this tool.");
     for (const [k, v] of Object.entries(ws.benchmarks || {})) if (v && Object.keys(v).length) bmStore.save(k, v);
     if (ws.mappings) mapStore.merge(ws.mappings);
+    if (ws.brand) { showBrand(ws.brand); applyBrand(ws.brand) }
     Object.assign(state, { rates: ws.rates || {}, curMode: ws.curMode || "local", inUnit: ws.inUnit || 1, isSample: !!ws.isSample, raw: ws.raw });
     document.getElementById("inUnit").value = String(state.inUnit);
     state.cf = normCf(ws.raw.cf); state.inv = ws.raw.inv ? normInv(ws.raw.inv) : null; state.hist = ws.raw.hist ? normHist(ws.raw.hist) : null; state.team = ws.raw.team ? normTeam(ws.raw.team) : null;
@@ -1687,7 +1802,7 @@ document.getElementById("dlHtml").addEventListener("click", async () => {
   const cssText = [...document.querySelectorAll("style")].map(s => s.textContent).join("\n");
   const title = `${document.getElementById("gpTitle").textContent} · ${document.getElementById("asOf").textContent}`;
   const doc = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${esc(title)}</title>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+Condensed:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+Condensed:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">${state.brandFontHref ? `\n<link rel="stylesheet" href="${esc(state.brandFontHref)}">` : ""}
 <style>${cssText}\n.view-h{font-size:22px;margin:24px 0 0;padding-top:16px;border-top:2px solid var(--ink)}</style></head>
 <body><div class="wrap"><header><div><h1>${esc(document.getElementById("gpTitle").textContent)}</h1><p class="sub">Track record report</p></div><div class="meta">${esc(document.getElementById("asOf").textContent)}</div></header>
 ${parts.join("\n")}</div></body></html>`;
