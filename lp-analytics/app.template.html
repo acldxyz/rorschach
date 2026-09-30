@@ -35,6 +35,10 @@ h1, h2, h3 { font-family: var(--display); font-weight: 600; margin: 0; text-wrap
 h1 { font-size: 26px } h2 { font-size: 18px } h3 { font-size: 14px; color: var(--ink-2); text-transform: uppercase; letter-spacing: .08em }
 header { display: flex; flex-wrap: wrap; gap: 8px 24px; align-items: baseline; justify-content: space-between }
 .sub { color: var(--ink-2); margin: 2px 0 0 }
+.modules { display: flex; gap: 4px; font: 600 12px var(--body); letter-spacing: .04em; text-transform: uppercase }
+.modules a { color: var(--ink-3); text-decoration: none; padding: 3px 10px; border: 1px solid var(--rule); border-radius: 999px }
+.modules a:hover { color: var(--accent); border-color: var(--accent) }
+.modules a[aria-current="page"] { color: var(--panel); background: var(--accent); border-color: var(--accent) }
 .meta { font-family: var(--mono); font-size: 12px; color: var(--ink-3) }
 .panel { background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 16px; min-width: 0; display: grid; gap: 12px; align-content: start }
 .panel-head { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; justify-content: space-between }
@@ -162,6 +166,7 @@ tr.total td { font-weight: 600; border-top: 2px solid var(--ink-3) }
 </style>
 
 <div class="wrap">
+  <nav class="modules" aria-label="Modules"><a href="index.html" aria-current="page">Fund performance</a><a href="exposure.html">LP exposure</a></nav>
   <header>
     <div>
       <h1 id="gpTitle">Venture Track Record</h1>
