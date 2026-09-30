@@ -30,6 +30,7 @@
   --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; --s5: #d55181; --s6: #2f9a2f; --s7: #9085e9; --s8: #e66767;
   color-scheme: dark }
 * { box-sizing: border-box }
+[hidden] { display: none !important }  /* component display rules must not un-hide closed panels */
 body { background: var(--bg); color: var(--ink); font: 14px/1.5 var(--body); margin: 0; padding: 24px 16px 48px }
 .wrap { max-width: 1240px; margin: 0 auto; display: grid; gap: 20px }
 h1, h2, h3 { font-family: var(--display); font-weight: 600; margin: 0; text-wrap: balance; letter-spacing: .01em }
@@ -72,6 +73,15 @@ tr.total td { font-weight: 600; border-top: 2px solid var(--ink-3) }
 .grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 520px), 1fr)); gap: 20px }
 .grid3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); gap: 16px }
 .chart { position: relative; height: 280px; min-width: 0 } .chart.tall { height: 340px } .chart.xtall { height: 460px }
+.scbar { gap: 6px } .scbar button[aria-pressed="true"] { background: var(--accent); color: var(--panel); border-color: var(--accent) }
+.scgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 250px), 1fr)); gap: 8px 20px }
+.scgrid label { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 13px; color: var(--ink-2) }
+.scgrid label span { display: inline-flex; align-items: center; gap: 4px; color: var(--ink-3); white-space: nowrap }
+.scin { width: 5.2em; font: 13px var(--mono); text-align: right; color: var(--ink); background: var(--bg); border: 1px solid var(--rule); border-radius: 3px; padding: 3px 5px }
+.scin::placeholder { color: var(--ink-3) } .scin:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px }
+.scin.wide { width: 12em; text-align: left; font-family: var(--body) } .scin.yr { width: 4.2em }
+.sctable td { vertical-align: top } .sctable td:first-child { white-space: normal; min-width: 15em }
+.sctable tr.scoff td { color: var(--ink-3) } .sctable .scimp { color: var(--accent); font-weight: 500 }
 .mapper { border-color: var(--accent); gap: 10px }
 .mtable td { white-space: normal; vertical-align: top } .mtable td:first-child { font-weight: 600 }
 .mtable select { max-width: 16em }
@@ -219,6 +229,7 @@ benchmarks:  vintage, metric (TVPI|IRR|DPI), top, median, bottom</pre>
     <button type="button" role="tab" id="tab-record" data-view="record" aria-selected="true">Track record</button>
     <button type="button" role="tab" id="tab-companies" data-view="companies" aria-selected="false">Portfolio companies <span id="flagCount"></span></button>
     <button type="button" role="tab" id="tab-team" data-view="team" aria-selected="false">Team &amp; partners</button>
+    <button type="button" role="tab" id="tab-scen" data-view="scen" aria-selected="false">Scenarios</button>
   </nav>
   <div class="exports" id="exportBar"><span class="note">Download everything:</span>
     <button type="button" id="dlXlsx">Excel workbook</button><button type="button" id="dlHtml">HTML report</button></div>
@@ -239,7 +250,7 @@ const BM_SOURCES = {
 };
 // Figures typed or uploaded per source stay in this browser only.
 const bmStore = { load(k) { try { return JSON.parse(localStorage.getItem("bm:" + k)) || {} } catch { return {} } }, save(k, v) { try { localStorage.setItem("bm:" + k, JSON.stringify(v)) } catch {} } };
-const state = { cur: { sym: "$", unit: { div: 1, suffix: "", word: "" } }, curMode: "local", inUnit: 1, rates: (() => { try { return JSON.parse(localStorage.getItem("fx-rates")) || {} } catch { return {} } })(), isSample: false, raw: {}, samplingOff: false, view: "record", coFund: "all", coFlagOnly: false, cf: null, inv: null, bm: null, bmSrc: "sample", bmSample: null, gp: "", dim: "stage", gpFund: "all", gpWin: "16", scope: "all" };
+const state = { cur: { sym: "$", unit: { div: 1, suffix: "", word: "" } }, curMode: "local", inUnit: 1, rates: (() => { try { return JSON.parse(localStorage.getItem("fx-rates")) || {} } catch { return {} } })(), isSample: false, raw: {}, samplingOff: false, view: "record", coFund: "all", coFlagOnly: false, cf: null, inv: null, bm: null, bmSrc: "sample", bmSample: null, gp: "", dim: "stage", scFund: "all", gpFund: "all", gpWin: "16", scope: "all" };
 let charts = [];
 
 // ---------- parsing ----------
@@ -383,6 +394,11 @@ const series = i => css(`--s${(i % 8) + 1}`);
 
 // ---------- render ----------
 function render() { renderView(); decorateDownloads() }
+function setChartDefaults() {
+  Chart.defaults.font.family = css("--body"); Chart.defaults.color = css("--ink-2"); Chart.defaults.borderColor = css("--rule");
+  Chart.defaults.plugins.tooltip.backgroundColor = css("--ink"); Chart.defaults.plugins.tooltip.titleColor = css("--bg"); Chart.defaults.plugins.tooltip.bodyColor = css("--bg");
+  Chart.defaults.maintainAspectRatio = false; Chart.defaults.animation = state.capturing || matchMedia("(prefers-reduced-motion: reduce)").matches ? false : { duration: 350 };
+}
 function renderView() {
   charts.forEach(c => c.destroy()); charts = [];
   document.querySelectorAll(".tabs [role=tab]").forEach(b => b.setAttribute("aria-selected", String(b.dataset.view === state.view)));
@@ -400,6 +416,7 @@ function renderView() {
   document.getElementById("flagCount").innerHTML = (nFlag ? `<span class="flag-pill">${nFlag} to check</span>` : "") + (nLowRw ? `<span class="flag-pill bad">${nLowRw} low runway</span>` : "");
   if (state.view === "companies") return renderCompanies(profiles, F, asOf);
   if (state.view === "team") return renderTeam(profiles, F, asOf);
+  if (state.view === "scen") return renderScen(F, fundColor, asOf);
   const bm = hasBm(state.bm) ? state.bm : {}, bmOn = hasBm(state.bm);
   const q = (f, m, v) => { const r = quartile(v, bm[f.vintage]?.[m]); return r ? `<span class="pill q${r}">Q${r}</span>` : `<span class="pill na">–</span>` };
   const T = F.reduce((t, f) => ({ paid: t.paid + f.paid, dist: t.dist + f.dist, nav: t.nav + f.nav, size: t.size + (f.size || 0) }), { paid: 0, dist: 0, nav: 0, size: 0 });
@@ -450,9 +467,7 @@ function renderView() {
   out.innerHTML = html;
   document.getElementById("scopeSel") && (document.getElementById("scopeSel").value = state.scope);
 
-  Chart.defaults.font.family = css("--body"); Chart.defaults.color = css("--ink-2"); Chart.defaults.borderColor = css("--rule");
-  Chart.defaults.plugins.tooltip.backgroundColor = css("--ink"); Chart.defaults.plugins.tooltip.titleColor = css("--bg"); Chart.defaults.plugins.tooltip.bodyColor = css("--bg");
-  Chart.defaults.maintainAspectRatio = false; Chart.defaults.animation = state.capturing || matchMedia("(prefers-reduced-motion: reduce)").matches ? false : { duration: 350 };
+  setChartDefaults();
 
   // Relative performance: quartile bands as overlaid floating bars, fund as a marker.
   [["cTvpi", "TVPI", "tvpi", fx], ["cIrr", "IRR", "irr", fp], ["cDpi", "DPI", "dpi", fx]].forEach(([id, m, k, f]) => {
@@ -708,7 +723,7 @@ function dealView(asOf) {
     // Quarterly revenue growth is year over year: this quarter against the same quarter a year before.
     const revRows = h.filter(r => r.revenue > 0), revAt = {}; revRows.forEach(r => revAt[qKey(r.date)] = r.revenue);
     const perf = revRows.map(r => { const q = qKey(r.date), prior = revAt[qKey(new Date(r.date.getFullYear() - 1, r.date.getMonth(), 15))];
-      return { q, d: r.date, growth: prior > 0 ? r.revenue / prior - 1 : NaN, pm: isFinite(r.profit_margin) ? r.profit_margin : isFinite(r.net_income) ? r.net_income / r.revenue : NaN } });
+      return { q, d: r.date, rev: r.revenue, growth: prior > 0 ? r.revenue / prior - 1 : NaN, pm: isFinite(r.profit_margin) ? r.profit_margin : isFinite(r.net_income) ? r.net_income / r.revenue : NaN } });
     // Year-ago point: the report closest to 12 months before the latest, if one exists within two months of it.
     const gmAgo = gmLast && gmRows.filter(r => Math.abs(monthsBetween(r.d, gmLast.d) - 12) <= 2).sort((a, b) => Math.abs(monthsBetween(a.d, gmLast.d) - 12) - Math.abs(monthsBetween(b.d, gmLast.d) - 12))[0];
     const hist = { has: h.length > 0, rounds, reports, last, runway, cashNow, raisedSince, since, perf, gmRows, gmLast, gmChange: gmAgo ? gmLast.v - gmAgo.v : NaN, own: h.filter(r => isFinite(r.ownership)) };
@@ -955,7 +970,7 @@ document.getElementById("bmGrid").addEventListener("change", e => {
 document.getElementById("bmSrc").addEventListener("change", e => { state.bmSrc = e.target.value; renderBm(); render() });
 function setView(v) { state.view = v; render() }
 document.querySelectorAll(".tabs [role=tab]").forEach(b => b.addEventListener("click", () => setView(b.dataset.view)));
-if (["#companies", "#team"].includes(location.hash)) state.view = location.hash.slice(1);
+if (["#companies", "#team", "#scen"].includes(location.hash)) state.view = location.hash.slice(1);
 document.addEventListener("change", e => { if (e.target.id === "coFund") { state.coFund = e.target.value; render() } if (e.target.id === "coFlag") { state.coFlagOnly = e.target.checked; render() } if (e.target.id === "dimSel") { state.dim = e.target.value; render() } if (e.target.id === "scopeSel") { state.scope = e.target.value; render() } if (e.target.id === "gpFund") { state.gpFund = e.target.value; render() } if (e.target.id === "gpWin") { state.gpWin = e.target.value; render() } });
 matchMedia("(prefers-color-scheme: dark)").addEventListener("change", render);
 new MutationObserver(render).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
@@ -1302,7 +1317,7 @@ document.getElementById("wsSave").addEventListener("click", () => {
   if (!state.cf) return dlMsg("Load data first.", true);
   const ws = { app: "venture-track-record", version: 1, savedAt: new Date().toISOString(), title: document.getElementById("gpTitle").textContent, isSample: state.isSample,
     raw: state.raw, benchmarks: Object.fromEntries(["carta", "cambridge", "custom"].map(k => [k, bmStore.load(k)])), bmSrc: state.bmSrc,
-    rates: state.rates, curMode: state.curMode, inUnit: state.inUnit, mappings: mapStore.all() };
+    rates: state.rates, curMode: state.curMode, inUnit: state.inUnit, mappings: mapStore.all(), scenarios: state.scen ? (({ key, ...r }) => r)(state.scen) : null };
   saveFile(`${slug(ws.title)}-workspace.json`, JSON.stringify(ws));
 });
 document.getElementById("wsOpen").addEventListener("change", async e => {
@@ -1320,10 +1335,229 @@ document.getElementById("wsOpen").addEventListener("change", async e => {
     state.bmSrc = ws.bmSrc || "custom"; if (state.bmSrc === "sample") state.bmSample = normBm(parseCSV(SAMPLE.bm));
     document.getElementById("bmSrc").value = state.bmSrc;
     document.getElementById("gpTitle").textContent = ws.title || "Venture Track Record";
+    state.scen = null; if (ws.scenarios?.list?.length) { state.scen = { ...ws.scenarios, key: scenKey() }; saveScen() }
     renderBm(); render(); dlMsg(`Opened workspace saved ${String(ws.savedAt || "").slice(0, 10)}.`);
   } catch (x) { err.textContent = x instanceof SyntaxError ? "That file could not be read as a workspace." : x.message }
 });
 document.getElementById("wsOpenBtn").addEventListener("click", () => document.getElementById("wsOpen").click());
+
+// ---------- scenarios ----------
+// Forward-looking model for the companies still held. Each company's exit value comes from a
+// revenue forecast and an exit multiple (or a value typed in directly, which then shows the multiple
+// it implies). Fund proceeds go through the company's liquidation preferences, and the fund's
+// proceeds go through the LP/GP waterfall (hurdle, catch-up, carry) to give net LP returns.
+const SEC_MULT = { "Enterprise Software": 8, "Developer Tools": 8, "Fintech": 5, "Healthcare": 4, "Consumer": 2.5, "Climate": 3 };
+const STAGE_GROWTH = { "Seed": 1.0, "Series A": 0.8, "Series B": 0.6, "Series C": 0.45 };
+const BASE_G = { growthX: 1, multipleX: 1, delay: 0, decay: 0.25, yearsToExit: 4, dilution: 0.08, prefMult: 1, participating: false, hurdle: 0.08, carry: 0.20, catchup: 1, feeRate: 0.015, secMult: { ...SEC_MULT } };
+const newScen = (id, name, over) => ({ id, name, g: { ...BASE_G, secMult: { ...SEC_MULT }, ...over }, co: {} });
+const defaultScens = () => ({ active: "base", list: [newScen("base", "Base", {}), newScen("down", "Downside", { growthX: 0.6, multipleX: 0.7, delay: 1, dilution: 0.12 }), newScen("up", "Upside", { growthX: 1.3, multipleX: 1.3, dilution: 0.06 })] });
+const scenKey = () => "scen:" + slug(document.getElementById("gpTitle").textContent);
+function scenState() {
+  const k = scenKey();
+  if (!state.scen || state.scen.key !== k) { let s = null; try { s = JSON.parse(localStorage.getItem(k)) } catch {} state.scen = { ...(s?.list?.length ? s : defaultScens()), key: k } }
+  return state.scen;
+}
+function saveScen() { try { const { key, ...rest } = state.scen; localStorage.setItem(key, JSON.stringify(rest)) } catch {} }
+const activeScen = () => { const S = scenState(); return S.list.find(s => s.id === S.active) || S.list[0] };
+const medianOf = a => { const s = a.filter(isFinite).sort((x, y) => x - y), m = s.length >> 1; return !s.length ? NaN : s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2 };
+
+// What the data says about a held company today; every value here can be overridden per scenario.
+function coBase(d) {
+  const perf = d.hist.perf || [], lastRev = [...perf].reverse().find(r => r.rev > 0), lastGrowth = [...perf].reverse().find(r => isFinite(r.growth));
+  const own = d.hist.own.length ? d.hist.own[d.hist.own.length - 1].ownership : d.ownership_current > 0 ? d.ownership_current : d.latest_post_money > 0 ? d.unrealized / d.latest_post_money : d.ownership_entry;
+  const raised = d.hist.rounds.reduce((t, r) => t + (r.amount_raised > 0 ? r.amount_raised : 0), 0);
+  return { rev: lastRev ? lastRev.rev * 4 : d.latest_post_money > 0 ? d.latest_post_money / 20 : NaN, revEst: !lastRev,
+    growth: lastGrowth ? Math.max(-0.5, Math.min(2, lastGrowth.growth)) : STAGE_GROWTH[baseRound(d.latest_round || d.stage)] ?? 0.5, growthEst: !lastGrowth,
+    own, prefStack: raised > 0 ? raised : d.latest_post_money > 0 ? d.latest_post_money * 0.3 : NaN, prefEst: !(raised > 0), post: d.latest_post_money };
+}
+function coModel(d, s, asOf) {
+  const g = s.g, o = s.co[d.company] || {}, b = coBase(d);
+  const outcome = o.outcome || "exit", rev0 = isFinite(o.rev) ? o.rev : b.rev, g1 = (isFinite(o.growth) ? o.growth : b.growth) * g.growthX;
+  const exitYear = (isFinite(o.exitYear) ? o.exitYear : asOf.getFullYear() + g.yearsToExit) + g.delay, exitDate = new Date(exitYear, 5, 30);
+  const years = Math.max(0.25, (exitDate - asOf) / 31557600000);
+  // Growth fades each year by the decay rate; a part year compounds at that year's rate.
+  let revExit = rev0, k = 0; for (let t = years; t > 0; t--, k++) revExit *= Math.pow(1 + g1 * Math.pow(1 - g.decay, k), Math.min(1, t));
+  const mult = (isFinite(o.mult) ? o.mult : g.secMult[d.sector] ?? 5) * g.multipleX;
+  const V = isFinite(o.exitValue) ? o.exitValue : revExit * mult;
+  const dil = isFinite(o.dilution) ? o.dilution : g.dilution, ownExit = b.own * Math.pow(1 - dil, years);
+  const stack = b.prefStack * g.prefMult, fundPref = d.invested * g.prefMult;
+  let proceeds, prefUsed = false;
+  if (outcome === "writeoff") proceeds = 0;
+  else if (outcome === "hold") proceeds = d.unrealized;
+  else if (!isFinite(V) || !isFinite(ownExit)) proceeds = NaN;
+  else if (isFinite(stack) && V <= stack) { proceeds = V * Math.min(1, fundPref / stack); prefUsed = true }
+  else if (g.participating) { proceeds = fundPref + ownExit * Math.max(0, V - (isFinite(stack) ? stack : 0)); prefUsed = true }
+  else { const conv = ownExit * V; proceeds = Math.max(conv, fundPref); prefUsed = fundPref > conv }
+  const total = d.realized + proceeds;
+  return { d, o, b, outcome, rev0, g1, exitYear, exitDate, years, revExit, mult, V, impliedExitMult: V / revExit, impliedNowMult: V / rev0, stepUp: V / b.post, dil, ownExit, proceeds, prefUsed,
+    moic: total / d.invested, irr: d.entry && isFinite(proceeds) ? xirr([{ d: d.entry, a: -d.invested }, { d: outcome === "hold" ? asOf : exitDate, a: total }]) : NaN };
+}
+// European (whole-fund) waterfall from today forward. The hurdle balance K is what LPs must still
+// receive, compounded at the hurdle, before any carry: once it is paid off the GP catches up, then
+// profits split. Carry already taken before the data date is estimated from distributions above paid-in.
+function fundProjection(f, models, s, asOf) {
+  const g = s.g, c = g.carry, p = g.catchup, h = g.hurdle, yrs = (a, b) => (b - a) / 31557600000;
+  let C = 0, LPd = 0, K = 0;
+  f.rows.forEach(r => { const grow = Math.pow(1 + h, yrs(r.date, asOf)); if (r.amount < 0) { C -= r.amount; K -= r.amount * grow } else { LPd += r.amount; K -= r.amount * grow } });
+  K = Math.max(0, K);
+  const gp0 = LPd > C ? c / (1 - c) * (LPd - C) : 0; let GP = gp0;
+  const held = models.filter(m => m.d.fund === f.name), last = held.length ? Math.max(...held.map(m => m.outcome === "hold" ? +asOf : +m.exitDate)) : +asOf;
+  const horizon = new Date(Math.max(last, ...held.map(m => +m.exitDate)));
+  const ev = held.filter(m => isFinite(m.proceeds) && m.proceeds > 0).map(m => ({ d: m.outcome === "hold" ? horizon : m.exitDate, gross: m.proceeds, hold: m.outcome === "hold" }));
+  // Fees are charged yearly on commitments until the last exit, as LP contributions.
+  const size = f.size > 0 ? f.size : C;
+  if (g.feeRate > 0) for (let y = asOf.getFullYear() + 1; y <= horizon.getFullYear(); y++) ev.push({ d: new Date(y, 0, 1), fee: g.feeRate * size });
+  ev.sort((a, b) => a.d - b.d);
+  let t = asOf; const flows = [];
+  for (const e of ev) {
+    K *= Math.pow(1 + h, Math.max(0, yrs(t, e.d))); t = e.d;
+    if ("fee" in e) { C += e.fee; K += e.fee; flows.push({ d: e.d, a: -e.fee, fee: true }); continue }
+    let x = e.gross, lp = 0;
+    const pay = Math.min(x, K); lp += pay; LPd += pay; K -= pay; x -= pay;
+    if (x > 0 && p > c) { const need = (c * (LPd + GP - C) - GP) / (p - c); if (need > 0) { const take = Math.min(x, need); GP += p * take; lp += (1 - p) * take; LPd += (1 - p) * take; x -= take } }
+    if (x > 0) { GP += c * x; lp += (1 - c) * x; LPd += (1 - c) * x }
+    flows.push({ d: e.d, a: lp, hold: e.hold });
+  }
+  const all = [...f.rows.map(r => ({ d: r.date, a: r.amount })), ...flows].sort((a, b) => a.d - b.d);
+  const paid = -all.filter(x => x.a < 0).reduce((s2, x) => s2 + x.a, 0), dist = all.filter(x => x.a > 0).reduce((s2, x) => s2 + x.a, 0);
+  return { f, flows, all, paid, dist, tvpi: dist / paid, irr: xirr(all), carryFuture: GP - gp0, carryPaidEst: gp0, fees: flows.filter(x => x.fee).reduce((s2, x) => s2 - x.a, 0), horizon };
+}
+function scenResults(s, F, D, asOf, fundName) {
+  const funds = F.filter(f => fundName === "all" || f.name === fundName);
+  const heldAll = D.filter(d => d.status !== "Realized" && funds.some(f => f.name === d.fund));
+  const models = heldAll.map(d => coModel(d, s, asOf));
+  const proj = funds.map(f => fundProjection(f, models, s, asOf));
+  const deals = D.filter(d => funds.some(f => f.name === d.fund));
+  const inv = deals.reduce((t, d) => t + d.invested, 0), grossNow = deals.reduce((t, d) => t + d.tv, 0) / inv;
+  const grossProj = (deals.reduce((t, d) => t + d.realized, 0) + models.reduce((t, m) => t + (isFinite(m.proceeds) ? m.proceeds : 0), 0)) / inv;
+  const all = proj.flatMap(p => p.all).sort((a, b) => a.d - b.d);
+  const paid = -all.filter(x => x.a < 0).reduce((t, x) => t + x.a, 0), dist = all.filter(x => x.a > 0).reduce((t, x) => t + x.a, 0);
+  const nowTvpi = funds.reduce((t, f) => t + f.dist + f.nav, 0) / funds.reduce((t, f) => t + f.paid, 0);
+  return { models, proj, grossNow, grossProj, nowTvpi, tvpi: dist / paid, irr: xirr(all), carry: proj.reduce((t, p) => t + p.carryFuture, 0), fees: proj.reduce((t, p) => t + p.fees, 0),
+    future: proj.reduce((t, p) => t + p.flows.filter(x => x.a > 0).reduce((u, x) => u + x.a, 0), 0), unmodelled: models.filter(m => !isFinite(m.proceeds)).length };
+}
+
+function renderScen(F, fundColor, asOf) {
+  const out = document.getElementById("out");
+  if (!state.inv) { out.innerHTML = `<div class="panel empty">Load the portfolio company file to model scenarios for the companies still held.</div>`; return }
+  const S = scenState(), s = activeScen(), g = s.g, D = dealView(asOf);
+  const fundName = F.some(f => f.name === state.scFund) ? state.scFund : "all";
+  const R = scenResults(s, F, D, asOf, fundName), all = S.list.map(x => ({ s: x, r: x.id === s.id ? R : scenResults(x, F, D, asOf, fundName) }));
+  const u = state.cur.unit, unitLbl = `${state.cur.sym}${u.suffix || ""}`;
+  const moneyIn = v => isFinite(v) ? +(v / u.div).toFixed(u.div === 1 ? 0 : 2) : "";
+  const pctInp = v => isFinite(v) ? +(v * 100).toFixed(1) : "";
+  const inp = (id, val, ph, label, w) => `<input id="${id}" class="scin${w ? " " + w : ""}" inputmode="decimal" value="${val}" placeholder="${ph}" aria-label="${esc(label)}">`;
+  const pct1 = v => fp(v, 0), yrLbl = m => m.outcome === "hold" ? "at mark" : String(m.exitYear);
+  const secs = [...new Set(D.map(d => d.sector).filter(Boolean))].sort();
+  const models = [...R.models].sort((a, b) => (b.proceeds || 0) - (a.proceeds || 0));
+  out.innerHTML = `<section class="panel"><div class="panel-head"><div><h2>Scenarios</h2><p class="note">Model exits for the ${R.models.length} companies still held${fundName === "all" ? "" : " in " + esc(fundName)}. Edits apply to the selected scenario and are kept in this browser and in the workspace file.</p></div>
+      <div class="row"><label for="scFund" class="note">Fund</label><select id="scFund"><option value="all">All funds</option>${F.map(f => `<option value="${esc(f.name)}"${fundName === f.name ? " selected" : ""}>${esc(f.name)}</option>`).join("")}</select></div></div>
+    <div class="row scbar" role="group" aria-label="Scenario">${S.list.map(x => `<button type="button" data-scen="${x.id}" aria-pressed="${x.id === s.id}">${esc(x.name)}</button>`).join("")}
+      <button type="button" id="scDup" class="dl">Duplicate</button>${S.list.length > 1 ? `<button type="button" id="scDel" class="dl">Delete</button>` : ""}<button type="button" id="scReset" class="dl">Reset edits</button>
+      <label class="row note" for="scName">Name <input id="scName" class="scin wide" value="${esc(s.name)}"></label></div>
+    <div class="kpis">
+      <div><b>${fx(R.grossProj)}</b><span>projected gross multiple (now ${fx(R.grossNow)})</span></div>
+      <div><b>${fx(R.tvpi)}</b><span>projected net TVPI to LPs (now ${fx(R.nowTvpi)})</span></div>
+      <div><b>${fp(R.irr)}</b><span>projected net IRR</span></div>
+      <div><b>${fm(R.future)}</b><span>still to come to LPs, after carry</span></div>
+      <div><b>${fm(R.carry)}</b><span>carry to the GP from here</span></div>
+      <div><b>${fm(R.fees)}</b><span>further management fees</span></div>
+    </div>
+    ${R.unmodelled ? `<p class="note warn-text">${R.unmodelled} compan${R.unmodelled > 1 ? "ies have" : "y has"} no revenue or ownership to model from; enter revenue and an exit value below.</p>` : ""}
+  </section>
+  <section class="panel"><div class="panel-head"><h2>Assumptions · ${esc(s.name)}</h2><p class="note">Apply to every company unless overridden in the table below.</p></div>
+    <div class="scgrid">
+      <label for="sg-growthX">Growth vs plan <span>${inp("sg-growthX", pctInp(g.growthX), "100", "Growth as a percent of each company's base growth")} %</span></label>
+      <label for="sg-decay">Growth fades each year by <span>${inp("sg-decay", pctInp(g.decay), "25", "Yearly growth fade")} %</span></label>
+      <label for="sg-yearsToExit">Years to exit (default) <span>${inp("sg-yearsToExit", g.yearsToExit, "4", "Default years to exit")}</span></label>
+      <label for="sg-delay">Exit delay <span>${inp("sg-delay", g.delay, "0", "Years added to every exit")} yrs</span></label>
+      <label for="sg-dilution">Dilution per year <span>${inp("sg-dilution", pctInp(g.dilution), "8", "Yearly dilution from future rounds")} %</span></label>
+      <label for="sg-multipleX">Exit multiples vs table <span>${inp("sg-multipleX", pctInp(g.multipleX), "100", "Exit multiples as a percent of the sector table")} %</span></label>
+      <label for="sg-prefMult">Liquidation preference <span>${inp("sg-prefMult", g.prefMult, "1", "Liquidation preference multiple")} x</span></label>
+      <label for="sg-participating">Preferred stock <span><select id="sg-participating"><option value="0"${!g.participating ? " selected" : ""}>non-participating</option><option value="1"${g.participating ? " selected" : ""}>participating</option></select></span></label>
+      <label for="sg-hurdle">Fund hurdle (preferred return) <span>${inp("sg-hurdle", pctInp(g.hurdle), "8", "Fund preferred return")} %</span></label>
+      <label for="sg-carry">Carried interest <span>${inp("sg-carry", pctInp(g.carry), "20", "Carried interest")} %</span></label>
+      <label for="sg-catchup">GP catch-up <span>${inp("sg-catchup", pctInp(g.catchup), "100", "GP catch-up share")} %</span></label>
+      <label for="sg-feeRate">Management fee <span>${inp("sg-feeRate", pctInp(g.feeRate), "1.5", "Yearly management fee on commitments")} % a year</span></label>
+    </div>
+    <h4>Exit EV / revenue by sector</h4>
+    <div class="scgrid">${secs.map(sec => `<label for="ss-${slug(sec)}">${esc(sec)} <span><input id="ss-${slug(sec)}" data-sec="${esc(sec)}" class="scin" inputmode="decimal" value="${g.secMult[sec] ?? ""}" placeholder="5" aria-label="Exit multiple for ${esc(sec)}"> x</span></label>`).join("")}</div>
+  </section>
+  <section class="panel"><div class="panel-head"><h2>Companies</h2><p class="note">Grey figures are defaults from the data (~ where estimated: revenue from the last post-money ÷ 20, growth from the company's stage); type to override for this scenario. An exit value you type replaces revenue × multiple, and the implied multiples update.</p></div>
+    <div class="tbl"><table class="sctable"><thead><tr><th>Company</th><th>Outcome</th><th>Revenue now (${unitLbl}/yr)</th><th>Growth next yr</th><th>Exit year</th><th>EV/Rev at exit</th><th>Exit value (${unitLbl})</th><th>Dilution/yr</th>
+      <th>Revenue at exit</th><th>Exit value</th><th>Implied EV/Rev at exit</th><th>Implied EV / revenue now</th><th>vs last round</th><th>Ownership now → exit</th><th>Fund proceeds</th><th>Gross multiple</th><th>Gross IRR</th><th></th></tr></thead><tbody>
+    ${models.map(m => { const d = m.d, o = m.o, b = m.b, id = slug(d.company), typed = isFinite(o.exitValue);
+      return `<tr${m.outcome !== "exit" ? ' class="scoff"' : ""}><td>${esc(d.company)}<div class="tags">${esc(fundShort(d.fund))} · ${esc(d.latest_round || d.stage)} · ${esc(d.sector || "")}</div></td>
+      <td><select id="sc-${id}-outcome" data-co="${esc(d.company)}" data-k="outcome" aria-label="Outcome for ${esc(d.company)}">${[["exit", "Exit"], ["hold", "Hold at mark"], ["writeoff", "Write off"]].map(([v, l]) => `<option value="${v}"${m.outcome === v ? " selected" : ""}>${l}</option>`).join("")}</select></td>
+      <td>${inp(`sc-${id}-rev`, moneyIn(o.rev), (b.revEst ? "~" : "") + moneyIn(b.rev), `Annual revenue now for ${d.company}`)}</td>
+      <td>${inp(`sc-${id}-growth`, pctInp(o.growth), (b.growthEst ? "~" : "") + pctInp(b.growth) + "%", `Revenue growth next year for ${d.company}`)}</td>
+      <td>${inp(`sc-${id}-exitYear`, isFinite(o.exitYear) ? o.exitYear : "", String(asOf.getFullYear() + g.yearsToExit), `Exit year for ${d.company}`, "yr")}</td>
+      <td>${inp(`sc-${id}-mult`, isFinite(o.mult) ? o.mult : "", String(g.secMult[d.sector] ?? 5), `Exit EV to revenue for ${d.company}`)}</td>
+      <td>${inp(`sc-${id}-exitValue`, moneyIn(o.exitValue), "", `Exit value for ${d.company}`)}</td>
+      <td>${inp(`sc-${id}-dilution`, pctInp(o.dilution), pctInp(g.dilution) + "%", `Yearly dilution for ${d.company}`)}</td>
+      <td>${m.outcome === "exit" ? fm(m.revExit) : "–"}</td><td>${m.outcome === "exit" ? fm(m.V, 0) : "–"}</td>
+      <td${typed ? ' class="scimp"' : ""}>${m.outcome === "exit" ? fx(m.impliedExitMult, 1) : "–"}</td><td class="scimp">${m.outcome === "exit" ? fx(m.impliedNowMult, 1) : "–"}</td><td>${m.outcome === "exit" && isFinite(m.stepUp) ? fx(m.stepUp, 1) : "–"}</td>
+      <td>${fp(m.b.own)} → ${m.outcome === "exit" ? fp(m.ownExit) : "–"}</td>
+      <td>${fm(m.proceeds)}${m.prefUsed && m.outcome === "exit" ? ` <span class="mchip" title="The liquidation preference sets these proceeds">pref</span>` : ""}</td><td>${fx(m.moic)}</td><td>${fp(m.irr)}</td>
+      <td>${Object.keys(o).length ? `<button type="button" class="dl" data-reset="${esc(d.company)}" aria-label="Reset ${esc(d.company)} to defaults">Reset</button>` : ""}</td></tr>` }).join("")}</tbody></table></div>
+    <p class="note">Preference stack = money raised in the company's rounds (history file) × the preference multiple${models.some(m => m.b.prefEst) ? "; where there is no round history it is estimated at 30% of the last post-money" : ""}. Proceeds below the stack are shared pro rata to preferences; "pref" marks where the preference, not conversion, sets the fund's proceeds. The preference model treats all series as one class, pari passu.</p>
+  </section>
+  <div class="grid2"><section class="panel"><h2>LP cash flows, actual and projected</h2><p class="note">Net of fees and carry. Projected years use the ${esc(s.name)} scenario.</p><div class="chart tall"><canvas id="cScFlows"></canvas></div></section>
+    <section class="panel"><h2>Cost and scenario proceeds</h2><p class="note">Largest ${Math.min(12, models.length)} held companies by scenario proceeds.</p><div class="chart tall"><canvas id="cScCo"></canvas></div></section></div>
+  <section class="panel"><h2>Scenario comparison</h2><div class="tbl"><table><thead><tr><th>Scenario</th><th>Gross multiple</th><th>Net TVPI</th><th>Net IRR</th><th>Still to come to LPs</th><th>Carry from here</th><th>Fees from here</th></tr></thead><tbody>
+    ${all.map(({ s: x, r }) => `<tr${x.id === s.id ? ' class="total"' : ""}><td>${esc(x.name)}</td><td>${fx(r.grossProj)}</td><td>${fx(r.tvpi)}</td><td>${fp(r.irr)}</td><td>${fm(r.future)}</td><td>${fm(r.carry)}</td><td>${fm(r.fees)}</td></tr>`).join("")}
+    <tr><td>Today (reported)</td><td>${fx(R.grossNow)}</td><td>${fx(R.nowTvpi)}</td><td colspan="4" class="note">Current marks, before any scenario</td></tr></tbody></table></div>
+    <p class="note">Carry taken before ${ym(asOf)} is estimated from distributions above paid-in (${fm(R.proj.reduce((t, p) => t + p.carryPaidEst, 0))}). Held-at-mark companies are counted at their current value at the last exit date. Fees are charged on commitments each year until the last exit.</p></section>`;
+  setChartDefaults();
+  const yearsSpan = [...new Set(R.proj.flatMap(p => p.all.map(x => x.d.getFullYear())))].sort((a, b) => a - b);
+  const byYear = (proj, fut) => yearsSpan.map(y => proj.flatMap(p => fut ? p.flows : p.f.rows.map(r => ({ d: r.date, a: r.amount }))).filter(x => x.d.getFullYear() === y).reduce((t, x) => t + x.a, 0));
+  const act = byYear(R.proj, false), fut = byYear(R.proj, true);
+  let cum = 0; const cumLine = yearsSpan.map((_, i) => (cum += act[i] + fut[i]));
+  charts.push(new Chart(document.getElementById("cScFlows"), { data: { labels: yearsSpan, datasets: [
+    { type: "bar", label: "Actual", data: act, backgroundColor: css("--q1"), stack: "a", borderRadius: 2 },
+    { type: "bar", label: `Projected · ${s.name}`, data: fut, backgroundColor: css("--q3"), stack: "a", borderRadius: 2 },
+    { type: "line", label: "Cumulative net", data: cumLine, borderColor: css("--accent"), backgroundColor: css("--accent"), borderWidth: 2, pointRadius: 0, pointHoverRadius: 4 }] },
+    options: { interaction: { mode: "index", intersect: false }, scales: { x: { stacked: true, grid: { display: false } }, y: { stacked: false, ticks: { callback: v => fm(v, 0) }, grid: { color: c => c.tick.value === 0 ? css("--ink-3") : css("--rule") } } },
+      plugins: { legend: { position: "bottom", labels: { boxWidth: 10 } }, tooltip: { callbacks: { label: c => `${c.dataset.label}: ${fm(c.raw)}` } } } } }));
+  const top = models.filter(m => isFinite(m.proceeds)).slice(0, 12);
+  charts.push(new Chart(document.getElementById("cScCo"), { type: "bar", data: { labels: top.map(m => m.d.company), datasets: [
+    { label: "Cost", data: top.map(m => m.d.invested), backgroundColor: css("--q3"), borderRadius: 3 },
+    { label: `Proceeds · ${s.name}`, data: top.map(m => m.proceeds + m.d.realized), backgroundColor: css("--q1"), borderRadius: 3 }] },
+    options: { indexAxis: "y", scales: { x: { beginAtZero: true, ticks: { callback: v => fm(v, 0) } }, y: { grid: { display: false }, ticks: { font: { size: 11 } } } },
+      plugins: { legend: { position: "bottom", labels: { boxWidth: 10 } }, tooltip: { callbacks: { label: c => `${c.dataset.label}: ${fm(c.raw)}` } } } } }));
+}
+// Inputs are read on change (blur or Enter) so typing is never interrupted by a redraw.
+const SC_PCT = new Set(["growthX", "decay", "dilution", "multipleX", "hurdle", "carry", "catchup", "feeRate", "growth"]);
+document.getElementById("out").addEventListener("change", e => {
+  if (state.view !== "scen") return;
+  const t = e.target, s = activeScen(), id = t.id || "";
+  if (id === "scFund") { state.scFund = t.value; return render() }
+  if (id === "scName") { s.name = t.value.trim() || s.name; saveScen(); return render() }
+  const raw = t.value.trim(), x = num(raw);
+  if (id.startsWith("sg-")) { const k = id.slice(3); if (k === "participating") s.g.participating = t.value === "1"; else if (raw === "") s.g[k] = BASE_G[k]; else if (isFinite(x)) s.g[k] = SC_PCT.has(k) ? x / 100 : x; saveScen(); return render() }
+  if (t.dataset.sec) { const sec = t.dataset.sec; if (raw === "") delete s.g.secMult[sec]; else if (isFinite(x)) s.g.secMult[sec] = x; saveScen(); return render() }
+  if (id.startsWith("sc-")) {
+    const k = id.split("-").pop(), row = t.closest("tr"), co = row?.querySelector("[data-co]")?.dataset.co; if (!co) return;
+    const o = s.co[co] ??= {};
+    if (k === "outcome") { if (t.value === "exit") delete o.outcome; else o.outcome = t.value }
+    else if (raw === "" || !isFinite(x)) delete o[k];
+    else o[k] = k === "rev" || k === "exitValue" ? x * state.cur.unit.div : SC_PCT.has(k) ? x / 100 : k === "exitYear" ? Math.round(x) : x;
+    if (!Object.keys(o).length) delete s.co[co];
+    saveScen(); render();
+  }
+});
+document.getElementById("out").addEventListener("click", e => {
+  if (state.view !== "scen") return;
+  const t = e.target.closest("button"); if (!t) return;
+  const S = scenState(), s = activeScen();
+  if (t.dataset.scen) { S.active = t.dataset.scen }
+  else if (t.id === "scDup") { const c = JSON.parse(JSON.stringify(s)); c.id = "s" + Date.now().toString(36); c.name = s.name + " copy"; S.list.push(c); S.active = c.id }
+  else if (t.id === "scDel") { S.list = S.list.filter(x => x.id !== s.id); S.active = S.list[0].id }
+  else if (t.id === "scReset") { s.co = {} }
+  else if (t.dataset.reset) { delete s.co[t.dataset.reset] }
+  else return;
+  saveScen(); render();
+});
 
 // ---------- downloads ----------
 // Inside the claude.ai viewer, files go through the downloads capability (the viewer confirms each
@@ -1346,7 +1580,7 @@ async function saveFile(filename, data) {
 }
 const slug = t => String(t).toLowerCase().replace(/&/g, "and").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 80);
 const fileBase = () => `${slug(document.getElementById("gpTitle").textContent)}-${(document.getElementById("asOf").textContent.match(/\d{4}-\d{2}-\d{2}/) || [""])[0]}`;
-const cellText = el => { const i = el.querySelector("input, select"); return (i ? (i.tagName === "SELECT" ? i.selectedOptions[0]?.textContent : i.value) : el.innerText).replace(/\s+/g, " ").trim() };
+const cellText = el => { const i = el.querySelector("input, select"); return (i ? (i.tagName === "SELECT" ? i.selectedOptions[0]?.textContent : i.value || i.placeholder) : el.innerText).replace(/\s+/g, " ").trim() };
 const tableRows = t => [...t.rows].map(r => [...r.cells].flatMap(c => [cellText(c), ...Array(Math.max(0, (c.colSpan || 1) - 1)).fill("")]));
 const csvOf = rows => rows.map(r => r.map(v => /[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v).join(",")).join("\r\n");
 // Name a table or chart after the heading nearest above it: its own h3 if it has one, else its panel's h2.
@@ -1379,7 +1613,7 @@ function decorateDownloads() {
 // Render each tab in turn, without animation, and hand every section to fn(view, label).
 async function eachView(fn) {
   const prev = state.view; state.capturing = true;
-  try { for (const [v, label] of [["record", "Track record"], ["companies", "Portfolio companies"], ["team", "Team & partners"]]) {
+  try { for (const [v, label] of [["record", "Track record"], ["companies", "Portfolio companies"], ["team", "Team & partners"], ["scen", "Scenarios"]]) {
     state.view = v; render(); await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r))); await fn(v, label) } }
   finally { state.capturing = false; state.view = prev; render() }
 }
