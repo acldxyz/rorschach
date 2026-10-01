@@ -19,6 +19,7 @@ Files:
 
 - `lp-analytics/app.template.html` and `lp-analytics/exposure.template.html` are the sources.
 - `python3 lp-analytics/build.py` bakes the sample CSVs into `index.html` and `exposure.html`.
+- `python3 lp-analytics/build.py --artifact OUTDIR --perf-url URL --exp-url URL` also writes the two pages for publishing as private claude.ai artifacts, with the module links pointing at each other's published URLs.
 - `cd lp-analytics/sample && python3 generate.py` regenerates the mock three-fund sample data for the fund performance module; `python3 generate_exposure.py` regenerates the mock ten-fund LP portfolio for the exposure module.
 
 The history was moved over from `acldxyz/personal-site` (branch `claude/amazing-heisenberg-48gqo9`).
