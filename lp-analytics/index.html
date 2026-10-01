@@ -469,7 +469,9 @@ function renderView() {
         <div><h3>Initial vs follow-on capital by outcome</h3><div class="chart"><canvas id="cFollow"></canvas></div></div></div></section>
       <section class="panel"><div class="panel-head"><h2>Time to write-off</h2><p class="note">Write-off = exited below 0.25x gross. Time runs from the fund's entry to the exit date.</p></div>
         <div class="kpis" id="woKpis"></div>
-        <div class="grid2"><div><h3>Write-offs by years from entry</h3><div class="chart"><canvas id="cWo"></canvas></div></div><div><h3>By entry round</h3><div class="tbl" id="woTbl"></div></div></div></section>
+        <div class="grid2"><div><h3>Write-offs by years from entry</h3><div class="chart"><canvas id="cWo"></canvas></div></div>
+          <div><h3>Follow-on rounds before write-off</h3><div class="chart"><canvas id="cWoFo"></canvas></div><p class="note" id="woFoNote"></p></div></div>
+        <h3>By entry round</h3><div class="tbl" id="woTbl"></div></section>
       ${state.hist ? `<section class="panel"><div class="panel-head"><h2>Gross margin</h2><p class="note">From the company history file: gross profit ÷ revenue each quarter, for companies reporting revenue.</p></div>
         <div class="grid2"><div><h3>Median gross margin by sector</h3><div class="chart tall"><canvas id="cGm"></canvas></div></div><div><h3>Latest quarter, companies still held</h3><div class="tbl" id="gmTbl"></div><p class="note" id="gmNote"></p></div></div></section>` : ""}
       ${state.hist ? `<section class="panel"><div class="panel-head"><h2>Growth vs profitability</h2><div class="row">
@@ -819,6 +821,24 @@ function renderGross(F, fundColor, asOf) {
   charts.push(new Chart(document.getElementById("cWo"), { type: "bar", data: { labels: yrB.map(b => b + " yrs"), datasets: [...new Set(D.map(d => d.stage))].sort((a, b) => STAGE_ORDER.indexOf(a) - STAGE_ORDER.indexOf(b)).filter(st => W.some(w => w.stage === st)).map((st, i) => ({
     label: `Entered at ${st}`, data: yrB.map(b => W.filter(w => w.stage === st && yb(w.mo) === b).length), backgroundColor: series(STAGE_ORDER.indexOf(st) >= 0 ? STAGE_ORDER.indexOf(st) - 1 : i), borderColor: css("--panel"), borderWidth: 1 })) },
     options: { scales: { x: { stacked: true, grid: { display: false } }, y: { stacked: true, beginAtZero: true, ticks: { precision: 0 }, title: { display: true, text: "Write-offs" } } }, plugins: { legend: { position: "bottom", labels: { boxWidth: 10 } } } } }));
+  // How many follow-on rounds the fund joined before each write-off: rounds in the company history
+  // after entry (and by the exit) where the fund put money in. Without history rounds for a company
+  // the amounts can still show there was no follow-on, but not how many there were.
+  const foBuckets = ["None", "1", "2", "3+", "Unknown"], foLabel = { None: "No follow-on", 1: "1 round", 2: "2 rounds", "3+": "3+ rounds", Unknown: "Count unknown" };
+  const foOf = w => { const n = w.hist.rounds.filter(r => r.date > w.entry && r.date <= w.exit && r.fund_invested > 0).length;
+    return n ? foBuckets[Math.min(n, 3)] : w.followOn > 0 ? "Unknown" : "None" };
+  W.forEach(w => w.fo = foOf(w));
+  const foShown = foBuckets.filter(b => b !== "Unknown" || W.some(w => w.fo === b));
+  const woStages = [...new Set(W.map(w => w.stage))].sort((a, b) => STAGE_ORDER.indexOf(a) - STAGE_ORDER.indexOf(b));
+  const foLost = b => W.filter(w => w.fo === b).reduce((t, w) => t + w.followOn, 0);
+  charts.push(new Chart(document.getElementById("cWoFo"), { type: "bar", data: { labels: foShown.map(b => foLabel[b]), datasets: woStages.map((st, i) => ({
+    label: `Entered at ${st}`, data: foShown.map(b => W.filter(w => w.stage === st && w.fo === b).length), backgroundColor: series(STAGE_ORDER.indexOf(st) >= 0 ? STAGE_ORDER.indexOf(st) - 1 : i), borderColor: css("--panel"), borderWidth: 1 })) },
+    options: { scales: { x: { stacked: true, grid: { display: false } }, y: { stacked: true, beginAtZero: true, ticks: { precision: 0 }, title: { display: true, text: "Write-offs" } } },
+      plugins: { legend: { position: "bottom", labels: { boxWidth: 10 } }, tooltip: { callbacks: { footer: items => { const b = foShown[items[0].dataIndex], n = W.filter(w => w.fo === b).length, lost = foLost(b);
+        return `${n} write-off${n === 1 ? "" : "s"}${lost > 0 ? ` · ${fm(lost)} of follow-on capital lost` : ""}` } } } } } }));
+  const foW = W.filter(w => w.fo !== "None");
+  document.getElementById("woFoNote").textContent = !W.length ? "" : `${foW.length} of ${W.length} write-offs had follow-on money, ${fm(foW.reduce((t, w) => t + w.followOn, 0))} in all.`
+    + (W.some(w => w.fo === "Unknown") ? " Count unknown: follow-on capital in the portfolio file but no rounds for the company in the history file." : "");
   const stRows = [...new Set(D.map(d => d.stage))].sort((a, b) => STAGE_ORDER.indexOf(a) - STAGE_ORDER.indexOf(b)).map(st => { const g = D.filter(d => d.stage === st), w = W.filter(x => x.stage === st), done = g.filter(d => d.status === "Realized");
     return `<tr><td>${esc(st)}</td><td>${g.length}</td><td>${w.length}</td><td>${fp(w.length / g.length, 0)}</td><td>${done.length ? fp(w.length / done.length, 0) : "–"}</td><td>${moTxt(median(w.map(x => x.mo)))}</td><td>${fm(w.reduce((t, x) => t + x.invested, 0))}</td></tr>` });
   document.getElementById("woTbl").innerHTML = `<table><thead><tr><th>Entry round</th><th>Deals</th><th>Write-offs</th><th>Of all deals</th><th>Of exited deals</th><th>Median time</th><th>Capital written off</th></tr></thead><tbody>${stRows.join("")}</tbody></table>`;
