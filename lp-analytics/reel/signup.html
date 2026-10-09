@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Track Record Analyzer · Sign up</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+Condensed:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Example: the reel playing full-bleed behind a signup card. A scrim in the page colour keeps the form legible; it is
+   heaviest behind the card and thins out to the right so the charts still read as motion. */
+:root {
+  --bg: #f5f6f3; --panel: #ffffff; --ink: #16201e; --ink-2: #4f5a57; --ink-3: #7b8582; --rule: #dfe3de; --accent: #1f5f5b;
+  --scrim: 245 246 243;
+  --display: "IBM Plex Sans Condensed", "Arial Narrow", system-ui, sans-serif;
+  --body: "IBM Plex Sans", system-ui, "Segoe UI", sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #111615; --panel: #192120; --ink: #eef2f0; --ink-2: #b4bebb; --ink-3: #85908c; --rule: #2c3634; --accent: #6cc2b8;
+  --scrim: 17 22 21; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #111615; --panel: #192120; --ink: #eef2f0; --ink-2: #b4bebb; --ink-3: #85908c; --rule: #2c3634; --accent: #6cc2b8;
+  --scrim: 17 22 21; color-scheme: dark }
+* { box-sizing: border-box }
+body { margin: 0; min-height: 100vh; min-height: 100dvh; background: var(--bg); color: var(--ink); font: 15px/1.5 var(--body); display: grid; align-items: center; overflow-x: hidden }
+.reel { position: fixed; inset: 0; z-index: -2; width: 100%; height: 100%; object-fit: cover; filter: saturate(.85) }
+.scrim { position: fixed; inset: 0; z-index: -1;
+  background: linear-gradient(90deg, rgb(var(--scrim) / .94) 0%, rgb(var(--scrim) / .86) 34%, rgb(var(--scrim) / .45) 62%, rgb(var(--scrim) / .25) 100%) }
+main { width: min(100%, 1240px); margin: 0 auto; padding: 48px 16px }
+.card { width: min(100%, 420px); display: grid; gap: 20px }
+.eyebrow { font: 500 12px var(--mono); letter-spacing: .06em; text-transform: uppercase; color: var(--accent); margin: 0 }
+h1 { font: 600 clamp(32px, 5vw, 46px)/1.05 var(--display); letter-spacing: .005em; margin: 0; text-wrap: balance }
+.lede { color: var(--ink-2); margin: 0; font-size: 16px; text-wrap: pretty }
+form { display: grid; gap: 10px; background: var(--panel); border: 1px solid var(--rule); border-radius: 8px; padding: 18px; box-shadow: 0 12px 40px rgb(0 0 0 / .08) }
+label { font: 600 12px var(--body); color: var(--ink-2) }
+input { font: 15px var(--body); color: var(--ink); background: var(--bg); border: 1px solid var(--rule); border-radius: 5px; padding: 10px 12px; width: 100% }
+input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; border-color: var(--accent) }
+button { font: 600 15px var(--body); color: var(--panel); background: var(--accent); border: 0; border-radius: 5px; padding: 11px 14px; cursor: pointer; margin-top: 4px }
+button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px }
+.fine { font-size: 12px; color: var(--ink-3); margin: 0 }
+#done:empty { display: none }
+#done { color: var(--accent); font-weight: 500; margin: 0 }
+@media (max-width: 720px) {
+  .scrim { background: rgb(var(--scrim) / .84) }  /* the card spans the width on phones, so scrim it all */
+}
+</style>
+</head>
+<body>
+<video class="reel" id="reel" muted loop playsinline preload="auto" aria-hidden="true" tabindex="-1"></video>
+<div class="scrim" aria-hidden="true"></div>
+<main>
+  <div class="card">
+    <p class="eyebrow">Track Record Analyzer</p>
+    <h1>See a venture fund's real performance in minutes.</h1>
+    <p class="lede">Load a GP's cash flows and portfolio data. Get net TVPI, IRR and DPI against benchmarks, J-curves, return concentration, and exit scenarios projected to LP cash flows.</p>
+    <form id="signup">
+      <label for="email">Work email</label>
+      <input id="email" type="email" autocomplete="email" required placeholder="you@fund.com">
+      <button type="submit">Request access</button>
+      <p class="fine">Runs in your browser. Your fund data never leaves it.</p>
+      <p id="done" role="status"></p>
+    </form>
+  </div>
+</main>
+<script>
+// Pick the reel for the theme (light or dark) and screen (720p MP4 on phones, else 1080p WebM then MP4); re-pick on change.
+// Reduced motion holds on the poster frame.
+const v = document.getElementById("reel"), dark = matchMedia("(prefers-color-scheme: dark)"), small = matchMedia("(max-width: 900px)"), calm = matchMedia("(prefers-reduced-motion: reduce)");
+let cur = "";
+function pick() {
+  const t = document.documentElement.dataset.theme, sfx = (t ? t === "dark" : dark.matches) ? "-dark" : "";
+  const srcs = small.matches ? [[`out/reel${sfx}-720.mp4`, "video/mp4"]] : [[`out/reel${sfx}.webm`, "video/webm"], [`out/reel${sfx}.mp4`, "video/mp4"]];
+  const key = srcs.join();
+  if (key !== cur) {
+    cur = key; v.poster = `out/poster${sfx}.jpg`;
+    v.replaceChildren(...srcs.map(([src, type]) => Object.assign(document.createElement("source"), { src, type })));
+    v.load();
+  }
+  if (calm.matches) v.pause(); else v.play().catch(() => {});
+}
+pick(); [dark, small, calm].forEach(m => m.addEventListener("change", pick));
+document.getElementById("signup").addEventListener("submit", e => { e.preventDefault(); document.getElementById("done").textContent = "Thanks. We'll be in touch."; });
+</script>
+</body></html>
