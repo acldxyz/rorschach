@@ -15,7 +15,7 @@ Two single-file modules that link to each other and open straight from disk with
 - manager overlap, and the same security held at different marks
 - manager and fund summaries, including how much of your NAV sits in companies another of your managers also holds
 
-Both modules open empty, with a welcome card that asks how to start: upload your own files, open a saved workspace (fund performance only), or use the fictional sample data. The card comes back whenever nothing is loaded, for example after Clear.
+Both modules open empty, showing nothing but a welcome card that asks how to start: upload your own files, open a saved workspace (fund performance only), or use the fictional sample data. The rest of the page appears once a choice is made, and the card comes back on its own whenever nothing is loaded, for example after Clear.
 
 A Light/Dark toggle sits at the top of each module. It follows the system setting until you pick one, and the choice is kept in the browser. Downloads (PNG, HTML report) always come out light, whatever theme is showing.
 

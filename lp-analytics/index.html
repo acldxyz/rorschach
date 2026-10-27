@@ -128,6 +128,12 @@ tr.total td { font-weight: 600; border-top: 2px solid var(--ink-3) }
 .theme-seg button:focus-visible { outline: 2px solid var(--ink); outline-offset: -2px }
 .welcome { border-color: var(--accent) }
 .welcome h2:focus { outline: none }
+/* Arriving (nothing loaded, no choice made): the card is the whole page, centred. */
+#app.arriving { min-height: calc(100vh - 72px); align-content: center }
+#app.arriving > :not(#welcome) { display: none }
+#app.arriving #welcome { max-width: 920px; width: 100%; justify-self: center; padding: 24px }
+.welcome .eyebrow { font: 600 12px var(--body); letter-spacing: .06em; text-transform: uppercase; color: var(--accent); margin: 0 0 4px }
+.welcome .switch { margin: 0 } .welcome .switch a { color: var(--accent) }
 .choices { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 230px), 1fr)); gap: 12px }
 .choice { display: grid; gap: 6px; align-content: start; justify-items: start; padding: 12px; border: 1px solid var(--rule); border-radius: 6px; background: var(--bg) }
 .bm th.grp { text-align: center; border-bottom: 1px solid var(--ink-3) }
@@ -189,7 +195,7 @@ tr.total td { font-weight: 600; border-top: 2px solid var(--ink-3) }
 @media (prefers-reduced-motion: reduce) { * { transition-duration: .01s !important } }
 </style>
 
-<div class="wrap">
+<div class="wrap arriving" id="app">
   <div class="topbar"><nav class="modules" aria-label="Modules"><a href="index.html" aria-current="page">Fund performance</a><a href="exposure.html">LP exposure</a></nav>
     <div class="theme-seg" role="group" aria-label="Colour theme"><button type="button" data-theme-set="light" aria-pressed="false">Light</button><button type="button" data-theme-set="dark" aria-pressed="false">Dark</button></div></div>
   <script>
@@ -225,12 +231,13 @@ tr.total td { font-weight: 600; border-top: 2px solid var(--ink-3) }
 
   <!-- Shown whenever nothing is loaded (see syncWelcome), so the first visit asks rather than assumes. -->
   <section class="panel welcome" id="welcome" aria-labelledby="welcomeH">
-    <div><h2 id="welcomeH" tabindex="-1">How would you like to start?</h2><p class="note">Nothing is loaded yet.</p></div>
+    <div><p class="eyebrow">Fund performance</p><h2 id="welcomeH" tabindex="-1">How would you like to start?</h2><p class="sub">See a venture GP's net performance, return concentration, follow-on discipline and company progress.</p></div>
     <div class="choices">
       <div class="choice"><button type="button" class="primary" id="wUpload" aria-describedby="wUploadD">Upload your data</button><p class="note" id="wUploadD">Your fund cash flows as CSV or XLSX, plus portfolio, company history and staff files if you have them.</p></div>
       <div class="choice"><button type="button" id="wWorkspace" aria-describedby="wWorkspaceD">Open a saved workspace</button><p class="note" id="wWorkspaceD">Pick up where you left off from a workspace file you saved.</p></div>
       <div class="choice"><button type="button" id="wSample" aria-describedby="wSampleD">Use sample data</button><p class="note" id="wSampleD">Explore with a fictional venture firm and its three funds.</p></div>
     </div>
+    <p class="note switch">Looking for something else? <a href="exposure.html">Switch to LP exposure</a></p>
   </section>
 
   <section class="panel" aria-labelledby="loadH">
@@ -1047,13 +1054,14 @@ function syncWelcome() {
   const card = document.getElementById("welcome"), had = card.contains(document.activeElement);
   card.hidden = !!(state.cf || state.inv || state.hist || state.team) || card.dataset.dismissed === "1";
   // A choice that loaded data hid the button it was on: carry focus on to the views.
+  document.getElementById("app").classList.toggle("arriving", !card.hidden);
   if (card.hidden && had) document.querySelector('.tabs [aria-selected="true"]')?.focus();
 }
 function dismissWelcome() { document.getElementById("welcome").dataset.dismissed = "1"; syncWelcome() }
 document.getElementById("wUpload").addEventListener("click", () => {
-  // Focus the first drop zone's file input (Enter or Space opens the picker), then close the card.
-  document.querySelector(".loaders .drop input").focus({ preventScroll: true });
+  // Close the card (showing the page), then focus the first drop zone's file input (Enter or Space opens the picker).
   dismissWelcome();
+  document.querySelector(".loaders .drop input").focus({ preventScroll: true });
   document.getElementById("loadH").closest("section").scrollIntoView({ block: "start", behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
 });
 document.getElementById("wWorkspace").addEventListener("click", () => document.getElementById("wsOpen").click());
