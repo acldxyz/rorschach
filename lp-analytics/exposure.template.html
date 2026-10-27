@@ -141,7 +141,7 @@ td.lo { color: var(--bad) } td.hi { color: var(--good) }
   <section class="panel welcome" id="welcome" aria-labelledby="welcomeH">
     <div><p class="eyebrow">LP exposure</p><h2 id="welcomeH" tabindex="-1">How would you like to start?</h2><p class="sub">See every company you own through your fund commitments, scaled to your share of each fund.</p></div>
     <div class="choices">
-      <div class="choice"><button type="button" class="primary" id="wUpload" aria-describedby="wUploadD">Upload your data</button><p class="note" id="wUploadD">Your fund commitments and each manager's schedule of investments, as CSV or XLSX.</p></div>
+      <div class="choice"><button type="button" class="primary" id="wUpload" aria-describedby="wUploadD">Upload your data</button><p class="note" id="wUploadD">Pick your fund holdings file, each manager's schedule of investments (CSV or XLSX). You can add your commitments after.</p></div>
       <div class="choice"><button type="button" id="wSample" aria-describedby="wSampleD">Use sample data</button><p class="note" id="wSampleD">Explore with a fictional LP's commitments to ten funds.</p></div>
     </div>
     <p class="note switch">Looking for something else? <a href="index.html">Switch to Fund performance</a></p>
@@ -623,10 +623,12 @@ function syncWelcome() {
 }
 function dismissWelcome() { document.getElementById("welcome").dataset.dismissed = "1"; syncWelcome() }
 document.getElementById("wUpload").addEventListener("click", () => {
-  // Close the card (showing the page), then focus the first drop zone's file input (Enter or Space opens the picker).
+  // Close the card (showing the page), then open the file picker for the one file the page needs. The
+  // click has to happen inside this click handler, or the browser blocks the picker; cancel leaves the Data panel.
   dismissWelcome();
-  document.querySelector(".loaders .drop input").focus({ preventScroll: true });
+  const input = document.querySelector('.drop[data-kind="hold"] input'); input.focus({ preventScroll: true });
   document.getElementById("loadH").closest("section").scrollIntoView({ block: "start", behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
+  input.click();
 });
 document.getElementById("wSample").addEventListener("click", () => document.getElementById("sampleBtn").click());
 document.getElementById("clearBtn").addEventListener("click", () => {

@@ -233,7 +233,7 @@ tr.total td { font-weight: 600; border-top: 2px solid var(--ink-3) }
   <section class="panel welcome" id="welcome" aria-labelledby="welcomeH">
     <div><p class="eyebrow">Fund performance</p><h2 id="welcomeH" tabindex="-1">How would you like to start?</h2><p class="sub">See a venture GP's net performance, return concentration, follow-on discipline and company progress.</p></div>
     <div class="choices">
-      <div class="choice"><button type="button" class="primary" id="wUpload" aria-describedby="wUploadD">Upload your data</button><p class="note" id="wUploadD">Your fund cash flows as CSV or XLSX, plus portfolio, company history and staff files if you have them.</p></div>
+      <div class="choice"><button type="button" class="primary" id="wUpload" aria-describedby="wUploadD">Upload your data</button><p class="note" id="wUploadD">Pick your fund cash flows file (CSV or XLSX). You can add portfolio, company history and staff files after.</p></div>
       <div class="choice"><button type="button" id="wWorkspace" aria-describedby="wWorkspaceD">Open a saved workspace</button><p class="note" id="wWorkspaceD">Pick up where you left off from a workspace file you saved.</p></div>
       <div class="choice"><button type="button" id="wSample" aria-describedby="wSampleD">Use sample data</button><p class="note" id="wSampleD">Explore with a fictional venture firm and its three funds.</p></div>
     </div>
@@ -1059,10 +1059,12 @@ function syncWelcome() {
 }
 function dismissWelcome() { document.getElementById("welcome").dataset.dismissed = "1"; syncWelcome() }
 document.getElementById("wUpload").addEventListener("click", () => {
-  // Close the card (showing the page), then focus the first drop zone's file input (Enter or Space opens the picker).
+  // Close the card (showing the page), then open the file picker for the one file the page needs. The
+  // click has to happen inside this click handler, or the browser blocks the picker; cancel leaves the Data panel.
   dismissWelcome();
-  document.querySelector(".loaders .drop input").focus({ preventScroll: true });
+  const input = document.querySelector('.drop[data-kind="cf"] input'); input.focus({ preventScroll: true });
   document.getElementById("loadH").closest("section").scrollIntoView({ block: "start", behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
+  input.click();
 });
 document.getElementById("wWorkspace").addEventListener("click", () => document.getElementById("wsOpen").click());
 document.getElementById("wSample").addEventListener("click", () => document.getElementById("sampleBtn").click());
