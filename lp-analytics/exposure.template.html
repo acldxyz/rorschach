@@ -108,6 +108,7 @@ td.lo { color: var(--bad) } td.hi { color: var(--good) }
 .co-head h2 { font-size: 24px }
 .matrix td { vertical-align: top } .matrix td small { display: block; font: 11px var(--body); color: var(--ink-3) }
 .bar-in { display: inline-block; height: 8px; background: var(--accent); border-radius: 2px; vertical-align: 1px; margin-left: 6px; opacity: .6 }
+/*BRAND_CSS*/
 @media (prefers-reduced-motion: reduce) { * { transition-duration: .01s !important } }
 </style>
 
@@ -140,6 +141,7 @@ td.lo { color: var(--bad) } td.hi { color: var(--good) }
       <span class="row"><span class="note">Returns</span><span class="seg" role="group" aria-label="Return basis"><button type="button" data-basis="gross">Gross</button><button type="button" data-basis="net">Net of carry</button></span></span>
     </div>
     <p class="note">Exit values assume every class converts to common, which holds for most 3x+ outcomes; below that, liquidation preferences change who gets what. Net of carry takes each fund's carry off each position's gain, a deal-by-deal estimate that ignores fees and whole-fund netting.</p>
+    <!--BRAND_HTML-->
     <p class="errors" id="errors" role="alert"></p>
     <details>
       <summary>File formats</summary>
@@ -611,6 +613,10 @@ document.getElementById("out").addEventListener("input", e => { if (e.target.id 
 matchMedia("(prefers-color-scheme: dark)").addEventListener("change", render);
 new MutationObserver(render).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
 
+/*BRAND_JS*/
+// Charts and manager swatches read the colour tokens when drawn, so redraw. Before any data, render() shows the empty state.
+initBrand({ onChange: render });
+
 // ---------- downloads ----------
 // Inside the claude.ai viewer, files go through the downloads capability (the viewer confirms each
 // save). Opened as a plain local file there is no window.claude, so fall back to a normal link.
@@ -744,7 +750,7 @@ document.getElementById("dlHtml").addEventListener("click", async () => {
   const cssText = [...document.querySelectorAll("style")].map(s => s.textContent).join("\n");
   const title = document.getElementById("lpTitle").textContent, meta = `${document.getElementById("asOf").textContent} · ${fp(state.dil, 0)} dilution to exit · ${basisWord()} returns`;
   const doc = `<!doctype html><html lang="en" data-theme="light"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${esc(title)}</title>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+Condensed:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+Condensed:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">${brand.fontHref ? `\n<link rel="stylesheet" href="${esc(brand.fontHref)}">` : ""}
 <style>${cssText}\n.view-h{font-size:22px;margin:24px 0 0;padding-top:16px;border-top:2px solid var(--ink)}</style></head>
 <body><div class="wrap"><header><div><h1>${esc(title)}</h1><p class="sub">Look-through exposure report</p></div><div class="meta">${esc(meta)}</div></header>
 ${parts.join("\n")}</div></body></html>`;

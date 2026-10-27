@@ -1,0 +1,10 @@
+/* Brand row, shared by both modules (build.py inlines this file and brand.js, brand.html). */
+.brand { display: grid; gap: 8px; border-top: 1px solid var(--rule); padding-top: 12px }
+.brand .bm-title { font-family: var(--display); font-weight: 600; font-size: 15px }
+.brand-row { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center }
+.brand-row label { display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: center; font-size: 13px; color: var(--ink-2) }
+.brand-row input { font: 13px var(--body); padding: 5px 8px; border: 1px solid var(--rule); border-radius: 4px; background: var(--bg); color: var(--ink); width: 22em; max-width: 100% }
+.brand-row #brandFont { width: 13em }
+.brand-row input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px }
+.swatches { display: flex; gap: 3px } .swatches span { width: 18px; height: 18px; border-radius: 3px; border: 1px solid var(--rule) }
+#brandNote:empty { display: none } #brandNote.warn { color: var(--warn) }

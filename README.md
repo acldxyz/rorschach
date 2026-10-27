@@ -15,12 +15,12 @@ Two single-file modules that link to each other and open straight from disk with
 - manager overlap, and the same security held at different marks
 - manager and fund summaries, including how much of your NAV sits in companies another of your managers also holds
 
-The fund performance module has Brand fields in its Data panel. They take your colours (hex, `rgb()` or names, in order) and a font (installed locally or from Google Fonts), and restyle the page, the charts, the PNG downloads and the HTML report. They're saved in the browser and in workspace files. The Excel workbook carries figures only: the spreadsheet library the app uses can't write fonts or fills.
+Both modules have Brand fields in their Data panel. They take your colours (hex, `rgb()` or names, in order) and a font (installed locally or from Google Fonts), and restyle the page, the charts, the PNG downloads and the HTML report. They're saved in the browser, shared by the two modules when both are opened from the same place, and the fund performance module also keeps them in workspace files. The Excel workbook carries figures only: the spreadsheet library the app uses can't write fonts or fills.
 
 Files:
 
-- `lp-analytics/app.template.html` and `lp-analytics/exposure.template.html` are the sources.
-- `python3 lp-analytics/build.py` bakes the sample CSVs into `index.html` and `exposure.html`.
+- `lp-analytics/app.template.html` and `lp-analytics/exposure.template.html` are the sources; `brand.css`, `brand.js` and `brand.html` hold the Brand feature both share.
+- `python3 lp-analytics/build.py` inlines those partials and bakes the sample CSVs into `index.html` and `exposure.html`.
 - `python3 lp-analytics/build.py --artifact OUTDIR --perf-url URL --exp-url URL` also writes the two pages for publishing as private claude.ai artifacts, with the module links pointing at each other's published URLs.
 - `cd lp-analytics/sample && python3 generate.py` regenerates the mock three-fund sample data for the fund performance module; `python3 generate_exposure.py` regenerates the mock ten-fund LP portfolio for the exposure module.
 

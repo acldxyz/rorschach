@@ -108,7 +108,9 @@ tr.total td { font-weight: 600; border-top: 2px solid var(--ink-3) }
 .bm a { color: var(--accent) }
 .bm td input { width: 5.5em; font: 13px var(--mono); text-align: right; color: var(--ink); background: var(--bg); border: 1px solid var(--rule); border-radius: 3px; padding: 3px 5px }
 .bm td input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px }
+/* Brand row, shared by both modules (build.py inlines this file and brand.js, brand.html). */
 .brand { display: grid; gap: 8px; border-top: 1px solid var(--rule); padding-top: 12px }
+.brand .bm-title { font-family: var(--display); font-weight: 600; font-size: 15px }
 .brand-row { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center }
 .brand-row label { display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: center; font-size: 13px; color: var(--ink-2) }
 .brand-row input { font: 13px var(--body); padding: 5px 8px; border: 1px solid var(--rule); border-radius: 4px; background: var(--bg); color: var(--ink); width: 22em; max-width: 100% }
@@ -1357,11 +1359,18 @@ function commitRows(kind, rows, fileName, how) {
 }
 
 // ---------- brand ----------
+// Shared by both modules: build.py inlines this file (with brand.css and the brand.html row) into each page.
 // The user's own colours and font. The first colour becomes the accent, the second the base of the
-// quartile scale (kept apart so the fund marker stands out against its benchmark bands), and the list
-// in order becomes the chart series (topped up to eight with tints and shades).
+// performance page's quartile scale (kept apart so the fund marker stands out against its benchmark
+// bands), and the list in order becomes the chart series (topped up to eight with tints and shades).
 // Everything is written as CSS custom properties, so the page, the charts (which read them through
-// css()) and the HTML report all follow. Kept in this browser and in the workspace file.
+// css()) and the HTML report all follow. Kept in this browser under one key, so both modules served
+// from the same place share it.
+// Page interface: call initBrand({ onChange, second }) once the page's render code exists. onChange()
+// runs after every change (re-render the charts, which bake colours in when drawn); second describes
+// the second colour's extra role in the note. The page reads brand.cur (for its workspace file) and
+// brand.fontHref (a Google Fonts stylesheet to link from its HTML report), and may call applyBrand/showBrand.
+const brand = { cur: {}, fontHref: null, opts: {} };
 const brandStore = { load() { try { return JSON.parse(localStorage.getItem("brand")) || {} } catch { return {} } }, save(v) { try { localStorage.setItem("brand", JSON.stringify(v)) } catch {} } };
 const LIGHT = { panel: "#ffffff", ink: "#16201e" }, DARK = { panel: "#192120", ink: "#eef2f0" };
 // Any CSS colour (hex with or without #, rgb(), hsl(), a name) to #rrggbb, or null.
@@ -1383,6 +1392,7 @@ function parseColors(text) {
   for (const tok of String(text).match(/rgba?\([^)]*\)|hsla?\([^)]*\)|#?[0-9a-f]{6}\b|#[0-9a-f]{3}\b|[a-z]+/gi) || []) { const h = toHex(tok.trim()); h ? out.push(h) : bad.push(tok) }
   return { colors: [...new Set(out)].slice(0, 8), bad };
 }
+// The --q quartile tokens only mean something on the performance page; elsewhere they go unused.
 function brandVars(colors, T, dark) {
   const c = colors, a = c[0], qb = c[1] || c[0], v = {};
   const extra = [...c.map(x => mix(x, "#ffffff", .45)), ...c.map(x => mix(x, "#000000", .35))];
@@ -1411,7 +1421,7 @@ async function googleFont(f) {
   return null;
 }
 async function applyBrand(b, { save = true } = {}) {
-  const bad = b.bad || []; state.brand = b = { colors: b.colors || [], font: (b.font || "").trim() };
+  const bad = b.bad || []; brand.cur = b = { colors: b.colors || [], font: (b.font || "").trim() };
   if (save) brandStore.save(b);
   const note = document.getElementById("brandNote"), msgs = [], warn = [];
   let el = document.getElementById("brandCss"); if (!el) { el = document.createElement("style"); el.id = "brandCss"; document.head.append(el) }
@@ -1422,23 +1432,24 @@ async function applyBrand(b, { save = true } = {}) {
     rules += `:root:root:root { ${L} }\n@media (prefers-color-scheme: dark) { :root:root:not([data-theme="light"]) { ${D} } }\n:root:root[data-theme="dark"] { ${D} }\n`;
   }
   document.getElementById("brandSwatches").innerHTML = b.colors.map(c => `<span style="background:${c}" title="${c}"></span>`).join("");
-  document.getElementById("brandFontLink")?.remove(); state.brandFontHref = null;
+  document.getElementById("brandFontLink")?.remove(); brand.fontHref = null;
   if (b.font) {
     rules += `:root:root:root:root { --display: ${fontStack(b.font)}; --body: ${fontStack(b.font)}; --mono: ${fontStack(b.font)} }\n`;
     if (fontAvailable(b.font)) msgs.push(`${b.font} is installed on this computer.`);
     else {
       const link = await googleFont(b.font);
       if (link) try { await document.fonts.load(`16px ${fontStack(b.font)}`) } catch {}
-      if (state.brand !== b) { link?.remove(); return }  // superseded while loading
-      if (link && fontAvailable(b.font)) { state.brandFontHref = link.href; msgs.push(`${b.font} loaded from Google Fonts.`) }
+      if (brand.cur !== b) { link?.remove(); return }  // superseded while loading
+      if (link && fontAvailable(b.font)) { brand.fontHref = link.href; msgs.push(`${b.font} loaded from Google Fonts.`) }
       else { document.getElementById("brandFontLink")?.remove(); warn.push(`${b.font} is not installed on this computer and is not on Google Fonts, so text shows in the fallback font. Check the spelling, or install the font.`) }
     }
   }
   el.textContent = rules;
-  if (b.colors.length) msgs.push(`${b.colors.length} colour${b.colors.length > 1 ? "s" : ""}: the first is the accent${b.colors.length > 1 ? ", the second shades the benchmark quartiles" : ""}${b.colors.length < 8 ? "; charts with more series than colours use tints and shades of these" : ""}.`);
+  const n = b.colors.length, second = brand.opts.second;
+  if (n) msgs.push(`${n} colour${n > 1 ? "s" : ""}: the first is the accent${n > 1 && second ? `, the second ${second}` : ""}${n < 8 ? "; charts with more series than colours use tints and shades of these" : ""}.`);
   if (bad.length) warn.push(`Could not read ${bad.map(t => `"${t}"`).join(", ")} as a colour.`);
   note.textContent = [...warn, ...msgs].join(" "); note.className = "note" + (warn.length ? " warn" : "");
-  if (state.cf) render();
+  brand.opts.onChange?.();
 }
 function brandFromInputs() {
   const { colors, bad } = parseColors(document.getElementById("brandColors").value);
@@ -1448,9 +1459,13 @@ function showBrand(b) {
   document.getElementById("brandColors").value = (b.colors || []).join(", ");
   document.getElementById("brandFont").value = b.font || "";
 }
-["brandColors", "brandFont"].forEach(id => { const i = document.getElementById(id); i.addEventListener("change", brandFromInputs); i.addEventListener("keydown", e => { if (e.key === "Enter") brandFromInputs() }) });
-document.getElementById("brandReset").addEventListener("click", () => { showBrand({}); applyBrand({}) });
-state.brand = brandStore.load(); showBrand(state.brand); if (state.brand.colors?.length || state.brand.font) applyBrand(state.brand, { save: false });
+function initBrand(opts = {}) {
+  brand.opts = opts;
+  ["brandColors", "brandFont"].forEach(id => { const i = document.getElementById(id); i.addEventListener("change", brandFromInputs); i.addEventListener("keydown", e => { if (e.key === "Enter") brandFromInputs() }) });
+  document.getElementById("brandReset").addEventListener("click", () => { showBrand({}); applyBrand({}) });
+  brand.cur = brandStore.load(); showBrand(brand.cur); if (brand.cur.colors?.length || brand.cur.font) applyBrand(brand.cur, { save: false });
+}
+initBrand({ second: "shades the benchmark quartiles", onChange: () => { if (state.cf) render() } });
 
 // ---------- workspace ----------
 // One JSON file holds everything needed to pick up where you left off: the loaded rows (already in
@@ -1459,7 +1474,7 @@ document.getElementById("wsSave").addEventListener("click", () => {
   if (!state.cf) return dlMsg("Load data first.", true);
   const ws = { app: "venture-track-record", version: 1, savedAt: new Date().toISOString(), title: document.getElementById("gpTitle").textContent, isSample: state.isSample,
     raw: state.raw, benchmarks: Object.fromEntries(["carta", "cambridge", "custom"].map(k => [k, bmStore.load(k)])), bmSrc: state.bmSrc,
-    rates: state.rates, curMode: state.curMode, inUnit: state.inUnit, mappings: mapStore.all(), brand: { colors: state.brand.colors, font: state.brand.font }, scenarios: state.scen ? (({ key, ...r }) => r)(state.scen) : null };
+    rates: state.rates, curMode: state.curMode, inUnit: state.inUnit, mappings: mapStore.all(), brand: { colors: brand.cur.colors, font: brand.cur.font }, scenarios: state.scen ? (({ key, ...r }) => r)(state.scen) : null };
   saveFile(`${slug(ws.title)}-workspace.json`, JSON.stringify(ws));
 });
 document.getElementById("wsOpen").addEventListener("change", async e => {
@@ -1848,7 +1863,7 @@ document.getElementById("dlHtml").addEventListener("click", async () => {
   const cssText = [...document.querySelectorAll("style")].map(s => s.textContent).join("\n");
   const title = `${document.getElementById("gpTitle").textContent} · ${document.getElementById("asOf").textContent}`;
   const doc = `<!doctype html><html lang="en" data-theme="light"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${esc(title)}</title>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+Condensed:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">${state.brandFontHref ? `\n<link rel="stylesheet" href="${esc(state.brandFontHref)}">` : ""}
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+Condensed:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">${brand.fontHref ? `\n<link rel="stylesheet" href="${esc(brand.fontHref)}">` : ""}
 <style>${cssText}\n.view-h{font-size:22px;margin:24px 0 0;padding-top:16px;border-top:2px solid var(--ink)}</style></head>
 <body><div class="wrap"><header><div><h1>${esc(document.getElementById("gpTitle").textContent)}</h1><p class="sub">Track record report</p></div><div class="meta">${esc(document.getElementById("asOf").textContent)}</div></header>
 ${parts.join("\n")}</div></body></html>`;
