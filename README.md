@@ -17,13 +17,15 @@ Two single-file modules that link to each other and open straight from disk with
 
 Both modules open empty, showing nothing but a welcome card that asks how to start: upload your own files, open a saved workspace (fund performance only), or use the fictional sample data. The rest of the page appears once a choice is made, and the card comes back on its own whenever nothing is loaded, for example after Clear.
 
+Firms often keep everything in one Excel workbook. Upload a workbook with several sheets (to any of the data upload boxes, or through the welcome card) and each module works out which kind of data each sheet holds, from its column headers, its tab name and, for cash flows, a column of Contribution/Distribution/NAV labels. A short list shows every sheet with its first headers and the guess, which you can change or set to Not used; **Load these** then loads each chosen sheet in turn, through the fund performance module's column matching step where a sheet needs it. CSVs and single-sheet workbooks load as before.
+
 A Light/Dark toggle sits at the top of each module. It follows the system setting until you pick one, and the choice is kept in the browser. Downloads (PNG, HTML report) always come out light, whatever theme is showing.
 
 Both modules have Brand fields in their Data panel. They take your colours (hex, `rgb()` or names, in order) and a font (installed locally or from Google Fonts), and restyle the page, the charts, the PNG downloads and the HTML report. **Load colour template** fills both from the firm's Office template or theme (`.potx`, `.pptx`, `.thmx`, `.dotx`, `.docx`, `.xltx`, `.xlsx`): the theme's six accent colours in order, and its body font (the heading font is mentioned in the note). It also takes a text, CSV or JSON list of colour codes, with an optional `font: Name` line. They're saved in the browser, shared by the two modules when both are opened from the same place, and the fund performance module also keeps them in workspace files. The Excel workbook carries figures only: the spreadsheet library the app uses can't write fonts or fills.
 
 Files:
 
-- `lp-analytics/app.template.html` and `lp-analytics/exposure.template.html` are the sources; `brand.css`, `brand.js` and `brand.html` hold the Brand feature both share, and `theme.css`, `theme.js` and `theme.html` the Light/Dark toggle.
+- `lp-analytics/app.template.html` and `lp-analytics/exposure.template.html` are the sources; `brand.css`, `brand.js` and `brand.html` hold the Brand feature both share, `theme.css`, `theme.js` and `theme.html` the Light/Dark toggle, and `workbook.js` and `workbook.css` the multi-sheet workbook proposal.
 - `python3 lp-analytics/build.py` inlines those partials and bakes the sample CSVs into `index.html` and `exposure.html`.
 - `python3 lp-analytics/build.py --artifact OUTDIR --perf-url URL --exp-url URL` also writes the two pages for publishing as private claude.ai artifacts, with the module links pointing at each other's published URLs.
 - `cd lp-analytics/sample && python3 generate.py` regenerates the mock three-fund sample data for the fund performance module; `python3 generate_exposure.py` regenerates the mock ten-fund LP portfolio for the exposure module.

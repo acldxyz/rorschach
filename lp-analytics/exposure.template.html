@@ -110,6 +110,7 @@ td.lo { color: var(--bad) } td.hi { color: var(--good) }
 .bar-in { display: inline-block; height: 8px; background: var(--accent); border-radius: 2px; vertical-align: 1px; margin-left: 6px; opacity: .6 }
 /*BRAND_CSS*/
 /*THEME_CSS*/
+/*WORKBOOK_CSS*/
 .welcome { border-color: var(--accent) }
 .welcome h2:focus { outline: none }
 /* Arriving (nothing loaded, no choice made): the card is the whole page, centred. */
@@ -141,7 +142,7 @@ td.lo { color: var(--bad) } td.hi { color: var(--good) }
   <section class="panel welcome" id="welcome" aria-labelledby="welcomeH">
     <div><p class="eyebrow">LP exposure</p><h2 id="welcomeH" tabindex="-1">How would you like to start?</h2><p class="sub">See every company you own through your fund commitments, scaled to your share of each fund.</p></div>
     <div class="choices">
-      <div class="choice"><button type="button" class="primary" id="wUpload" aria-describedby="wUploadD">Upload your data</button><p class="note" id="wUploadD">Pick your fund holdings file, each manager's schedule of investments (CSV or XLSX). You can add your commitments after.</p></div>
+      <div class="choice"><button type="button" class="primary" id="wUpload" aria-describedby="wUploadD">Upload your data</button><p class="note" id="wUploadD">Pick your fund holdings file, each manager's schedule of investments (CSV or XLSX), or one workbook with holdings and commitments on separate sheets. You can add your commitments after.</p></div>
       <div class="choice"><button type="button" id="wSample" aria-describedby="wSampleD">Use sample data</button><p class="note" id="wSampleD">Explore with a fictional LP's commitments to ten funds.</p></div>
     </div>
     <p class="note switch">Looking for something else? <a href="index.html">Switch to Fund performance</a></p>
@@ -159,6 +160,7 @@ td.lo { color: var(--bad) } td.hi { color: var(--good) }
       <label class="drop" data-kind="commit"><b>Fund commitments</b><span class="note">One row per fund you are in: manager, fund size, your commitment, carry. Sets your look-through share of each fund. CSV or XLSX.</span><input type="file" accept=".csv,.xlsx,.xls"><span class="status">Not loaded</span></label>
       <label class="drop" data-kind="hold"><b>Fund holdings</b><span class="note">One row per fund, company and security from each manager's schedule of investments: round, shares, cost, fair value. CSV or XLSX.</span><input type="file" accept=".csv,.xlsx,.xls"><span class="status">Not loaded</span></label>
     </div>
+    <div class="wbook panel" id="wbook" hidden></div>
     <div class="assume">
       <label for="inUnit">Amounts in files are in <select id="inUnit"><option value="1">full units</option><option value="1000">thousands</option><option value="1000000">millions</option></select></label>
       <label for="dil">Dilution before exit <input class="num-in" id="dil" inputmode="decimal" value="15">%</label>
@@ -170,7 +172,7 @@ td.lo { color: var(--bad) } td.hi { color: var(--good) }
     <p class="errors" id="errors" role="alert"></p>
     <details>
       <summary>File formats</summary>
-      <p class="note">Common alternative column names are recognised (for example "Fair Value", "FMV" or "Carrying Value" for fair_value). Ownership may be given as 0.052 or 5.2%. A position needs either shares plus the company's fully diluted share count, or an ownership figure.</p>
+      <p class="note">One Excel workbook can hold both: drop it on either box and each sheet is matched to the kind of data it looks like, for you to confirm. Common alternative column names are recognised (for example "Fair Value", "FMV" or "Carrying Value" for fair_value). Ownership may be given as 0.052 or 5.2%. A position needs either shares plus the company's fully diluted share count, or an ownership figure.</p>
 <pre>commitments: manager, fund, vintage, fund_size, commitment, carry (0.20 or 20%), currency
              or lp_share (your share of the fund) instead of fund_size and commitment
 holdings:    manager, fund, company, sector, security (e.g. Series B Preferred), round,
@@ -218,13 +220,14 @@ function parseCSVRows(text) {
   if (f || row.length) { row.push(f); rows.push(row) }
   return rows.filter(r => r.some(x => String(x).trim() !== ""));
 }
-async function readRows(file) {
+// Every non-empty sheet, as { name: rows }; a CSV is one sheet.
+async function readSheets(file) {
   if (/\.xlsx?$/i.test(file.name)) {
     if (typeof XLSX === "undefined") throw new Error("The spreadsheet library did not load, so XLSX files cannot be read. Try a CSV.");
     const wb = XLSX.read(await file.arrayBuffer(), { cellDates: true });
-    return XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, raw: true, defval: "" }).filter(r => r.some(x => String(x).trim() !== ""));
+    return Object.fromEntries(wb.SheetNames.map(n => [n, XLSX.utils.sheet_to_json(wb.Sheets[n], { header: 1, raw: true, defval: "" }).filter(r => r.some(x => String(x).trim() !== ""))]).filter(([, a]) => a.length));
   }
-  return parseCSVRows(await file.text());
+  return { Sheet1: parseCSVRows(await file.text()) };
 }
 // The header row is the first row that is mostly non-empty text; title rows above it are skipped.
 function headerRow(aoa) {
@@ -248,9 +251,13 @@ const SYN = {
     as_of: "asof asofdate valuationdate reportdate periodend", company_fd_shares: "companyfdshares fullydilutedshares fdshares totalfullydilutedshares sharesoutstanding fullydilutedsharesoutstanding",
     ownership: "ownership fdownership fullydilutedownership ownershippct percentownership pctownership" },
 };
+// The field each header stands for (or undefined), each field taken once, first header wins.
+function matchCols(kind, headers) {
+  const used = new Set();
+  return headers.map(normH).map(n => { const k = Object.keys(SYN[kind]).find(k => !used.has(k) && (n === k.replace(/_/g, "") || SYN[kind][k].split(" ").includes(n))); if (k) used.add(k); return k });
+}
 function toObjects(kind, aoa) {
-  const h = headerRow(aoa), heads = aoa[h].map(normH), used = new Set();
-  const cols = heads.map(n => { const k = Object.keys(SYN[kind]).find(k => !used.has(k) && (n === k.replace(/_/g, "") || SYN[kind][k].split(" ").includes(n))); if (k) used.add(k); return k });
+  const h = headerRow(aoa), cols = matchCols(kind, aoa[h]);
   return aoa.slice(h + 1).map(r => Object.fromEntries(cols.map((k, i) => [k, r[i]]).filter(([k]) => k)));
 }
 const num = v => { if (v === "" || v == null) return NaN; if (typeof v === "number") return v; return parseFloat(String(v).replace(/[$€£,\s]/g, "").replace(/^\((.*)\)$/, "-$1")) };
@@ -593,11 +600,28 @@ function setStatus(kind, text, cls) { const s = document.querySelector(`.drop[da
 state.raw = {};
 function apply(kind, rows) { state[kind] = kind === "commit" ? normCommit(rows) : normHold(rows); state.raw[kind] = rows }
 async function load(kind, file) {
-  dismissWelcome();
+  dismissWelcome(); wbook.close();
   const err = document.getElementById("errors"); err.textContent = "";
-  try { const rows = toObjects(kind, await readRows(file)); apply(kind, rows); state.isSample = false; setStatus(kind, `${file.name} · ${state[kind].length} rows`, "ok"); render() }
+  try { const sheets = await readSheets(file), names = Object.keys(sheets);
+    if (!names.length) throw new Error(`${file.name} has no rows.`);
+    // Several data sheets in one workbook: propose which holds what before loading any (workbook.js).
+    if (wbook.offer(file.name, sheets, kind)) return;
+    const rows = toObjects(kind, sheets[names[0]]); apply(kind, rows); state.isSample = false; setStatus(kind, `${file.name} · ${state[kind].length} rows`, "ok"); render() }
   catch (e) { err.textContent = e.message; setStatus(kind, "Could not read file", "err") }
 }
+/*WORKBOOK_JS*/
+// No column matcher here: each confirmed sheet goes straight through the synonym list and the
+// normalisers, which name any required column they could not find.
+initWorkbook({ box: document.getElementById("wbook"), kinds: { commit: "Fund commitments", hold: "Fund holdings" },
+  fields: k => ({ need: k === "commit" ? [["fund"], ["commitment", "lp_share"], ["fund_size", "lp_share"]]
+      : [["fund"], ["company"], ["cost"], ["fair_value"], ["shares", "ownership"], ["company_fd_shares", "ownership"]],
+    all: Object.keys(SYN[k]), label: key => key.replace(/_/g, " ") }),
+  match: (k, headers) => matchCols(k, headers).map(x => x || ""), headerRow,
+  names: { commit: /commit/i, hold: /holding|schedule|\bsoi\b|position|investment|portfolio/i },
+  load(k, sheet, info) {
+    try { apply(k, toObjects(k, info.sheets[sheet])); state.isSample = false; setStatus(k, `${info.label} · ${state[k].length} rows`, "ok"); render(); return true }
+    catch (e) { setStatus(k, "Could not read sheet", "err"); throw e } },
+  abort() {} });
 document.querySelectorAll(".drop").forEach(el => {
   const kind = el.dataset.kind, input = el.querySelector("input");
   input.addEventListener("change", () => input.files[0] && load(kind, input.files[0]));
@@ -632,7 +656,7 @@ document.getElementById("wUpload").addEventListener("click", () => {
 });
 document.getElementById("wSample").addEventListener("click", () => document.getElementById("sampleBtn").click());
 document.getElementById("clearBtn").addEventListener("click", () => {
-  delete document.getElementById("welcome").dataset.dismissed;
+  delete document.getElementById("welcome").dataset.dismissed; wbook.close();
   Object.assign(state, { commit: null, hold: null, raw: {}, company: null, isSample: false }); ["commit", "hold"].forEach(k => setStatus(k, "Not loaded"));
   document.querySelectorAll(".drop input").forEach(i => i.value = ""); document.getElementById("lpTitle").textContent = "LP Look-through Exposure"; render();
 });

@@ -1,0 +1,13 @@
+/* Workbook proposal (workbook.js), shared by both modules: one row per sheet, its first headers and a kind picker. */
+.wbook { border-color: var(--accent); gap: 10px }
+.wbook h3:focus, .wb-step:focus { outline: none }
+.wb-list { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--rule) }
+.wb-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, auto); gap: 4px 16px; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--rule) }
+.wb-sheet { display: grid; gap: 2px; min-width: 0 }
+.wb-sheet label { font-weight: 600; overflow-wrap: anywhere }
+.wb-cols { font: 12px var(--mono); color: var(--ink-3); overflow-wrap: anywhere }
+.wb-pick { display: grid; gap: 4px; justify-items: end; min-width: 0 }
+.wb-pick select { max-width: 100% }
+.wb-hint { font-size: 12px; color: var(--ink-3); margin: 0; text-align: right } .wb-hint.warn { color: var(--warn) } .wb-fail { text-align: left }
+.wb-step { color: var(--ink-2); font-size: 13px }
+@media (max-width: 560px) { .wb-row { grid-template-columns: minmax(0, 1fr) } .wb-pick { justify-items: start } .wb-hint { text-align: left } }

@@ -128,6 +128,19 @@ td.lo { color: var(--bad) } td.hi { color: var(--good) }
 .theme-seg button:hover { color: var(--accent) }
 .theme-seg button[aria-pressed="true"] { color: var(--panel); background: var(--accent) }
 .theme-seg button:focus-visible { outline: 2px solid var(--ink); outline-offset: -2px }
+/* Workbook proposal (workbook.js), shared by both modules: one row per sheet, its first headers and a kind picker. */
+.wbook { border-color: var(--accent); gap: 10px }
+.wbook h3:focus, .wb-step:focus { outline: none }
+.wb-list { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--rule) }
+.wb-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, auto); gap: 4px 16px; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--rule) }
+.wb-sheet { display: grid; gap: 2px; min-width: 0 }
+.wb-sheet label { font-weight: 600; overflow-wrap: anywhere }
+.wb-cols { font: 12px var(--mono); color: var(--ink-3); overflow-wrap: anywhere }
+.wb-pick { display: grid; gap: 4px; justify-items: end; min-width: 0 }
+.wb-pick select { max-width: 100% }
+.wb-hint { font-size: 12px; color: var(--ink-3); margin: 0; text-align: right } .wb-hint.warn { color: var(--warn) } .wb-fail { text-align: left }
+.wb-step { color: var(--ink-2); font-size: 13px }
+@media (max-width: 560px) { .wb-row { grid-template-columns: minmax(0, 1fr) } .wb-pick { justify-items: start } .wb-hint { text-align: left } }
 .welcome { border-color: var(--accent) }
 .welcome h2:focus { outline: none }
 /* Arriving (nothing loaded, no choice made): the card is the whole page, centred. */
@@ -179,7 +192,7 @@ td.lo { color: var(--bad) } td.hi { color: var(--good) }
   <section class="panel welcome" id="welcome" aria-labelledby="welcomeH">
     <div><p class="eyebrow">LP exposure</p><h2 id="welcomeH" tabindex="-1">How would you like to start?</h2><p class="sub">See every company you own through your fund commitments, scaled to your share of each fund.</p></div>
     <div class="choices">
-      <div class="choice"><button type="button" class="primary" id="wUpload" aria-describedby="wUploadD">Upload your data</button><p class="note" id="wUploadD">Pick your fund holdings file, each manager's schedule of investments (CSV or XLSX). You can add your commitments after.</p></div>
+      <div class="choice"><button type="button" class="primary" id="wUpload" aria-describedby="wUploadD">Upload your data</button><p class="note" id="wUploadD">Pick your fund holdings file, each manager's schedule of investments (CSV or XLSX), or one workbook with holdings and commitments on separate sheets. You can add your commitments after.</p></div>
       <div class="choice"><button type="button" id="wSample" aria-describedby="wSampleD">Use sample data</button><p class="note" id="wSampleD">Explore with a fictional LP's commitments to ten funds.</p></div>
     </div>
     <p class="note switch">Looking for something else? <a href="index.html">Switch to Fund performance</a></p>
@@ -197,6 +210,7 @@ td.lo { color: var(--bad) } td.hi { color: var(--good) }
       <label class="drop" data-kind="commit"><b>Fund commitments</b><span class="note">One row per fund you are in: manager, fund size, your commitment, carry. Sets your look-through share of each fund. CSV or XLSX.</span><input type="file" accept=".csv,.xlsx,.xls"><span class="status">Not loaded</span></label>
       <label class="drop" data-kind="hold"><b>Fund holdings</b><span class="note">One row per fund, company and security from each manager's schedule of investments: round, shares, cost, fair value. CSV or XLSX.</span><input type="file" accept=".csv,.xlsx,.xls"><span class="status">Not loaded</span></label>
     </div>
+    <div class="wbook panel" id="wbook" hidden></div>
     <div class="assume">
       <label for="inUnit">Amounts in files are in <select id="inUnit"><option value="1">full units</option><option value="1000">thousands</option><option value="1000000">millions</option></select></label>
       <label for="dil">Dilution before exit <input class="num-in" id="dil" inputmode="decimal" value="15">%</label>
@@ -219,7 +233,7 @@ td.lo { color: var(--bad) } td.hi { color: var(--good) }
     <p class="errors" id="errors" role="alert"></p>
     <details>
       <summary>File formats</summary>
-      <p class="note">Common alternative column names are recognised (for example "Fair Value", "FMV" or "Carrying Value" for fair_value). Ownership may be given as 0.052 or 5.2%. A position needs either shares plus the company's fully diluted share count, or an ownership figure.</p>
+      <p class="note">One Excel workbook can hold both: drop it on either box and each sheet is matched to the kind of data it looks like, for you to confirm. Common alternative column names are recognised (for example "Fair Value", "FMV" or "Carrying Value" for fair_value). Ownership may be given as 0.052 or 5.2%. A position needs either shares plus the company's fully diluted share count, or an ownership figure.</p>
 <pre>commitments: manager, fund, vintage, fund_size, commitment, carry (0.20 or 20%), currency
              or lp_share (your share of the fund) instead of fund_size and commitment
 holdings:    manager, fund, company, sector, security (e.g. Series B Preferred), round,
@@ -267,13 +281,14 @@ function parseCSVRows(text) {
   if (f || row.length) { row.push(f); rows.push(row) }
   return rows.filter(r => r.some(x => String(x).trim() !== ""));
 }
-async function readRows(file) {
+// Every non-empty sheet, as { name: rows }; a CSV is one sheet.
+async function readSheets(file) {
   if (/\.xlsx?$/i.test(file.name)) {
     if (typeof XLSX === "undefined") throw new Error("The spreadsheet library did not load, so XLSX files cannot be read. Try a CSV.");
     const wb = XLSX.read(await file.arrayBuffer(), { cellDates: true });
-    return XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, raw: true, defval: "" }).filter(r => r.some(x => String(x).trim() !== ""));
+    return Object.fromEntries(wb.SheetNames.map(n => [n, XLSX.utils.sheet_to_json(wb.Sheets[n], { header: 1, raw: true, defval: "" }).filter(r => r.some(x => String(x).trim() !== ""))]).filter(([, a]) => a.length));
   }
-  return parseCSVRows(await file.text());
+  return { Sheet1: parseCSVRows(await file.text()) };
 }
 // The header row is the first row that is mostly non-empty text; title rows above it are skipped.
 function headerRow(aoa) {
@@ -297,9 +312,13 @@ const SYN = {
     as_of: "asof asofdate valuationdate reportdate periodend", company_fd_shares: "companyfdshares fullydilutedshares fdshares totalfullydilutedshares sharesoutstanding fullydilutedsharesoutstanding",
     ownership: "ownership fdownership fullydilutedownership ownershippct percentownership pctownership" },
 };
+// The field each header stands for (or undefined), each field taken once, first header wins.
+function matchCols(kind, headers) {
+  const used = new Set();
+  return headers.map(normH).map(n => { const k = Object.keys(SYN[kind]).find(k => !used.has(k) && (n === k.replace(/_/g, "") || SYN[kind][k].split(" ").includes(n))); if (k) used.add(k); return k });
+}
 function toObjects(kind, aoa) {
-  const h = headerRow(aoa), heads = aoa[h].map(normH), used = new Set();
-  const cols = heads.map(n => { const k = Object.keys(SYN[kind]).find(k => !used.has(k) && (n === k.replace(/_/g, "") || SYN[kind][k].split(" ").includes(n))); if (k) used.add(k); return k });
+  const h = headerRow(aoa), cols = matchCols(kind, aoa[h]);
   return aoa.slice(h + 1).map(r => Object.fromEntries(cols.map((k, i) => [k, r[i]]).filter(([k]) => k)));
 }
 const num = v => { if (v === "" || v == null) return NaN; if (typeof v === "number") return v; return parseFloat(String(v).replace(/[$€£,\s]/g, "").replace(/^\((.*)\)$/, "-$1")) };
@@ -642,11 +661,165 @@ function setStatus(kind, text, cls) { const s = document.querySelector(`.drop[da
 state.raw = {};
 function apply(kind, rows) { state[kind] = kind === "commit" ? normCommit(rows) : normHold(rows); state.raw[kind] = rows }
 async function load(kind, file) {
-  dismissWelcome();
+  dismissWelcome(); wbook.close();
   const err = document.getElementById("errors"); err.textContent = "";
-  try { const rows = toObjects(kind, await readRows(file)); apply(kind, rows); state.isSample = false; setStatus(kind, `${file.name} · ${state[kind].length} rows`, "ok"); render() }
+  try { const sheets = await readSheets(file), names = Object.keys(sheets);
+    if (!names.length) throw new Error(`${file.name} has no rows.`);
+    // Several data sheets in one workbook: propose which holds what before loading any (workbook.js).
+    if (wbook.offer(file.name, sheets, kind)) return;
+    const rows = toObjects(kind, sheets[names[0]]); apply(kind, rows); state.isSample = false; setStatus(kind, `${file.name} · ${state[kind].length} rows`, "ok"); render() }
   catch (e) { err.textContent = e.message; setStatus(kind, "Could not read file", "err") }
 }
+// ---------- workbook ----------
+// Shared by both modules: build.py inlines this file (with workbook.css) into each page.
+// Firms often keep everything in one Excel file, a tab each for cash flows, portfolio, KPIs and staff.
+// When an upload has two or more non-empty sheets, every sheet is scored against every data kind the
+// page takes, each kind gets at most one sheet, and a proposal panel lets the viewer confirm or change
+// the guesses before anything loads. Confirmed sheets then go through the page's own loading path one
+// after another; a step that needs the viewer (the column matcher) pauses the queue.
+// Page interface: initWorkbook({ box, kinds, fields, match, headerRow, names, extra, load, abort }), where
+//   box        the (hidden) element the panel draws into, inside the Data panel;
+//   kinds      { kind: "Label" } in load order;
+//   fields(k)  { need: [[key, alt...], ...] (each group is met by any one of its keys), all: [keys], label(key) };
+//   match(k, headers) the field key (or "") each header maps to, from the page's synonym list;
+//   headerRow(aoa)    the page's header-row guess;
+//   names      { kind: RegExp } sheet-name telltales; extra(k, aoa, h) true for a content telltale;
+//   load(k, sheet, info) loads one sheet (info: { fileName, sheets, label, step, total }); returns true
+//              when done, false when it waits on the viewer (the page then calls wbook.next() or
+//              wbook.stop()), and throws to report the sheet as not loaded;
+//   abort(k)   closes whatever step the page left open for kind k.
+// The page calls wbook.offer(fileName, sheets, kind) on an upload: false means "not a workbook", carry on as before.
+const wbook = { opts: null, P: null, Q: null };
+function initWorkbook(opts) {
+  wbook.opts = opts;
+  opts.box.addEventListener("change", e => { const s = e.target.closest("select[data-wb]"); if (s) wbPick(+s.dataset.wb, s.value) });
+  opts.box.addEventListener("click", e => { const id = e.target.id;
+    if (id === "wbLoad") wbStart(); else if (id === "wbCancel") wbCancel(); else if (id === "wbSkip") wbSkip(); else if (id === "wbStop") wbook.stop(); else if (id === "wbClose") wbook.close() });
+  return wbook;
+}
+const wbEsc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+// How well one sheet fits one kind, 0 to ~1.15: mostly the share of required column groups found, then
+// optional columns (four are plenty), then the tab name and a content telltale as tie-breakers.
+function wbScore(kind, name, aoa) {
+  const o = wbook.opts, h = o.headerRow(aoa), headers = (aoa[h] || []).map(x => String(x ?? "").trim());
+  const F = o.fields(kind), got = new Set(o.match(kind, headers).filter(Boolean));
+  const met = F.need.filter(g => g.some(k => got.has(k))), needKeys = new Set(F.need.flat());
+  const opt = F.all.filter(k => !needKeys.has(k) && got.has(k)).length, optOf = Math.min(4, F.all.filter(k => !needKeys.has(k)).length) || 1;
+  const req = F.need.length ? met.length / F.need.length : 0, named = !!o.names[kind]?.test(name), tell = !!o.extra?.(kind, aoa, h);
+  const s = 0.6 * req + 0.2 * Math.min(1, opt / optOf) + (named ? 0.2 : 0) + (tell ? 0.15 : 0);
+  return { s: got.size ? s : 0, req, missing: F.need.filter(g => !g.some(k => got.has(k))).map(g => F.label(g[0])) };
+}
+const WB_PLAUSIBLE = 0.45, WB_STRONG = 0.7;
+// Greedy: the strongest sheet/kind pair first, each sheet and kind used once. The kind the viewer
+// dropped onto goes first, so it gets its best sheet whenever one is plausible at all.
+function wbAssign(rows, kinds, prefer) {
+  const take = new Map(), used = new Set();
+  const pairs = rows.flatMap((r, i) => kinds.map(k => ({ i, k, s: r.score[k].s }))).filter(p => p.s >= WB_PLAUSIBLE)
+    .sort((a, b) => (b.k === prefer) - (a.k === prefer) || b.s - a.s);
+  pairs.forEach(p => { if (!take.has(p.i) && !used.has(p.k)) { take.set(p.i, p.k); used.add(p.k) } });
+  rows.forEach((r, i) => r.kind = take.get(i) || "");
+}
+wbook.offer = (fileName, sheets, prefer) => {
+  const names = Object.keys(sheets); if (names.length < 2) return false;
+  const o = wbook.opts, kinds = Object.keys(o.kinds);
+  wbook.close();
+  const rows = names.map(name => { const aoa = sheets[name], h = o.headerRow(aoa);
+    return { name, headers: (aoa[h] || []).map(x => String(x ?? "").trim()).filter(Boolean), score: Object.fromEntries(kinds.map(k => [k, wbScore(k, name, aoa)])) } });
+  wbAssign(rows, kinds, prefer);
+  // Clear the zone's file input, or picking the same workbook again after Cancel would fire no change event.
+  const input = document.querySelector(`.drop[data-kind="${prefer}"] input`); if (input) input.value = "";
+  wbook.P = { fileName, sheets, rows, prefer, note: "" };
+  wbDraw();
+  o.box.scrollIntoView({ block: "nearest" }); o.box.querySelector("#wbH")?.focus({ preventScroll: true });
+  return true;
+};
+// A short word on the guess, only where it needs checking.
+function wbHint(r) {
+  if (!r.kind) { const best = Math.max(...Object.values(r.score).map(x => x.s)); return best < WB_PLAUSIBLE ? "Doesn't look like any of these." : "" }
+  const x = r.score[r.kind];
+  if (x.req < 1) return `Check this one: no ${x.missing.slice(0, 2).join(", no ")} column found.`;
+  return x.s < WB_STRONG ? "Possible match; check the columns when it loads." : "";
+}
+function wbDraw() {
+  const o = wbook.opts, P = wbook.P, kinds = Object.entries(o.kinds), n = P.rows.length, picked = P.rows.filter(r => r.kind).length;
+  o.box.hidden = false;
+  o.box.innerHTML = `<div class="panel-head"><h3 id="wbH" tabindex="-1">Workbook: ${wbEsc(P.fileName)}</h3></div>
+    <p class="note">This workbook has ${n} sheets. Here's what each one looks like:</p>
+    <ul class="wb-list">${P.rows.map((r, i) => { const hint = wbHint(r), more = r.headers.length - 4;
+      return `<li class="wb-row"><div class="wb-sheet"><label for="wbSel${i}">${wbEsc(r.name)}</label>
+        <span class="wb-cols" id="wbCols${i}">${r.headers.length ? wbEsc(r.headers.slice(0, 4).join(", ")) + (more > 0 ? `, +${more} more` : "") : "No column headers"}</span></div>
+        <div class="wb-pick"><select id="wbSel${i}" data-wb="${i}" aria-describedby="wbCols${i}${hint ? ` wbHint${i}` : ""}">${kinds.map(([k, l]) => `<option value="${k}"${r.kind === k ? " selected" : ""}>${wbEsc(l)}</option>`).join("")}<option value=""${r.kind ? "" : " selected"}>Not used</option></select>
+        ${hint ? `<span class="wb-hint${r.kind ? " warn" : ""}" id="wbHint${i}">${wbEsc(hint)}</span>` : ""}</div></li>` }).join("")}</ul>
+    <p class="note" id="wbNote" role="status">${wbEsc(P.note || (picked ? `${picked} of ${n} sheets will load. Each kind takes one sheet.` : "Pick at least one sheet to load."))}</p>
+    <div class="row"><button type="button" class="primary" id="wbLoad"${picked ? "" : " disabled"}>Load these</button><button type="button" id="wbCancel">Cancel</button></div>`;
+}
+function wbPick(i, kind) {
+  const P = wbook.P; if (!P) return;
+  P.rows[i].kind = kind; P.note = "";
+  // One sheet per kind, as in the column matcher: the earlier holder steps aside.
+  P.rows.forEach((r, j) => { if (j !== i && kind && r.kind === kind) { r.kind = ""; P.note = `“${r.name}” is now Not used: each kind takes one sheet.` } });
+  wbDraw(); wbook.opts.box.querySelector(`#wbSel${i}`)?.focus();
+}
+function wbCancel() { const k = wbook.P?.prefer; wbook.close(); document.querySelector(`.drop[data-kind="${k}"] input`)?.focus() }
+function wbStart() {
+  const o = wbook.opts, P = wbook.P, order = Object.keys(o.kinds);
+  const items = P.rows.filter(r => r.kind).sort((a, b) => order.indexOf(a.kind) - order.indexOf(b.kind)).map(r => ({ sheet: r.name, kind: r.kind }));
+  wbook.P = null; if (!items.length) return;
+  wbook.Q = { fileName: P.fileName, sheets: P.sheets, items, i: 0, done: [], failed: [], skipped: [] };
+  wbRun();
+}
+// Load sheets until one needs the viewer; next() resumes after it.
+function wbRun() {
+  const o = wbook.opts, Q = wbook.Q;
+  while (Q && wbook.Q === Q && Q.i < Q.items.length) {
+    const it = Q.items[Q.i], info = { fileName: Q.fileName, sheets: Q.sheets, label: `${Q.fileName} › ${it.sheet}`, step: Q.i + 1, total: Q.items.length };
+    wbProgress();
+    let done;
+    try { done = o.load(it.kind, it.sheet, info) } catch (e) { Q.failed.push(`${it.sheet}: ${e.message}`); done = true; it.failed = true }
+    if (!done) return wbProgress();
+    if (!it.failed) Q.done.push(it);
+    Q.i++;
+  }
+  if (Q && wbook.Q === Q) wbFinish();
+}
+function wbProgress() {
+  const o = wbook.opts, Q = wbook.Q, it = Q.items[Q.i];
+  o.box.hidden = false;
+  o.box.innerHTML = `<p class="note wb-step" id="wbStep" role="status" tabindex="-1">Sheet ${Q.i + 1} of ${Q.items.length}: ${wbEsc(it.sheet)} → ${wbEsc(o.kinds[it.kind])}. Check the columns below, then load.</p>
+    <div class="row"><button type="button" id="wbSkip">Skip this sheet</button><button type="button" id="wbStop">Stop</button></div>`;
+}
+wbook.next = () => { const Q = wbook.Q; if (!Q) return; Q.done.push(Q.items[Q.i]); Q.i++; wbRun() };
+function wbSkip() { const Q = wbook.Q; if (!Q) return; const it = Q.items[Q.i]; wbook.opts.abort(it.kind); Q.skipped.push(it.sheet); Q.i++; wbRun() }
+// Stop keeps whatever already loaded; the open step is closed.
+wbook.stop = () => { const Q = wbook.Q; if (!Q) return; const it = Q.items[Q.i]; if (it) wbook.opts.abort(it.kind); Q.stopped = true; wbFinish() };
+function wbFinish() {
+  const o = wbook.opts, Q = wbook.Q, had = o.box.contains(document.activeElement) || document.activeElement === document.body;
+  wbook.Q = null;
+  const n = Q.done.length, msgs = [];
+  msgs.push(n ? `Loaded ${n} of ${Q.items.length} sheet${Q.items.length > 1 ? "s" : ""} from ${Q.fileName}: ${Q.done.map(it => `${it.sheet} → ${o.kinds[it.kind]}`).join(", ")}.` : `Nothing loaded from ${Q.fileName}.`);
+  if (Q.stopped) msgs.push("Stopped before the rest.");
+  if (Q.skipped.length) msgs.push(`Skipped ${Q.skipped.join(", ")}.`);
+  o.box.hidden = false;
+  o.box.innerHTML = `<p class="note wb-step" id="wbStep" role="status" tabindex="-1">${wbEsc(msgs.join(" "))}</p>
+    ${Q.failed.map(f => `<p class="wb-hint warn wb-fail">${wbEsc(f)}</p>`).join("")}
+    <div class="row"><button type="button" id="wbClose">Close</button></div>`;
+  if (had) o.box.querySelector("#wbStep").focus({ preventScroll: true });
+}
+// Hides the panel; a queue that is still running is dropped (its open step closed) without loading more.
+wbook.close = () => { const Q = wbook.Q; wbook.Q = null; wbook.P = null; if (Q && Q.items[Q.i]) wbook.opts.abort(Q.items[Q.i].kind);
+  const b = wbook.opts.box; b.hidden = true; b.innerHTML = "" };
+// No column matcher here: each confirmed sheet goes straight through the synonym list and the
+// normalisers, which name any required column they could not find.
+initWorkbook({ box: document.getElementById("wbook"), kinds: { commit: "Fund commitments", hold: "Fund holdings" },
+  fields: k => ({ need: k === "commit" ? [["fund"], ["commitment", "lp_share"], ["fund_size", "lp_share"]]
+      : [["fund"], ["company"], ["cost"], ["fair_value"], ["shares", "ownership"], ["company_fd_shares", "ownership"]],
+    all: Object.keys(SYN[k]), label: key => key.replace(/_/g, " ") }),
+  match: (k, headers) => matchCols(k, headers).map(x => x || ""), headerRow,
+  names: { commit: /commit/i, hold: /holding|schedule|\bsoi\b|position|investment|portfolio/i },
+  load(k, sheet, info) {
+    try { apply(k, toObjects(k, info.sheets[sheet])); state.isSample = false; setStatus(k, `${info.label} · ${state[k].length} rows`, "ok"); render(); return true }
+    catch (e) { setStatus(k, "Could not read sheet", "err"); throw e } },
+  abort() {} });
 document.querySelectorAll(".drop").forEach(el => {
   const kind = el.dataset.kind, input = el.querySelector("input");
   input.addEventListener("change", () => input.files[0] && load(kind, input.files[0]));
@@ -681,7 +854,7 @@ document.getElementById("wUpload").addEventListener("click", () => {
 });
 document.getElementById("wSample").addEventListener("click", () => document.getElementById("sampleBtn").click());
 document.getElementById("clearBtn").addEventListener("click", () => {
-  delete document.getElementById("welcome").dataset.dismissed;
+  delete document.getElementById("welcome").dataset.dismissed; wbook.close();
   Object.assign(state, { commit: null, hold: null, raw: {}, company: null, isSample: false }); ["commit", "hold"].forEach(k => setStatus(k, "Not loaded"));
   document.querySelectorAll(".drop input").forEach(i => i.value = ""); document.getElementById("lpTitle").textContent = "LP Look-through Exposure"; render();
 });
