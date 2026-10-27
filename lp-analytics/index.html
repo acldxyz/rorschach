@@ -1737,6 +1737,16 @@ function chartPng(canvas) {
   const c = document.createElement("canvas"); c.width = canvas.width; c.height = canvas.height;
   const x = c.getContext("2d"); x.fillStyle = css("--panel"); x.fillRect(0, 0, c.width, c.height); x.drawImage(canvas, 0, 0); return c;
 }
+const frames = () => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+// Downloads go into internal materials, so they always come out in the light theme, whatever the viewer
+// uses. Force data-theme="light" (charts repaint unanimated via the data-theme observer), export, then put
+// the attribute back exactly as it was (absent stays absent); the observer repaints the page again.
+async function asLight(fn) {
+  const root = document.documentElement, had = root.getAttribute("data-theme"), was = state.capturing;
+  state.capturing = true; root.setAttribute("data-theme", "light"); await frames();
+  try { return await fn() }
+  finally { state.capturing = was; had === null ? root.removeAttribute("data-theme") : root.setAttribute("data-theme", had) }
+}
 function decorateDownloads() {
   document.querySelectorAll("#out .tbl, .bm .tbl").forEach(box => {
     const t = box.querySelector("table"); if (!t || box.previousElementSibling?.classList.contains("dl-row")) return;
@@ -1749,7 +1759,13 @@ function decorateDownloads() {
     const cv = box.querySelector("canvas"); if (!cv) return;
     const row = document.createElement("div"); row.className = "dl-row";
     row.innerHTML = `<button type="button" class="dl" aria-label="Download ${esc(titleFor(box))} chart as PNG">PNG</button>`;
-    row.firstChild.onclick = () => chartPng(cv).toBlob(b => b && saveFile(`${fileBase()}-${slug(titleFor(box))}.png`, b), "image/png");
+    // Forcing light re-renders #out, replacing this canvas and button: find both again by position.
+    row.firstChild.onclick = async () => {
+      const i = [...document.querySelectorAll("#out .chart")].indexOf(box), name = `${fileBase()}-${slug(titleFor(box))}.png`, at = () => document.querySelectorAll("#out .chart")[i];
+      const png = await asLight(() => chartPng(at()?.querySelector("canvas") || cv));
+      at()?.previousElementSibling?.querySelector(".dl")?.focus();
+      png.toBlob(b => b && saveFile(name, b), "image/png");
+    };
     box.before(row);
   });
 }
@@ -1757,7 +1773,7 @@ function decorateDownloads() {
 async function eachView(fn) {
   const prev = state.view; state.capturing = true;
   try { for (const [v, label] of [["record", "Track record"], ["companies", "Portfolio companies"], ["team", "Team & partners"], ["scen", "Scenarios"]]) {
-    state.view = v; render(); await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r))); await fn(v, label) } }
+    state.view = v; render(); await frames(); await fn(v, label) } }
   finally { state.capturing = false; state.view = prev; render() }
 }
 // Turn a formatted cell ("$1,054.7M", "12.3%", "1.57x") back into a number with a matching Excel format.
@@ -1820,7 +1836,7 @@ document.getElementById("dlHtml").addEventListener("click", async () => {
   if (!state.cf) return dlMsg("Load data first.", true);
   dlMsg("Building report…");
   const parts = [];
-  await eachView((v, label) => {
+  await asLight(() => eachView((v, label) => {
     const src = document.getElementById("out"), clone = src.cloneNode(true);
     const cvs = [...src.querySelectorAll("canvas")], cls = [...clone.querySelectorAll("canvas")];
     cls.forEach((c, i) => { const img = document.createElement("img"); img.src = chartPng(cvs[i]).toDataURL("image/png"); img.alt = titleFor(cvs[i].closest(".chart")); img.style.cssText = "width:100%;height:auto"; c.parentElement.style.height = "auto"; c.replaceWith(img) });
@@ -1828,10 +1844,10 @@ document.getElementById("dlHtml").addEventListener("click", async () => {
     clone.querySelectorAll("select").forEach((sel, i) => { const orig = src.querySelectorAll("select")[i]; const sp = document.createElement("b"); sp.textContent = orig.selectedOptions[0]?.textContent || ""; sel.replaceWith(sp) });
     clone.querySelectorAll("details").forEach(d => d.open = true);
     parts.push(`<h2 class="view-h">${esc(label)}</h2>${clone.innerHTML}`);
-  });
+  }));
   const cssText = [...document.querySelectorAll("style")].map(s => s.textContent).join("\n");
   const title = `${document.getElementById("gpTitle").textContent} · ${document.getElementById("asOf").textContent}`;
-  const doc = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${esc(title)}</title>
+  const doc = `<!doctype html><html lang="en" data-theme="light"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${esc(title)}</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+Condensed:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">${state.brandFontHref ? `\n<link rel="stylesheet" href="${esc(state.brandFontHref)}">` : ""}
 <style>${cssText}\n.view-h{font-size:22px;margin:24px 0 0;padding-top:16px;border-top:2px solid var(--ink)}</style></head>
 <body><div class="wrap"><header><div><h1>${esc(document.getElementById("gpTitle").textContent)}</h1><p class="sub">Track record report</p></div><div class="meta">${esc(document.getElementById("asOf").textContent)}</div></header>
