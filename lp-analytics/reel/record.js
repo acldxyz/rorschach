@@ -6,7 +6,8 @@
 // advances requestAnimationFrame / performance.now / Date.now by exactly 1/fps, so Chart.js animations come out
 // smooth however slow the screenshots are. A "camera" (a CSS transform on <body>) frames one panel per scene;
 // scenes are joined with crossfades and the last fades back into the first, so the file loops without a seam.
-// Needs Playwright (npm i -g playwright, or set PLAYWRIGHT) and ffmpeg on PATH.
+// Needs Playwright (npm i -g playwright, or set PLAYWRIGHT) and an ffmpeg with libx264, libvpx-vp9 and xfade, on PATH
+// or named by FFMPEG. REEL_LAUNCH takes Chromium launch options as JSON (e.g. a proxy). Renders go to out/, which git ignores.
 const { spawn, execFileSync } = require("child_process");
 const fs = require("fs"), path = require("path");
 const { chromium } = require(process.env.PLAYWRIGHT || "playwright");
@@ -17,6 +18,7 @@ const W = 1920, H = 1080, FADE = 0.7;  // seconds of crossfade between scenes
 const APP = "file://" + path.resolve(__dirname, "..", "index.html");
 const TMP = fs.mkdtempSync(path.join(require("os").tmpdir(), "reel-"));
 const SUFFIX = THEME === "dark" ? "-dark" : "";
+const FFMPEG = process.env.FFMPEG || "ffmpeg";
 
 // Virtual clock, installed before any page script runs (Chart.js captures requestAnimationFrame at load).
 const CLOCK = () => {
@@ -116,7 +118,7 @@ const SCENES = [
 
 async function main() {
   fs.mkdirSync(OUT, { recursive: true });
-  const browser = await chromium.launch();
+  const browser = await chromium.launch(process.env.REEL_LAUNCH ? JSON.parse(process.env.REEL_LAUNCH) : {});
   const ctx = await browser.newContext({ viewport: { width: W, height: H }, deviceScaleFactor: 2, colorScheme: THEME, reducedMotion: "no-preference" });
   if (process.env.REEL_VENDOR) await require("./vendor-route")(ctx);
   await ctx.addInitScript(CLOCK);
@@ -143,7 +145,7 @@ async function main() {
     const [a, b] = await sc.cam(page);
     if (sc.setup) await sc.setup(page);
     const file = path.join(TMP, `s${i}.mp4`); files.push(file);
-    const ff = spawn("ffmpeg", ["-y", "-loglevel", "error", "-f", "image2pipe", "-framerate", String(FPS), "-i", "-", "-c:v", "libx264", "-crf", "12", "-preset", "veryfast", "-pix_fmt", "yuv420p", file], { stdio: ["pipe", "inherit", "inherit"] });
+    const ff = spawn(FFMPEG, ["-y", "-loglevel", "error", "-f", "image2pipe", "-framerate", String(FPS), "-i", "-", "-c:v", "libx264", "-crf", "12", "-preset", "veryfast", "-pix_fmt", "yuv420p", file], { stdio: ["pipe", "inherit", "inherit"] });
     const n = Math.round(sc.dur * FPS);
     for (let f = 0; f < n; f++) {
       const t = f / FPS, c = lerpCam(a, b, easeIO(clamp01(t / sc.dur)));
@@ -170,10 +172,10 @@ async function main() {
   const len = durs.reduce((x, y) => x + y, 0) - durs.length * FADE;
   filt += `[chain]trim=start=${FADE}:duration=${len.toFixed(4)},setpts=PTS-STARTPTS[v]`;
   const master = path.join(TMP, "master.mp4");
-  execFileSync("ffmpeg", ["-y", "-loglevel", "error", ...inputs.flatMap(f => ["-i", f]), "-filter_complex", filt, "-map", "[v]", "-c:v", "libx264", "-crf", "10", "-preset", "veryfast", "-pix_fmt", "yuv420p", master], { stdio: "inherit" });
+  execFileSync(FFMPEG, ["-y", "-loglevel", "error", ...inputs.flatMap(f => ["-i", f]), "-filter_complex", filt, "-map", "[v]", "-c:v", "libx264", "-crf", "10", "-preset", "veryfast", "-pix_fmt", "yuv420p", master], { stdio: "inherit" });
 
   // Delivery files: no audio track, faststart so playback begins before the download finishes, a keyframe a second.
-  const o = n => path.join(OUT, n), ff = a => execFileSync("ffmpeg", ["-y", "-loglevel", "error", "-i", master, ...a], { stdio: "inherit" });
+  const o = n => path.join(OUT, n), ff = a => execFileSync(FFMPEG, ["-y", "-loglevel", "error", "-i", master, ...a], { stdio: "inherit" });
   const g = ["-g", String(FPS), "-an"];
   ff(["-c:v", "libx264", "-preset", "slow", "-crf", "27", "-pix_fmt", "yuv420p", "-movflags", "+faststart", ...g, o(`reel${SUFFIX}.mp4`)]);
   ff(["-vf", "scale=1280:-2:flags=lanczos", "-c:v", "libx264", "-preset", "slow", "-crf", "27", "-pix_fmt", "yuv420p", "-movflags", "+faststart", ...g, o(`reel${SUFFIX}-720.mp4`)]);

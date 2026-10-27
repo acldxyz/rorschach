@@ -23,5 +23,6 @@ Files:
 - `python3 lp-analytics/build.py` bakes the sample CSVs into `index.html` and `exposure.html`.
 - `python3 lp-analytics/build.py --artifact OUTDIR --perf-url URL --exp-url URL` also writes the two pages for publishing as private claude.ai artifacts, with the module links pointing at each other's published URLs.
 - `cd lp-analytics/sample && python3 generate.py` regenerates the mock three-fund sample data for the fund performance module; `python3 generate_exposure.py` regenerates the mock ten-fund LP portfolio for the exposure module.
+- `lp-analytics/reel/` records a muted, seamlessly looping ~28-second reel of the fund performance module, for use as a background video; `signup.html` is an example page that plays it behind a signup card. Run `python3 lp-analytics/build.py`, then `node lp-analytics/reel/record.js` (add `--theme dark` for the dark cut). It needs Playwright and an ffmpeg with libx264, libvpx-vp9 and the xfade filter (set `FFMPEG` to point at one). Renders (MP4, WebM, posters) go to `lp-analytics/reel/out/`, which git ignores, so they stay local: host them wherever the signup page is served.
 
 The history was moved over from `acldxyz/personal-site` (branch `claude/amazing-heisenberg-48gqo9`).
