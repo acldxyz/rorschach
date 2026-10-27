@@ -125,6 +125,8 @@ async function main() {
   const page = await ctx.newPage();
   page.on("pageerror", e => console.error("page error:", e.message));
   await page.goto(APP);
+  // The page opens empty, on its welcome card. Click in-page: Playwright's click waits on animation frames, which the virtual clock holds.
+  await page.evaluate(() => document.getElementById("sampleBtn").click());
   await page.waitForFunction(() => window.Chart && document.querySelector("#cJ"));
   await page.evaluate(() => document.fonts.ready);
   await page.evaluate(HELPERS);

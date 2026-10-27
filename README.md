@@ -15,11 +15,15 @@ Two single-file modules that link to each other and open straight from disk with
 - manager overlap, and the same security held at different marks
 - manager and fund summaries, including how much of your NAV sits in companies another of your managers also holds
 
+Both modules open empty, with a welcome card that asks how to start: upload your own files, open a saved workspace (fund performance only), or use the fictional sample data. The card comes back whenever nothing is loaded, for example after Clear.
+
+A Light/Dark toggle sits at the top of each module. It follows the system setting until you pick one, and the choice is kept in the browser. Downloads (PNG, HTML report) always come out light, whatever theme is showing.
+
 Both modules have Brand fields in their Data panel. They take your colours (hex, `rgb()` or names, in order) and a font (installed locally or from Google Fonts), and restyle the page, the charts, the PNG downloads and the HTML report. They're saved in the browser, shared by the two modules when both are opened from the same place, and the fund performance module also keeps them in workspace files. The Excel workbook carries figures only: the spreadsheet library the app uses can't write fonts or fills.
 
 Files:
 
-- `lp-analytics/app.template.html` and `lp-analytics/exposure.template.html` are the sources; `brand.css`, `brand.js` and `brand.html` hold the Brand feature both share.
+- `lp-analytics/app.template.html` and `lp-analytics/exposure.template.html` are the sources; `brand.css`, `brand.js` and `brand.html` hold the Brand feature both share, and `theme.css`, `theme.js` and `theme.html` the Light/Dark toggle.
 - `python3 lp-analytics/build.py` inlines those partials and bakes the sample CSVs into `index.html` and `exposure.html`.
 - `python3 lp-analytics/build.py --artifact OUTDIR --perf-url URL --exp-url URL` also writes the two pages for publishing as private claude.ai artifacts, with the module links pointing at each other's published URLs.
 - `cd lp-analytics/sample && python3 generate.py` regenerates the mock three-fund sample data for the fund performance module; `python3 generate_exposure.py` regenerates the mock ten-fund LP portfolio for the exposure module.

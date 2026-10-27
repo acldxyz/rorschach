@@ -118,6 +118,17 @@ tr.total td { font-weight: 600; border-top: 2px solid var(--ink-3) }
 .brand-row input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px }
 .swatches { display: flex; gap: 3px } .swatches span { width: 18px; height: 18px; border-radius: 3px; border: 1px solid var(--rule) }
 #brandNote:empty { display: none } #brandNote.warn { color: var(--warn) }
+/* Top bar (module links + Light/Dark toggle), shared by both modules (build.py inlines this file, theme.js and theme.html). */
+.topbar { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; justify-content: space-between }
+.theme-seg { display: inline-flex; margin-left: auto; border: 1px solid var(--rule); border-radius: 999px; overflow: hidden }
+.theme-seg button { font: 600 12px var(--body); letter-spacing: .04em; text-transform: uppercase; color: var(--ink-3); background: none; border: 0; border-radius: 0; padding: 3px 10px }
+.theme-seg button:hover { color: var(--accent) }
+.theme-seg button[aria-pressed="true"] { color: var(--panel); background: var(--accent) }
+.theme-seg button:focus-visible { outline: 2px solid var(--ink); outline-offset: -2px }
+.welcome { border-color: var(--accent) }
+.welcome h2:focus { outline: none }
+.choices { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 230px), 1fr)); gap: 12px }
+.choice { display: grid; gap: 6px; align-content: start; justify-items: start; padding: 12px; border: 1px solid var(--rule); border-radius: 6px; background: var(--bg) }
 .bm th.grp { text-align: center; border-bottom: 1px solid var(--ink-3) }
 .errors { color: var(--bad); font-size: 13px; margin: 0 }
 .empty { color: var(--ink-3); padding: 24px; text-align: center }
@@ -178,7 +189,31 @@ tr.total td { font-weight: 600; border-top: 2px solid var(--ink-3) }
 </style>
 
 <div class="wrap">
-  <nav class="modules" aria-label="Modules"><a href="index.html" aria-current="page">Fund performance</a><a href="exposure.html">LP exposure</a></nav>
+  <div class="topbar"><nav class="modules" aria-label="Modules"><a href="index.html" aria-current="page">Fund performance</a><a href="exposure.html">LP exposure</a></nav>
+    <div class="theme-seg" role="group" aria-label="Colour theme"><button type="button" data-theme-set="light" aria-pressed="false">Light</button><button type="button" data-theme-set="dark" aria-pressed="false">Dark</button></div></div>
+  <script>
+// ---------- theme ----------
+// Light/Dark toggle, shared by both modules: build.py inlines this file (with theme.css and the theme.html
+// buttons) in a script right after the buttons, so a stored choice is applied before the page paints.
+// The choice lives in data-theme on <html> and in localStorage ("theme"). With no stored choice the
+// attribute stays absent and the CSS follows the system setting, live. Pages re-render their charts when
+// data-theme changes. Downloads that force light (asLight) put the attribute back as they found it, and
+// the buttons follow this script's own record of the choice, not the attribute, so they never flicker.
+(() => {
+  const KEY = "theme", root = document.documentElement, sys = matchMedia("(prefers-color-scheme: dark)");
+  let choice = null;
+  try { const v = localStorage.getItem(KEY); if (v === "light" || v === "dark") choice = v } catch {}
+  if (choice) root.setAttribute("data-theme", choice);
+  const btns = [...document.querySelectorAll("[data-theme-set]")];
+  const sync = () => { const eff = choice || (sys.matches ? "dark" : "light"); btns.forEach(b => b.setAttribute("aria-pressed", String(b.dataset.themeSet === eff))) };
+  btns.forEach(b => b.addEventListener("click", () => {
+    choice = b.dataset.themeSet; try { localStorage.setItem(KEY, choice) } catch {}
+    root.setAttribute("data-theme", choice); sync();
+  }));
+  sys.addEventListener("change", sync);
+  sync();
+})();
+  </script>
   <header>
     <div>
       <h1 id="gpTitle">Venture Track Record</h1>
@@ -186,6 +221,16 @@ tr.total td { font-weight: 600; border-top: 2px solid var(--ink-3) }
     </div>
     <div class="meta" id="asOf"></div>
   </header>
+
+  <!-- Shown whenever nothing is loaded (see syncWelcome), so the first visit asks rather than assumes. -->
+  <section class="panel welcome" id="welcome" aria-labelledby="welcomeH">
+    <div><h2 id="welcomeH" tabindex="-1">How would you like to start?</h2><p class="note">Nothing is loaded yet.</p></div>
+    <div class="choices">
+      <div class="choice"><button type="button" class="primary" id="wUpload" aria-describedby="wUploadD">Upload your data</button><p class="note" id="wUploadD">Your fund cash flows as CSV or XLSX, plus portfolio, company history and staff files if you have them.</p></div>
+      <div class="choice"><button type="button" id="wWorkspace" aria-describedby="wWorkspaceD">Open a saved workspace</button><p class="note" id="wWorkspaceD">Pick up where you left off from a workspace file you saved.</p></div>
+      <div class="choice"><button type="button" id="wSample" aria-describedby="wSampleD">Use sample data</button><p class="note" id="wSampleD">Explore with a fictional venture firm and its three funds.</p></div>
+    </div>
+  </section>
 
   <section class="panel" aria-labelledby="loadH">
     <div class="panel-head">
@@ -418,7 +463,7 @@ const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).
 const series = i => css(`--s${(i % 8) + 1}`);
 
 // ---------- render ----------
-function render() { renderView(); decorateDownloads() }
+function render() { renderView(); decorateDownloads(); syncWelcome() }
 function setChartDefaults() {
   Chart.defaults.font.family = css("--body"); Chart.defaults.color = css("--ink-2"); Chart.defaults.borderColor = css("--rule");
   Chart.defaults.plugins.tooltip.backgroundColor = css("--ink"); Chart.defaults.plugins.tooltip.titleColor = css("--bg"); Chart.defaults.plugins.tooltip.bodyColor = css("--bg");
@@ -432,7 +477,7 @@ function renderView() {
   document.querySelectorAll(".tabs [role=tab]").forEach(b => b.setAttribute("aria-selected", String(b.dataset.view === state.view)));
   document.getElementById("out").setAttribute("aria-labelledby", "tab-" + state.view);
   const out = document.getElementById("out");
-  if (!state.cf) { out.innerHTML = `<div class="panel empty">Load fund cash flows, or the sample data, to build the charts.</div>`; document.getElementById("asOf").textContent = ""; return }
+  if (!state.cf) { out.innerHTML = `<div class="panel empty">Nothing loaded yet. Upload fund cash flows, open a saved workspace or use the sample data to build the charts.</div>`; document.getElementById("asOf").textContent = ""; return }
   state.cur = currencySetup(); renderCur();
   if (!state.cur.disp) { out.innerHTML = `<div class="panel empty">These funds report in different currencies. Enter the exchange rates above to combine them in USD.</div>`; document.getElementById("asOf").textContent = ""; return }
   const F = fundStats(cfView()), fundColor = Object.fromEntries(F.map((f, i) => [f.name, series(i)]));
@@ -968,6 +1013,7 @@ function renderGross(F, fundColor, asOf) {
 // ---------- wiring ----------
 function setStatus(kind, text, cls) { const s = document.querySelector(`.drop[data-kind="${kind}"] .status`); s.textContent = text; s.className = "status " + (cls || "") }
 async function load(kind, file) {
+  dismissWelcome();
   const err = document.getElementById("errors"); err.textContent = "";
   try { setStatus(kind, "Matching columns…"); await startMapping(kind, file); if (M) document.getElementById("mapper").scrollIntoView({ block: "nearest" }) }
   catch (e) { err.textContent = e.message; setStatus(kind, "Could not read file", "err") }
@@ -991,7 +1037,26 @@ document.getElementById("inUnit").addEventListener("change", e => { state.inUnit
 document.getElementById("curCtl").addEventListener("click", e => { const b = e.target.closest("[data-cur]"); if (b) { state.curMode = b.dataset.cur; render() } });
 document.getElementById("curCtl").addEventListener("change", e => { const c = e.target.dataset.rate; if (!c) return; const x = num(e.target.value);
   if (x > 0) state.rates[c] = x; else delete state.rates[c]; try { localStorage.setItem("fx-rates", JSON.stringify(state.rates)) } catch {} render() });
+// ---------- welcome ----------
+// With nothing loaded, the welcome card asks how to start. Loading anything (sample, upload, workspace)
+// hides it; Upload also closes it on the way to the drop zones; Clear brings it back.
+function syncWelcome() {
+  const card = document.getElementById("welcome"), had = card.contains(document.activeElement);
+  card.hidden = !!(state.cf || state.inv || state.hist || state.team) || card.dataset.dismissed === "1";
+  // A choice that loaded data hid the button it was on: carry focus on to the views.
+  if (card.hidden && had) document.querySelector('.tabs [aria-selected="true"]')?.focus();
+}
+function dismissWelcome() { document.getElementById("welcome").dataset.dismissed = "1"; syncWelcome() }
+document.getElementById("wUpload").addEventListener("click", () => {
+  // Focus the first drop zone's file input (Enter or Space opens the picker), then close the card.
+  document.querySelector(".loaders .drop input").focus({ preventScroll: true });
+  dismissWelcome();
+  document.getElementById("loadH").closest("section").scrollIntoView({ block: "start", behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
+});
+document.getElementById("wWorkspace").addEventListener("click", () => document.getElementById("wsOpen").click());
+document.getElementById("wSample").addEventListener("click", () => document.getElementById("sampleBtn").click());
 document.getElementById("clearBtn").addEventListener("click", () => {
+  delete document.getElementById("welcome").dataset.dismissed;
   Object.assign(state, { cf: null, inv: null, team: null, hist: null, isSample: false, raw: {} }); M = null; renderMapper(); ["cf", "inv", "team", "hist"].forEach(k => setStatus(k, "Not loaded"));
   document.querySelectorAll(".drop input").forEach(i => i.value = ""); document.getElementById("gpTitle").textContent = "Venture Track Record"; renderBm(); render();
 });
@@ -1870,8 +1935,8 @@ ${parts.join("\n")}</div></body></html>`;
   await saveFile(`${fileBase()}-report.html`, doc);
 });
 
-// Open on the sample so the first view shows what the tool does.
-document.getElementById("sampleBtn").click();
+// Open empty: the welcome card asks how to start. The sample benchmark is ready for whatever loads.
+state.bmSample = normBm(parseCSV(SAMPLE.bm)); renderBm(); render();
 </script>
 
 </html>

@@ -120,11 +120,46 @@ td.lo { color: var(--bad) } td.hi { color: var(--good) }
 .brand-row input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px }
 .swatches { display: flex; gap: 3px } .swatches span { width: 18px; height: 18px; border-radius: 3px; border: 1px solid var(--rule) }
 #brandNote:empty { display: none } #brandNote.warn { color: var(--warn) }
+/* Top bar (module links + Light/Dark toggle), shared by both modules (build.py inlines this file, theme.js and theme.html). */
+.topbar { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; justify-content: space-between }
+.theme-seg { display: inline-flex; margin-left: auto; border: 1px solid var(--rule); border-radius: 999px; overflow: hidden }
+.theme-seg button { font: 600 12px var(--body); letter-spacing: .04em; text-transform: uppercase; color: var(--ink-3); background: none; border: 0; border-radius: 0; padding: 3px 10px }
+.theme-seg button:hover { color: var(--accent) }
+.theme-seg button[aria-pressed="true"] { color: var(--panel); background: var(--accent) }
+.theme-seg button:focus-visible { outline: 2px solid var(--ink); outline-offset: -2px }
+.welcome { border-color: var(--accent) }
+.welcome h2:focus { outline: none }
+.choices { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr)); gap: 12px }
+.choice { display: grid; gap: 6px; align-content: start; justify-items: start; padding: 12px; border: 1px solid var(--rule); border-radius: 6px; background: var(--bg) }
 @media (prefers-reduced-motion: reduce) { * { transition-duration: .01s !important } }
 </style>
 
 <div class="wrap">
-  <nav class="modules" aria-label="Modules"><a href="index.html">Fund performance</a><a href="exposure.html" aria-current="page">LP exposure</a></nav>
+  <div class="topbar"><nav class="modules" aria-label="Modules"><a href="index.html">Fund performance</a><a href="exposure.html" aria-current="page">LP exposure</a></nav>
+    <div class="theme-seg" role="group" aria-label="Colour theme"><button type="button" data-theme-set="light" aria-pressed="false">Light</button><button type="button" data-theme-set="dark" aria-pressed="false">Dark</button></div></div>
+  <script>
+// ---------- theme ----------
+// Light/Dark toggle, shared by both modules: build.py inlines this file (with theme.css and the theme.html
+// buttons) in a script right after the buttons, so a stored choice is applied before the page paints.
+// The choice lives in data-theme on <html> and in localStorage ("theme"). With no stored choice the
+// attribute stays absent and the CSS follows the system setting, live. Pages re-render their charts when
+// data-theme changes. Downloads that force light (asLight) put the attribute back as they found it, and
+// the buttons follow this script's own record of the choice, not the attribute, so they never flicker.
+(() => {
+  const KEY = "theme", root = document.documentElement, sys = matchMedia("(prefers-color-scheme: dark)");
+  let choice = null;
+  try { const v = localStorage.getItem(KEY); if (v === "light" || v === "dark") choice = v } catch {}
+  if (choice) root.setAttribute("data-theme", choice);
+  const btns = [...document.querySelectorAll("[data-theme-set]")];
+  const sync = () => { const eff = choice || (sys.matches ? "dark" : "light"); btns.forEach(b => b.setAttribute("aria-pressed", String(b.dataset.themeSet === eff))) };
+  btns.forEach(b => b.addEventListener("click", () => {
+    choice = b.dataset.themeSet; try { localStorage.setItem(KEY, choice) } catch {}
+    root.setAttribute("data-theme", choice); sync();
+  }));
+  sys.addEventListener("change", sync);
+  sync();
+})();
+  </script>
   <header>
     <div>
       <h1 id="lpTitle">LP Look-through Exposure</h1>
@@ -132,6 +167,15 @@ td.lo { color: var(--bad) } td.hi { color: var(--good) }
     </div>
     <div class="meta" id="asOf"></div>
   </header>
+
+  <!-- Shown whenever nothing is loaded (see syncWelcome), so the first visit asks rather than assumes. -->
+  <section class="panel welcome" id="welcome" aria-labelledby="welcomeH">
+    <div><h2 id="welcomeH" tabindex="-1">How would you like to start?</h2><p class="note">Nothing is loaded yet.</p></div>
+    <div class="choices">
+      <div class="choice"><button type="button" class="primary" id="wUpload" aria-describedby="wUploadD">Upload your data</button><p class="note" id="wUploadD">Your fund commitments and each manager's schedule of investments, as CSV or XLSX.</p></div>
+      <div class="choice"><button type="button" id="wSample" aria-describedby="wSampleD">Use sample data</button><p class="note" id="wSampleD">Explore with a fictional LP's commitments to ten funds.</p></div>
+    </div>
+  </section>
 
   <section class="panel" aria-labelledby="loadH">
     <div class="panel-head">
@@ -371,13 +415,13 @@ function setChartDefaults() {
   Chart.defaults.plugins.tooltip.backgroundColor = css("--ink"); Chart.defaults.plugins.tooltip.titleColor = css("--bg"); Chart.defaults.plugins.tooltip.bodyColor = css("--bg");
   Chart.defaults.maintainAspectRatio = false; Chart.defaults.animation = state.capturing || matchMedia("(prefers-reduced-motion: reduce)").matches ? false : { duration: 300 };
 }
-function render() { renderView(); decorateDownloads() }
+function render() { renderView(); decorateDownloads(); syncWelcome() }
 function renderView() {
   charts.forEach(c => c.destroy()); charts = [];
   document.querySelectorAll(".tabs [role=tab]").forEach(b => b.setAttribute("aria-selected", String(b.dataset.view === state.view)));
   document.querySelectorAll("[data-basis]").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.basis === state.basis)));
   const out = document.getElementById("out"); out.setAttribute("aria-labelledby", "tab-" + state.view);
-  if (!state.hold) { out.innerHTML = `<div class="panel empty">Load fund holdings (and your commitments), or the sample data, to see your look-through exposure.</div>`; document.getElementById("asOf").textContent = ""; return }
+  if (!state.hold) { out.innerHTML = `<div class="panel empty">Nothing loaded yet. Upload fund holdings (and your commitments) or use the sample data to see your look-through exposure.</div>`; document.getElementById("asOf").textContent = ""; return }
   const D = buildModel(); SYM = D.sym;
   document.getElementById("asOf").textContent = D.asOf[0] ? `Marks as of ${D.asOf[0]}${D.asOf[1] !== D.asOf[0] ? " to " + D.asOf[1] : ""}` : "";
   const warn = D.warn.map(w => `<p class="alert">${esc(w)}</p>`).join("");
@@ -588,6 +632,7 @@ function setStatus(kind, text, cls) { const s = document.querySelector(`.drop[da
 state.raw = {};
 function apply(kind, rows) { state[kind] = kind === "commit" ? normCommit(rows) : normHold(rows); state.raw[kind] = rows }
 async function load(kind, file) {
+  dismissWelcome();
   const err = document.getElementById("errors"); err.textContent = "";
   try { const rows = toObjects(kind, await readRows(file)); apply(kind, rows); state.isSample = false; setStatus(kind, `${file.name} · ${state[kind].length} rows`, "ok"); render() }
   catch (e) { err.textContent = e.message; setStatus(kind, "Could not read file", "err") }
@@ -605,7 +650,25 @@ document.getElementById("sampleBtn").addEventListener("click", () => {
   setStatus("commit", `Sample · ${state.commit.length} funds`, "ok"); setStatus("hold", `Sample · ${state.hold.length} positions`, "ok");
   state.isSample = true; document.getElementById("lpTitle").textContent = "LP Look-through Exposure (sample)"; render();
 });
+// ---------- welcome ----------
+// With nothing loaded, the welcome card asks how to start. Loading anything (sample or upload) hides it;
+// Upload also closes it on the way to the drop zones; Clear brings it back.
+function syncWelcome() {
+  const card = document.getElementById("welcome"), had = card.contains(document.activeElement);
+  card.hidden = !!(state.commit || state.hold) || card.dataset.dismissed === "1";
+  // A choice that loaded data hid the button it was on: carry focus on to the views.
+  if (card.hidden && had) document.querySelector('.tabs [aria-selected="true"]')?.focus();
+}
+function dismissWelcome() { document.getElementById("welcome").dataset.dismissed = "1"; syncWelcome() }
+document.getElementById("wUpload").addEventListener("click", () => {
+  // Focus the first drop zone's file input (Enter or Space opens the picker), then close the card.
+  document.querySelector(".loaders .drop input").focus({ preventScroll: true });
+  dismissWelcome();
+  document.getElementById("loadH").closest("section").scrollIntoView({ block: "start", behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
+});
+document.getElementById("wSample").addEventListener("click", () => document.getElementById("sampleBtn").click());
 document.getElementById("clearBtn").addEventListener("click", () => {
+  delete document.getElementById("welcome").dataset.dismissed;
   Object.assign(state, { commit: null, hold: null, raw: {}, company: null, isSample: false }); ["commit", "hold"].forEach(k => setStatus(k, "Not loaded"));
   document.querySelectorAll(".drop input").forEach(i => i.value = ""); document.getElementById("lpTitle").textContent = "LP Look-through Exposure"; render();
 });
@@ -883,8 +946,8 @@ ${parts.join("\n")}</div></body></html>`;
   await saveFile(`${fileBase()}-report.html`, doc);
 });
 
-// Open on the sample so the first view shows what the tool does.
-document.getElementById("sampleBtn").click();
+// Open empty: the welcome card asks how to start.
+render();
 </script>
 
 </html>

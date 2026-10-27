@@ -1,0 +1,7 @@
+/* Top bar (module links + Light/Dark toggle), shared by both modules (build.py inlines this file, theme.js and theme.html). */
+.topbar { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; justify-content: space-between }
+.theme-seg { display: inline-flex; margin-left: auto; border: 1px solid var(--rule); border-radius: 999px; overflow: hidden }
+.theme-seg button { font: 600 12px var(--body); letter-spacing: .04em; text-transform: uppercase; color: var(--ink-3); background: none; border: 0; border-radius: 0; padding: 3px 10px }
+.theme-seg button:hover { color: var(--accent) }
+.theme-seg button[aria-pressed="true"] { color: var(--panel); background: var(--accent) }
+.theme-seg button:focus-visible { outline: 2px solid var(--ink); outline-offset: -2px }
