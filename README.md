@@ -15,7 +15,7 @@ Two single-file modules that link to each other and open straight from disk with
 - manager overlap, and the same security held at different marks
 - manager and fund summaries, including how much of your NAV sits in companies another of your managers also holds
 
-Both modules have Brand fields in their Data panel. They take your colours (hex, `rgb()` or names, in order) and a font (installed locally or from Google Fonts), and restyle the page, the charts, the PNG downloads and the HTML report. They're saved in the browser, shared by the two modules when both are opened from the same place, and the fund performance module also keeps them in workspace files. The Excel workbook carries figures only: the spreadsheet library the app uses can't write fonts or fills.
+Both modules have Brand fields in their Data panel. They take your colours (hex, `rgb()` or names, in order) and a font (installed locally or from Google Fonts), and restyle the page, the charts, the PNG downloads and the HTML report. **Load colour template** fills both from the firm's Office template or theme (`.potx`, `.pptx`, `.thmx`, `.dotx`, `.docx`, `.xltx`, `.xlsx`): the theme's six accent colours in order, and its body font (the heading font is mentioned in the note). It also takes a text, CSV or JSON list of colour codes, with an optional `font: Name` line. They're saved in the browser, shared by the two modules when both are opened from the same place, and the fund performance module also keeps them in workspace files. The Excel workbook carries figures only: the spreadsheet library the app uses can't write fonts or fills.
 
 Files:
 

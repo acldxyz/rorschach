@@ -4,7 +4,9 @@
         <label for="brandColors">Colours <input id="brandColors" spellcheck="false" autocomplete="off" placeholder="#0B3D91, #F2A900, #6C757D"></label>
         <span class="swatches" id="brandSwatches" aria-hidden="true"></span>
         <label for="brandFont">Font <input id="brandFont" spellcheck="false" autocomplete="off" placeholder="e.g. Inter or Calibri"></label>
+        <button type="button" id="brandFileBtn" aria-describedby="brandFileHint">Load colour template</button><input type="file" id="brandFile" accept=".potx,.pptx,.thmx,.dotx,.docx,.xltx,.xlsx,.txt,.csv,.json" hidden>
         <button type="button" id="brandReset">Reset</button>
+        <span class="note" id="brandFileHint">Reads the colours and font from your firm's PowerPoint, Word or Excel template or theme (.potx, .thmx and the like), or a text list of colour codes.</span>
       </div>
       <p class="note" id="brandNote" role="status"></p>
     </div>
