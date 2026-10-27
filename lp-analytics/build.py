@@ -1,4 +1,5 @@
-"""Bakes the sample CSVs into each module's page so it runs from a single file with no server.
+"""Bakes the sample CSVs, and the shared brand partials (brand.css, brand.js, brand.html), into each
+module's page so it runs from a single file with no server.
 
 python3 build.py
     writes index.html (fund performance) and exposure.html (LP exposure), which open from disk.
@@ -17,9 +18,15 @@ modules = [
 ap = argparse.ArgumentParser()
 ap.add_argument("--artifact"); ap.add_argument("--perf-url"); ap.add_argument("--exp-url")
 a = ap.parse_args()
+# Shared partials, inlined so each page stays one self-contained file.
+partials = {"/*BRAND_CSS*/": "brand.css", "/*BRAND_JS*/": "brand.js", "<!--BRAND_HTML-->": "brand.html"}
 for key, template, page, files in modules:
     s = {k: (here / "sample" / f).read_text() for k, f in files}
-    body = (here / template).read_text().replace("/*SAMPLE*/null", json.dumps(s))
+    body = (here / template).read_text()
+    for mark, f in partials.items():
+        assert body.count(mark) == 1, f"{template}: expected one {mark}"
+        body = body.replace(mark, (here / f).read_text().rstrip("\n"))
+    body = body.replace("/*SAMPLE*/null", json.dumps(s))
     (here / page).write_text(head + body + "\n</html>\n")
     if a.artifact:
         out = pathlib.Path(a.artifact); out.mkdir(parents=True, exist_ok=True)
