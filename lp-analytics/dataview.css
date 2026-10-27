@@ -1,0 +1,38 @@
+/* Analysis / Data switch and the Data view's identified-data cards with their audit pane (dataview.js), shared by both modules. */
+.viewsw { display: inline-flex; justify-self: start; border: 1px solid var(--rule); border-radius: 6px; overflow: hidden; background: var(--panel) }
+.viewsw button { border: 0; border-radius: 0; padding: 7px 18px; font: 600 14px var(--display); color: var(--ink-2); background: none }
+.viewsw button + button { border-left: 1px solid var(--rule) }
+.viewsw button[aria-selected="true"] { background: var(--accent); color: var(--panel) }
+.viewsw button:focus-visible { outline: 2px solid var(--ink); outline-offset: -3px }
+.pane { display: grid; gap: 20px; min-width: 0; grid-template-columns: minmax(0, 1fr) }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap }
+.dv h2:focus { outline: none }
+.dv-grid { display: grid; gap: 16px; grid-template-columns: minmax(0, 1fr); align-items: start }
+.dv-cards { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(min(100%, 360px), 1fr)); align-content: start; min-width: 0 }
+@media (min-width: 900px) { .dv-grid.open { grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr) } .dv-grid.open .dv-cards { grid-template-columns: minmax(0, 1fr) }
+  .dv-pane { position: sticky; top: 12px; max-height: calc(100vh - 24px); overflow: auto } }
+.dv-card { border: 1px solid var(--rule); border-radius: 6px; padding: 12px; display: grid; gap: 6px; align-content: start; min-width: 0; background: var(--panel) }
+.dv-card.dv-off { background: var(--bg); border-style: dashed }
+.dv-card h3, .dv-pane h3 { color: var(--ink); text-transform: none; letter-spacing: .01em; font-size: 16px }
+.dv-card h4, .dv-pane h4 { margin: 4px 0 0; font: 600 11px var(--body); text-transform: uppercase; letter-spacing: .08em; color: var(--ink-3) }
+.dv-head { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: baseline; justify-content: space-between }
+.dv-n { font: 500 12px var(--mono); color: var(--ink-2) }
+.dv-src { margin: 0; font-size: 13px; color: var(--ink-2); overflow-wrap: anywhere }
+.dv-q { margin: 0; font-size: 12px; color: var(--ink-2) }
+.dv-fields, .dv-der, .dv-tr { margin: 0; padding: 0; list-style: none; display: grid; gap: 2px }
+.dv-der, .dv-tr { padding-left: 16px; list-style: disc; font-size: 13px; color: var(--ink-2); gap: 3px }
+.dv-fields .dv-fl, .dv-fields .dv-fs { overflow-wrap: anywhere }
+.dv-f { width: 100%; text-align: left; display: block; border: 1px solid transparent; background: none; padding: 3px 6px; margin-left: -6px; font: 13px var(--body); color: var(--ink) }
+.dv-f:hover { border-color: var(--rule); background: var(--bg) }
+.dv-f[aria-expanded="true"] { border-color: var(--accent); background: var(--accent-soft) }
+.dv-fl { font-weight: 600 } .dv-fs { font-family: var(--mono); font-size: 12px; color: var(--ink-2) }
+.dv-pane { border: 1px solid var(--accent); border-radius: 6px; padding: 12px; display: grid; gap: 8px; align-content: start; min-width: 0; background: var(--panel) }
+.dv-pane:focus { outline: 2px solid var(--accent); outline-offset: 2px }
+.dv-dl { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 3px 12px; margin: 0; font-size: 13px }
+.dv-dl dt { color: var(--ink-2) } .dv-dl dd { margin: 0; overflow-wrap: anywhere }
+.dv-tbl { overflow-x: auto }
+.dv-tab td { font-size: 12px; white-space: normal; overflow-wrap: anywhere; text-align: left; vertical-align: top } .dv-tab th { text-align: left }
+.dv-tab td:first-child { font: 12px var(--mono); white-space: nowrap }
+.dv-tab tr.dv-skip td { color: var(--warn) }
+#dvAll { justify-self: start }
+.dv .warn-text { color: var(--warn) }

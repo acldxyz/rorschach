@@ -139,6 +139,46 @@ tr.total td { font-weight: 600; border-top: 2px solid var(--ink-3) }
 .wb-hint { font-size: 12px; color: var(--ink-3); margin: 0; text-align: right } .wb-hint.warn { color: var(--warn) } .wb-fail { text-align: left }
 .wb-step { color: var(--ink-2); font-size: 13px }
 @media (max-width: 560px) { .wb-row { grid-template-columns: minmax(0, 1fr) } .wb-pick { justify-items: start } .wb-hint { text-align: left } }
+/* Analysis / Data switch and the Data view's identified-data cards with their audit pane (dataview.js), shared by both modules. */
+.viewsw { display: inline-flex; justify-self: start; border: 1px solid var(--rule); border-radius: 6px; overflow: hidden; background: var(--panel) }
+.viewsw button { border: 0; border-radius: 0; padding: 7px 18px; font: 600 14px var(--display); color: var(--ink-2); background: none }
+.viewsw button + button { border-left: 1px solid var(--rule) }
+.viewsw button[aria-selected="true"] { background: var(--accent); color: var(--panel) }
+.viewsw button:focus-visible { outline: 2px solid var(--ink); outline-offset: -3px }
+.pane { display: grid; gap: 20px; min-width: 0; grid-template-columns: minmax(0, 1fr) }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap }
+.dv h2:focus { outline: none }
+.dv-grid { display: grid; gap: 16px; grid-template-columns: minmax(0, 1fr); align-items: start }
+.dv-cards { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(min(100%, 360px), 1fr)); align-content: start; min-width: 0 }
+@media (min-width: 900px) { .dv-grid.open { grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr) } .dv-grid.open .dv-cards { grid-template-columns: minmax(0, 1fr) }
+  .dv-pane { position: sticky; top: 12px; max-height: calc(100vh - 24px); overflow: auto } }
+.dv-card { border: 1px solid var(--rule); border-radius: 6px; padding: 12px; display: grid; gap: 6px; align-content: start; min-width: 0; background: var(--panel) }
+.dv-card.dv-off { background: var(--bg); border-style: dashed }
+.dv-card h3, .dv-pane h3 { color: var(--ink); text-transform: none; letter-spacing: .01em; font-size: 16px }
+.dv-card h4, .dv-pane h4 { margin: 4px 0 0; font: 600 11px var(--body); text-transform: uppercase; letter-spacing: .08em; color: var(--ink-3) }
+.dv-head { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: baseline; justify-content: space-between }
+.dv-n { font: 500 12px var(--mono); color: var(--ink-2) }
+.dv-src { margin: 0; font-size: 13px; color: var(--ink-2); overflow-wrap: anywhere }
+.dv-q { margin: 0; font-size: 12px; color: var(--ink-2) }
+.dv-fields, .dv-der, .dv-tr { margin: 0; padding: 0; list-style: none; display: grid; gap: 2px }
+.dv-der, .dv-tr { padding-left: 16px; list-style: disc; font-size: 13px; color: var(--ink-2); gap: 3px }
+.dv-fields .dv-fl, .dv-fields .dv-fs { overflow-wrap: anywhere }
+.dv-f { width: 100%; text-align: left; display: block; border: 1px solid transparent; background: none; padding: 3px 6px; margin-left: -6px; font: 13px var(--body); color: var(--ink) }
+.dv-f:hover { border-color: var(--rule); background: var(--bg) }
+.dv-f[aria-expanded="true"] { border-color: var(--accent); background: var(--accent-soft) }
+.dv-fl { font-weight: 600 } .dv-fs { font-family: var(--mono); font-size: 12px; color: var(--ink-2) }
+.dv-pane { border: 1px solid var(--accent); border-radius: 6px; padding: 12px; display: grid; gap: 8px; align-content: start; min-width: 0; background: var(--panel) }
+.dv-pane:focus { outline: 2px solid var(--accent); outline-offset: 2px }
+.dv-dl { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 3px 12px; margin: 0; font-size: 13px }
+.dv-dl dt { color: var(--ink-2) } .dv-dl dd { margin: 0; overflow-wrap: anywhere }
+.dv-tbl { overflow-x: auto }
+.dv-tab td { font-size: 12px; white-space: normal; overflow-wrap: anywhere; text-align: left; vertical-align: top } .dv-tab th { text-align: left }
+.dv-tab td:first-child { font: 12px var(--mono); white-space: nowrap }
+.dv-tab tr.dv-skip td { color: var(--warn) }
+#dvAll { justify-self: start }
+.dv .warn-text { color: var(--warn) }
+#setH + .figs-row { border-top: 0; padding-top: 0 }
+#exportBar #addData { margin-right: 10px }
 .welcome { border-color: var(--accent) }
 .welcome h2:focus { outline: none }
 /* Arriving (nothing loaded, no choice made): the card is the whole page, centred. */
@@ -253,9 +293,17 @@ tr.total td { font-weight: 600; border-top: 2px solid var(--ink-3) }
     <p class="note switch">Looking for something else? <a href="exposure.html">Switch to LP exposure</a></p>
   </section>
 
+  <div class="viewsw" role="tablist" aria-label="Page view">
+    <button type="button" role="tab" id="view-analysis" data-top="analysis" aria-controls="analysisView" aria-selected="false">Analysis</button><button type="button" role="tab" id="view-data" data-top="data" aria-controls="dataView" aria-selected="true">Data</button>
+  </div>
+  <p class="note" id="dlMsg" role="status"></p>
+
+  <!-- Data view: what was identified (with the source audit) first, then uploads, then the settings that describe the files. -->
+  <div class="pane" id="dataView" role="tabpanel" aria-labelledby="view-data">
+  <section class="panel dv" id="dvBox" aria-labelledby="dvH"></section>
   <section class="panel" aria-labelledby="loadH">
     <div class="panel-head">
-      <h2 id="loadH">Data</h2>
+      <h2 id="loadH">Add or replace data</h2>
       <div class="row">
         <button id="wsSave" type="button">Save workspace</button>
         <button id="wsOpenBtn" type="button">Open workspace</button><input type="file" id="wsOpen" accept=".json,application/json" hidden>
@@ -271,6 +319,27 @@ tr.total td { font-weight: 600; border-top: 2px solid var(--ink-3) }
     </div>
     <div class="wbook panel" id="wbook" hidden></div>
     <div class="mapper panel" id="mapper" hidden></div>
+    <p class="errors" id="errors" role="alert"></p>
+    <details>
+      <summary>File formats</summary>
+      <p class="note">One Excel workbook can hold several of these: drop it on any box and each sheet is matched to the kind of data it looks like, for you to confirm. Column names don't have to match: each upload opens a matching step that recognises common labels, can ask Claude about the rest, and remembers what you confirm. A workspace file saves everything you have loaded so you can pick it up later. Headers are case-insensitive. Set the unit your files use under Settings (full amounts, thousands or millions); the app picks millions, thousands or full figures for display from the size of the funds. Add a <code>currency</code> column (ISO code, e.g. EUR) to the cash flows; investment amounts are read in their fund's currency. Contributions negative, distributions positive, NAV is the reported value at a date (the latest NAV per fund is used).</p>
+<pre>cash_flows:  fund, vintage, fund_size, date, type (Contribution|Distribution|NAV), amount, currency
+investments: company, fund, sector, stage (Seed|Series A|...), entry_date, exit_date,
+             exit_type (IPO|M&A|Shut down), invested (all cheques), initial_investment,
+             realized, unrealized, entry_post_money, latest_post_money, latest_round,
+             ownership_entry, ownership_current, founded, pre_investment,
+             milestones ("2019-06: text | 2021-03: text"), deal_lead, board_seat (Yes|No)
+history:     company, date, round (blank on report rows), post_money, amount_raised,
+             fund_invested, ownership, cash_on_hand, monthly_burn,
+             revenue (for the quarter), gross_profit, or gross_margin (0.62 or 62%),
+             net_income (for the quarter), or profit_margin
+team:        name, title, level (optional), joined, focus, prior, education, boards
+             one row per person at the firm; background fields are only needed for partners
+benchmarks:  vintage, metric (TVPI|IRR|DPI), top, median, bottom</pre>
+    </details>
+  </section>
+  <section class="panel" aria-labelledby="setH">
+    <h2 id="setH">Settings</h2>
     <div class="figs-row">
       <div class="row"><label for="inUnit" class="note">Amounts in files are in</label>
         <select id="inUnit"><option value="1">full units</option><option value="1000">thousands</option><option value="1000000">millions</option></select></div>
@@ -298,26 +367,10 @@ tr.total td { font-weight: 600; border-top: 2px solid var(--ink-3) }
       </div>
       <p class="note" id="brandNote" role="status"></p>
     </div>
-    <p class="errors" id="errors" role="alert"></p>
-    <details>
-      <summary>File formats</summary>
-      <p class="note">One Excel workbook can hold several of these: drop it on any box and each sheet is matched to the kind of data it looks like, for you to confirm. Column names don't have to match: each upload opens a matching step that recognises common labels, can ask Claude about the rest, and remembers what you confirm. A workspace file saves everything you have loaded so you can pick it up later. Headers are case-insensitive. Set the unit your files use above (full amounts, thousands or millions); the app picks millions, thousands or full figures for display from the size of the funds. Add a <code>currency</code> column (ISO code, e.g. EUR) to the cash flows; investment amounts are read in their fund's currency. Contributions negative, distributions positive, NAV is the reported value at a date (the latest NAV per fund is used).</p>
-<pre>cash_flows:  fund, vintage, fund_size, date, type (Contribution|Distribution|NAV), amount, currency
-investments: company, fund, sector, stage (Seed|Series A|...), entry_date, exit_date,
-             exit_type (IPO|M&A|Shut down), invested (all cheques), initial_investment,
-             realized, unrealized, entry_post_money, latest_post_money, latest_round,
-             ownership_entry, ownership_current, founded, pre_investment,
-             milestones ("2019-06: text | 2021-03: text"), deal_lead, board_seat (Yes|No)
-history:     company, date, round (blank on report rows), post_money, amount_raised,
-             fund_invested, ownership, cash_on_hand, monthly_burn,
-             revenue (for the quarter), gross_profit, or gross_margin (0.62 or 62%),
-             net_income (for the quarter), or profit_margin
-team:        name, title, level (optional), joined, focus, prior, education, boards
-             one row per person at the firm; background fields are only needed for partners
-benchmarks:  vintage, metric (TVPI|IRR|DPI), top, median, bottom</pre>
-    </details>
   </section>
+  </div>
 
+  <div class="pane" id="analysisView" role="tabpanel" aria-labelledby="view-analysis" hidden>
   <div class="viewbar">
   <nav class="tabs" role="tablist" aria-label="Views">
     <button type="button" role="tab" id="tab-record" data-view="record" aria-selected="true">Track record</button>
@@ -325,11 +378,11 @@ benchmarks:  vintage, metric (TVPI|IRR|DPI), top, median, bottom</pre>
     <button type="button" role="tab" id="tab-team" data-view="team" aria-selected="false">Team &amp; partners</button>
     <button type="button" role="tab" id="tab-scen" data-view="scen" aria-selected="false">Scenarios</button>
   </nav>
-  <div class="exports" id="exportBar"><span class="note">Download everything:</span>
+  <div class="exports" id="exportBar"><button type="button" id="addData" aria-describedby="addDataD">Add data</button><input type="file" id="addFile" accept=".csv,.xlsx,.xls" hidden><span class="sr" id="addDataD">Opens a file; it is matched to the kind of data it holds, then shown in the Data view.</span><span class="note">Download everything:</span>
     <button type="button" id="dlXlsx">Excel workbook</button><button type="button" id="dlHtml">HTML report</button></div>
   </div>
-  <p class="note" id="dlMsg" role="status"></p>
   <div id="out" class="wrap" style="padding:0;margin:0;max-width:none" role="tabpanel"></div>
+  </div>
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
@@ -344,7 +397,7 @@ const BM_SOURCES = {
 };
 // Figures typed or uploaded per source stay in this browser only.
 const bmStore = { load(k) { try { return JSON.parse(localStorage.getItem("bm:" + k)) || {} } catch { return {} } }, save(k, v) { try { localStorage.setItem("bm:" + k, JSON.stringify(v)) } catch {} } };
-const state = { cur: { sym: "$", unit: { div: 1, suffix: "", word: "" } }, curMode: "local", inUnit: 1, rates: (() => { try { return JSON.parse(localStorage.getItem("fx-rates")) || {} } catch { return {} } })(), isSample: false, raw: {}, samplingOff: false, view: "record", coFund: "all", coFlagOnly: false, cf: null, inv: null, bm: null, bmSrc: "sample", bmSample: null, gp: "", dim: "stage", scFund: "all", gpFund: "all", gpWin: "16", scope: "all" };
+const state = { cur: { sym: "$", unit: { div: 1, suffix: "", word: "" } }, curMode: "local", inUnit: 1, rates: (() => { try { return JSON.parse(localStorage.getItem("fx-rates")) || {} } catch { return {} } })(), isSample: false, raw: {}, prov: {}, top: "data", samplingOff: false, view: "record", coFund: "all", coFlagOnly: false, cf: null, inv: null, bm: null, bmSrc: "sample", bmSample: null, gp: "", dim: "stage", scFund: "all", gpFund: "all", gpWin: "16", scope: "all" };
 let charts = [];
 
 // ---------- parsing ----------
@@ -366,14 +419,15 @@ function need(rows, cols, label) {
 }
 function normCf(rows) {
   need(rows, ["fund", "date", "type", "amount"], "Cash flows");
-  return rows.map(r => ({ fund: r.fund.trim(), vintage: num(r.vintage), size: num(r.fund_size), date: date(r.date), type: String(r.type).trim().toLowerCase(), amount: num(r.amount), currency: String(r.currency || "").trim().toUpperCase() }))
-    .filter(r => r.fund && r.date && isFinite(r.amount));
+  // dvKeep filters as before, noting which rows went and why for the Data view.
+  return dvKeep(rows.map(r => ({ fund: r.fund.trim(), vintage: num(r.vintage), size: num(r.fund_size), date: date(r.date), type: String(r.type).trim().toLowerCase(), amount: num(r.amount), currency: String(r.currency || "").trim().toUpperCase() })),
+    r => r.fund && r.date && isFinite(r.amount), r => !r.fund ? "No fund name" : !r.date ? "Blank or unreadable date" : "Amount not a number");
 }
 function normInv(rows) {
   need(rows, ["company", "fund", "invested"], "Investments");
-  return rows.map(r => { const o = { ...r }; for (const k in o) if (!["company", "fund", "sector", "country", "deal_type", "stage", "exit_type", "latest_round", "entry_date", "exit_date", "pre_investment", "milestones", "deal_lead", "board_seat"].includes(k)) o[k] = num(o[k]);
-    o.entry = date(r.entry_date); o.exit = date(r.exit_date); o.realized = o.realized || 0; o.unrealized = o.unrealized || 0; return o })
-    .filter(r => r.company && isFinite(r.invested));
+  return dvKeep(rows.map(r => { const o = { ...r }; for (const k in o) if (!["company", "fund", "sector", "country", "deal_type", "stage", "exit_type", "latest_round", "entry_date", "exit_date", "pre_investment", "milestones", "deal_lead", "board_seat"].includes(k)) o[k] = num(o[k]);
+    o.entry = date(r.entry_date); o.exit = date(r.exit_date); o.realized = o.realized || 0; o.unrealized = o.unrealized || 0; return o }),
+    r => r.company && isFinite(r.invested), r => !r.company ? "No company name" : "Invested not a number");
 }
 const LEVELS = [["partner", "Partners"], ["mid", "Mid-level professionals"], ["junior", "Junior professionals"], ["back", "Back office"]];
 // An explicit level column wins; otherwise read it off the title. Partner titles are checked first
@@ -395,14 +449,14 @@ const MONEY_HIST = ["post_money", "amount_raised", "fund_invested", "cash_on_han
 const pctIn = v => { const x = num(String(v ?? "").replace("%", "")); return isFinite(x) ? (Math.abs(x) > 1.5 ? x / 100 : x) : NaN };
 function normHist(rows) {
   need(rows, ["company", "date"], "Company history");
-  return rows.map(r => { const o = { company: String(r.company).trim(), date: date(r.date), round: String(r.round || "").trim(), ownership: num(r.ownership) };
-    MONEY_HIST.forEach(k => o[k] = num(r[k])); o.gross_margin = pctIn(r.gross_margin); o.profit_margin = pctIn(r.profit_margin); return o }).filter(r => r.company && r.date);
+  return dvKeep(rows.map(r => { const o = { company: String(r.company).trim(), date: date(r.date), round: String(r.round || "").trim(), ownership: num(r.ownership) };
+    MONEY_HIST.forEach(k => o[k] = num(r[k])); o.gross_margin = pctIn(r.gross_margin); o.profit_margin = pctIn(r.profit_margin); return o }), r => r.company && r.date, r => !r.company ? "No company name" : "Blank or unreadable date");
 }
 function normTeam(rows) {
   need(rows, ["name"], "Team");
-  return rows.map(r => ({ name: String(r.name).trim(), title: String(r.title || "").trim(), joined: num(r.joined), focus: String(r.focus || "").trim(),
+  return dvKeep(rows.map(r => ({ name: String(r.name).trim(), title: String(r.title || "").trim(), joined: num(r.joined), focus: String(r.focus || "").trim(),
     prior: String(r.prior || "").trim(), education: String(r.education || "").trim(), boards: String(r.boards || "").trim(),
-    level: levelOf(r.level, r.title) })).filter(r => r.name);
+    level: levelOf(r.level, r.title) })), r => r.name, () => "No name");
 }
 function normBm(rows) {
   need(rows, ["vintage", "metric", "top", "median", "bottom"], "Benchmarks");
@@ -487,7 +541,7 @@ const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).
 const series = i => css(`--s${(i % 8) + 1}`);
 
 // ---------- render ----------
-function render() { renderView(); decorateDownloads(); syncWelcome() }
+function render() { renderView(); decorateDownloads(); dv.render(); syncTop(); syncWelcome() }
 function setChartDefaults() {
   Chart.defaults.font.family = css("--body"); Chart.defaults.color = css("--ink-2"); Chart.defaults.borderColor = css("--rule");
   Chart.defaults.plugins.tooltip.backgroundColor = css("--ink"); Chart.defaults.plugins.tooltip.titleColor = css("--bg"); Chart.defaults.plugins.tooltip.bodyColor = css("--bg");
@@ -1054,12 +1108,15 @@ document.querySelectorAll(".drop").forEach(el => {
   el.addEventListener("drop", e => { e.preventDefault(); el.classList.remove("over"); e.dataTransfer.files[0] && load(kind, e.dataTransfer.files[0]) });
 });
 document.getElementById("sampleBtn").addEventListener("click", () => {
-  state.raw = { cf: parseCSV(SAMPLE.cf), inv: parseCSV(SAMPLE.inv), hist: parseCSV(SAMPLE.hist), team: parseCSV(SAMPLE.team) };
-  state.cf = normCf(state.raw.cf); state.inv = normInv(state.raw.inv); state.bmSample = normBm(parseCSV(SAMPLE.bm)); state.team = normTeam(parseCSV(SAMPLE.team)); state.hist = normHist(parseCSV(SAMPLE.hist)); setStatus("hist", `Sample · ${state.hist.length} rows`, "ok"); setStatus("team", `Sample · ${state.team.length} people`, "ok"); state.bmSrc = "sample"; document.getElementById("bmSrc").value = "sample"; state.bm = state.bmSample; renderBm();
+  state.raw = {}; state.prov = {};
+  // Each sample CSV is read as an upload already in the app's own columns, so the Data view can show where every field came from.
+  Object.entries({ cf: "cash_flows.csv", inv: "investments.csv", hist: "company_history.csv", team: "team.csv" }).forEach(([k, file]) => {
+    const aoa = parseCSVRows(SAMPLE[k]); state.raw[k] = toObjects(aoa); state[k] = NORM[k](state.raw[k]); state.prov[k] = dvFill(provSample(k, file, aoa), null, state[k]) });
+  state.bmSample = normBm(parseCSV(SAMPLE.bm)); setStatus("hist", `Sample · ${state.hist.length} rows`, "ok"); setStatus("team", `Sample · ${state.team.length} people`, "ok"); state.bmSrc = "sample"; document.getElementById("bmSrc").value = "sample"; state.bm = state.bmSample; renderBm();
   setStatus("cf", `Sample · ${state.cf.length} rows`, "ok"); setStatus("inv", `Sample · ${state.inv.length} companies`, "ok"); 
   document.getElementById("gpTitle").textContent = "Lanternfish Ventures (sample)";
   state.isSample = true; state.inUnit = 1; document.getElementById("inUnit").value = "1";
-  render();
+  landOnData(); render();
 });
 document.getElementById("inUnit").addEventListener("change", e => { state.inUnit = +e.target.value; render() });
 document.getElementById("curCtl").addEventListener("click", e => { const b = e.target.closest("[data-cur]"); if (b) { state.curMode = b.dataset.cur; render() } });
@@ -1073,13 +1130,13 @@ function syncWelcome() {
   card.hidden = !!(state.cf || state.inv || state.hist || state.team) || card.dataset.dismissed === "1";
   // A choice that loaded data hid the button it was on: carry focus on to the views.
   document.getElementById("app").classList.toggle("arriving", !card.hidden);
-  if (card.hidden && had) document.querySelector('.tabs [aria-selected="true"]')?.focus();
+  if (card.hidden && had) document.querySelector('.viewsw [aria-selected="true"]')?.focus();
 }
 function dismissWelcome() { document.getElementById("welcome").dataset.dismissed = "1"; syncWelcome() }
 document.getElementById("wUpload").addEventListener("click", () => {
   // Close the card (showing the page), then open the file picker for the one file the page needs. The
   // click has to happen inside this click handler, or the browser blocks the picker; cancel leaves the Data panel.
-  dismissWelcome();
+  dismissWelcome(); state.top = "data"; render();
   const input = document.querySelector('.drop[data-kind="cf"] input'); input.focus({ preventScroll: true });
   document.getElementById("loadH").closest("section").scrollIntoView({ block: "start", behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
   input.click();
@@ -1088,7 +1145,7 @@ document.getElementById("wWorkspace").addEventListener("click", () => document.g
 document.getElementById("wSample").addEventListener("click", () => document.getElementById("sampleBtn").click());
 document.getElementById("clearBtn").addEventListener("click", () => {
   delete document.getElementById("welcome").dataset.dismissed; wbook.close();
-  Object.assign(state, { cf: null, inv: null, team: null, hist: null, isSample: false, raw: {} }); M = null; renderMapper(); ["cf", "inv", "team", "hist"].forEach(k => setStatus(k, "Not loaded"));
+  Object.assign(state, { cf: null, inv: null, team: null, hist: null, isSample: false, raw: {}, prov: {} }); dv.open = null; M = null; renderMapper(); ["cf", "inv", "team", "hist"].forEach(k => setStatus(k, "Not loaded"));
   document.querySelectorAll(".drop input").forEach(i => i.value = ""); document.getElementById("gpTitle").textContent = "Venture Track Record"; renderBm(); render();
 });
 function hasBm(b) { return b && Object.values(b).some(v => Object.values(v).some(q => [q.top, q.median, q.bottom].some(isFinite))) }
@@ -1112,9 +1169,37 @@ document.getElementById("bmGrid").addEventListener("change", e => {
   bmStore.save(state.bmSrc, b); state.bm = b; render();
 });
 document.getElementById("bmSrc").addEventListener("change", e => { state.bmSrc = e.target.value; renderBm(); render() });
-function setView(v) { state.view = v; render() }
+// A sub-tab belongs to the Analysis view, so picking one (the reel does, in-page) shows Analysis.
+function setView(v) { state.view = v; state.top = "analysis"; render() }
 document.querySelectorAll(".tabs [role=tab]").forEach(b => b.addEventListener("click", () => setView(b.dataset.view)));
-if (["#companies", "#team", "#scen"].includes(location.hash)) state.view = location.hash.slice(1);
+if (["#companies", "#team", "#scen"].includes(location.hash)) { state.view = location.hash.slice(1); state.top = "analysis" }
+if (location.hash === "#analysis") state.top = "analysis";
+// ---------- Analysis / Data ----------
+// Two top-level views: Analysis (the sub-tabs, which keep their selection) and Data (the identified data
+// with its source audit, uploads and the settings that describe the files). The hash names the one showing.
+function syncTop() {
+  const d = state.top === "data"; document.getElementById("dataView").hidden = !d; document.getElementById("analysisView").hidden = d;
+  document.querySelectorAll(".viewsw [role=tab]").forEach(b => { const on = b.dataset.top === state.top; b.setAttribute("aria-selected", String(on)); b.tabIndex = on ? 0 : -1 });
+}
+function setTop(v, focus) {
+  const was = state.top; state.top = v; try { history.replaceState(null, "", "#" + v) } catch {}
+  if (was !== v) render(); if (focus) document.getElementById("view-" + v).focus();
+}
+document.querySelector(".viewsw").addEventListener("click", e => { const b = e.target.closest("[data-top]"); if (b) setTop(b.dataset.top) });
+document.querySelector(".viewsw").addEventListener("keydown", e => { if (["ArrowLeft", "ArrowRight", "Home", "End"].includes(e.key)) { e.preventDefault(); setTop(state.top === "data" ? "analysis" : "data", true) } });
+addEventListener("hashchange", () => { const h = location.hash.slice(1); if ((h === "data" || h === "analysis") && h !== state.top) setTop(h) });
+// Add data (Analysis view): pick a file, then every file, even a CSV, goes through the workbook proposal in the
+// Data view so its kind is recognised and confirmed before it loads. Cancelling the picker changes nothing.
+document.getElementById("addData").addEventListener("click", () => document.getElementById("addFile").click());
+document.getElementById("addFile").addEventListener("change", async e => {
+  const file = e.target.files[0]; e.target.value = ""; if (!file) return;
+  const err = document.getElementById("errors"); err.textContent = ""; wbook.close(); M = null; renderMapper(); setTop("data");
+  try { let sheets = await readSheets(file);
+    if (!Object.values(sheets).some(a => a.length)) throw new Error(`${file.name} has no rows.`);
+    if (!/\.xlsx?$/i.test(file.name)) sheets = { [file.name]: sheets.Sheet1 };
+    wbook.offer(file.name, sheets, "", true) }
+  catch (x) { err.textContent = x.message }
+});
 document.addEventListener("change", e => { if (e.target.id === "coFund") { state.coFund = e.target.value; render() } if (e.target.id === "coFlag") { state.coFlagOnly = e.target.checked; render() } if (e.target.id === "dimSel") { state.dim = e.target.value; render() } if (e.target.id === "scopeSel") { state.scope = e.target.value; render() } if (e.target.id === "gpFund") { state.gpFund = e.target.value; render() } if (e.target.id === "gpWin") { state.gpWin = e.target.value; render() } });
 matchMedia("(prefers-color-scheme: dark)").addEventListener("change", render);
 new MutationObserver(render).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
@@ -1219,13 +1304,15 @@ function parseCSVRows(text) {
     else f += c;
   }
   if (f || row.length) { row.push(f); rows.push(row) }
-  return rows.filter(r => r.some(x => String(x).trim() !== ""));
+  return dvRows(rows, i => i + 1);
 }
 async function readSheets(file) {
   if (/\.xlsx?$/i.test(file.name)) {
     if (typeof XLSX === "undefined") throw new Error("The spreadsheet library did not load, so XLSX files cannot be read. Try a CSV.");
     const wb = XLSX.read(await file.arrayBuffer(), { cellDates: true });
-    return Object.fromEntries(wb.SheetNames.map(n => [n, XLSX.utils.sheet_to_json(wb.Sheets[n], { header: 1, raw: true, defval: "" }).filter(r => r.some(x => String(x).trim() !== ""))]).filter(([, a]) => a.length));
+    // dvRows drops blank rows but keeps sheet row numbers and the first column, so the Data view can name cells.
+    return Object.fromEntries(wb.SheetNames.map(n => { const ws = wb.Sheets[n], R = XLSX.utils.decode_range(ws["!ref"] || "A1");
+      return [n, dvRows(XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: "" }), i => R.s.r + i + 1, R.s.c)] }).filter(([, a]) => a.length));
   }
   return { Sheet1: parseCSVRows(await file.text()) };
 }
@@ -1240,7 +1327,7 @@ function guessHeaderRow(aoa) {
 function localMatch(kind, headers) {
   const used = new Set();
   return headers.map(h => { const n = normH(h); const f = FIELDS[kind].find(f => !used.has(f.key) && (n === f.key.replace(/_/g, "") || f.syn.includes(n)));
-    if (f) { used.add(f.key); return { field: f.key, how: "name" } } return { field: "", how: "" } });
+    if (f) { used.add(f.key); return { field: f.key, how: "name", by: n === f.key.replace(/_/g, "") ? "exact" : "synonym" } } return { field: "", how: "" } });
 }
 function unitsHint(headers) { const t = headers.join(" ").toLowerCase(); return /\b(000s|000's|thousands|in 000|\(000\)|k\))/.test(t) ? 1000 : /\b(millions|mm|\$m\b|in m\b)/.test(t) ? 1e6 : null }
 function parseDateOrder(v, order) {
@@ -1263,13 +1350,17 @@ function parseDateOrder(v, order) {
 const isoDate = d => d ? `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}` : "";
 const metricOf = v => { const n = normH(v); return /irr/.test(n) ? "IRR" : /dpi/.test(n) ? "DPI" : /tvpi|moic|tvm|multiple/.test(n) ? "TVPI" : /rvpi/.test(n) ? "RVPI" : String(v).trim().toUpperCase() };
 
-// Turn the sheet plus a confirmed mapping into rows in the app's own column names.
+// Turn the sheet plus a confirmed mapping into rows in the app's own column names. For the Data view,
+// out.src[i] = { j, f } names the data row (and, for cash flows, the field) behind out[i], and
+// out.skips lists rows that made nothing, with the reason.
 function applyMapping(m) {
   const { kind } = m, aoa = m.sheets[m.sheet], data = aoa.slice(m.headerRow + 1);
   const col = {}; m.cols.forEach((c, i) => { if (c.field) col[c.field] = i });
   const get = (r, k) => col[k] != null ? r[col[k]] : undefined;
-  const out = [];
-  for (const r of data) {
+  const out = [], put = (o, j, f) => { out.push(o); out.src.push({ j, f }) };
+  out.src = []; out.skips = [];
+  for (let j = 0; j < data.length; j++) {
+    const r = data[j], n0 = out.length; let why = "";
     if (!r.some(x => String(x).trim() !== "")) continue;
     const o = {};
     FIELDS[kind].forEach(f => { const v = get(r, f.key); if (v !== undefined) o[f.key] = v instanceof Date ? v : typeof v === "string" ? v.trim() : v });
@@ -1278,20 +1369,22 @@ function applyMapping(m) {
     (PCT_OF[kind] || []).forEach(k => { if (k in o && String(o[k]).trim() !== "") o[k] = pctIn(o[k]) });
     if (kind === "cf") {
       const base = { fund: String(o.fund ?? "").trim(), vintage: o.vintage ?? "", fund_size: o.fund_size ?? "", currency: o.currency ?? "", date: o.date };
-      if (!base.date) continue;
+      if (!base.date) { out.skips.push([j, "Blank or unreadable date"]); continue }
       if (o.amount !== undefined && String(o.amount).trim() !== "") {
-        const a = num(o.amount); if (!isFinite(a) || a === 0) { /* skip empty flows */ }
+        const a = num(o.amount); if (!isFinite(a) || a === 0) why = a === 0 ? "Zero amount" : "Amount not a number";
         else {
           const raw = o.type ?? "", t = o.type !== undefined ? (m.typeMap[raw] || typeFromSyn(raw)) : a < 0 ? "Contribution" : "Distribution";
-          if (t && t !== "Ignore") out.push({ ...base, type: t, amount: t === "Contribution" ? -Math.abs(a) : t === "Distribution" ? Math.abs(a) : a });
+          if (t && t !== "Ignore") put({ ...base, type: t, amount: t === "Contribution" ? -Math.abs(a) : t === "Distribution" ? Math.abs(a) : a }, j, "amount");
+          else why = t ? `Type “${raw}” set to Ignore` : "Unknown type";
         }
-      }
+      } else if (o.amount !== undefined) why = "Blank amount";
       [["contributions", "Contribution", -1], ["distributions", "Distribution", 1], ["nav", "NAV", 0]].forEach(([k, t, s]) => {
-        const a = num(o[k]); if (isFinite(a) && a !== 0) out.push({ ...base, type: t, amount: s ? s * Math.abs(a) : a }) });
+        const a = num(o[k]); if (isFinite(a) && a !== 0) put({ ...base, type: t, amount: s ? s * Math.abs(a) : a }, j, k) });
+      if (out.length === n0) out.skips.push([j, why || "No amount"]);
       continue;
     }
     if (kind === "bm") { o.metric = metricOf(o.metric); if (o.metric === "IRR") ["top", "median", "bottom"].forEach(k => o[k] = pctIn(o[k])) }
-    out.push(o);
+    put(o, j, null);
   }
   return out;
 }
@@ -1322,22 +1415,22 @@ async function startMapping(kind, file, sheets) {
 // wb marks a sheet handed over by the workbook proposal, whose queue resumes when the mapper closes.
 function mapSheet(kind, fileName, sheets, sheet, wb) {
   const headerRow = guessHeaderRow(sheets[sheet]);
-  const m = { kind, fileName, sheets, sheet, headerRow, dateOrder: "auto", typeMap: {}, constFund: "", notes: "", remember: true, wb: !!wb };
+  const m = { kind, fileName, sheets, sheet, headerRow, dateOrder: "auto", typeMap: {}, typeBy: {}, constFund: "", notes: "", remember: true, wb: !!wb };
   buildCols(m);
   const headers = m.cols.map(c => c.header);
   // A file already in the app's own format needs no questions.
   const exact = headers.every(h => !h || FIELDS[kind].some(f => f.key.replace(/_/g, "") === normH(h)));
   const saved = mapStore.all()[sigOf(kind, headers)];
-  if (saved) { Object.assign(m, { dateOrder: saved.dateOrder, typeMap: saved.typeMap || {}, constFund: saved.constFund || "" }); m.cols.forEach((c, i) => { c.field = saved.fields[i] || ""; c.how = c.field ? "saved" : "" }) }
+  if (saved) { Object.assign(m, { dateOrder: saved.dateOrder, typeMap: saved.typeMap || {}, constFund: saved.constFund || "" }); for (const k in m.typeMap) m.typeBy[k] = "saved"; m.cols.forEach((c, i) => { c.field = saved.fields[i] || ""; c.how = c.field ? "saved" : "" }) }
   if ((exact || saved) && !missingRequired(m).length && !unmappedTypes(m).length) { finishMapping(m, saved ? "saved column mapping" : ""); return true }
   M = m; renderMapper(); return false;
 }
-const srcLabel = m => m.wb ? `${m.fileName} › ${m.sheet}` : m.fileName;
+const srcLabel = m => m.wb && m.sheet !== m.fileName ? `${m.fileName} › ${m.sheet}` : m.fileName;
 function buildCols(m) {
   const aoa = m.sheets[m.sheet], headers = (aoa[m.headerRow] || []).map(h => String(h ?? "").trim());
   const width = Math.max(headers.length, ...aoa.slice(m.headerRow + 1, m.headerRow + 30).map(r => r.length));
   const local = localMatch(m.kind, headers);
-  m.cols = Array.from({ length: width }, (_, i) => ({ header: headers[i] || `Column ${i + 1}`, field: local[i]?.field || "", how: local[i]?.how || "", conf: "", reason: "",
+  m.cols = Array.from({ length: width }, (_, i) => ({ header: headers[i] || `Column ${i + 1}`, field: local[i]?.field || "", how: local[i]?.how || "", by: local[i]?.by || "", conf: "", reason: "",
     samples: aoa.slice(m.headerRow + 1).map(r => r[i]).filter(v => String(v ?? "").trim() !== "").slice(0, 3).map(v => v instanceof Date ? isoDate(v) : String(v)) }));
   const u = unitsHint(headers); if (u && m.kind !== "team" && m.kind !== "bm") m.unitsHint = u;
 }
@@ -1380,7 +1473,7 @@ document.getElementById("mapper").addEventListener("change", e => {
   const t = e.target, m = M; if (!m) return;
   if (t.dataset.col != null) { const c = m.cols[+t.dataset.col]; c.field = t.value; c.how = t.value ? "you" : ""; c.reason = "";
     m.cols.forEach((o, i) => { if (i !== +t.dataset.col && o.field && o.field === t.value) { o.field = ""; o.how = "" } }) }
-  else if (t.dataset.type != null) m.typeMap[t.dataset.type] = t.value;
+  else if (t.dataset.type != null) { m.typeMap[t.dataset.type] = t.value; m.typeBy[t.dataset.type] = "you" }
   else if (t.id === "mSheet") { m.sheet = t.value; m.headerRow = guessHeaderRow(m.sheets[m.sheet]); buildCols(m) }
   else if (t.id === "mHeader") { m.headerRow = +t.value; buildCols(m) }
   else if (t.id === "mDate") m.dateOrder = t.value;
@@ -1432,7 +1525,7 @@ Rules: column indexes count from 0 within the header row; list every column; use
     [...r.columns].sort((a, b) => (rank[a.confidence] ?? 3) - (rank[b.confidence] ?? 3)).forEach(x => {
       const c = m.cols[x.index]; if (!c || !x.field || !keys.has(x.field) || taken.has(x.field) || (c.field && c.how !== "claude")) return;
       c.field = x.field; c.how = "claude"; c.conf = ["high", "medium", "low"].includes(x.confidence) ? x.confidence : "low"; c.reason = String(x.reason || "").slice(0, 80); taken.add(x.field) });
-    if (r.type_values && typeof r.type_values === "object") for (const [k, v] of Object.entries(r.type_values)) if (["Contribution", "Distribution", "NAV", "Ignore"].includes(v) && !m.typeMap[k]) m.typeMap[k] = v;
+    if (r.type_values && typeof r.type_values === "object") for (const [k, v] of Object.entries(r.type_values)) if (["Contribution", "Distribution", "NAV", "Ignore"].includes(v) && !m.typeMap[k]) { m.typeMap[k] = v; m.typeBy[k] = "claude" }
     if (["mdy", "dmy"].includes(r.date_order)) m.dateOrder = r.date_order;
     if ([1, 1000, 1000000].includes(r.units) && r.units !== 1) m.unitsHint = r.units;
     if (r.fund_name && !m.cols.some(c => c.field === "fund") && !m.constFund) m.constFund = String(r.fund_name).slice(0, 80);
@@ -1449,18 +1542,256 @@ Rules: column indexes count from 0 within the header row; list every column; use
 function finishMapping(m, how) {
   const rows = applyMapping(m);
   if (!rows.length) throw new Error("No usable rows after mapping. Check the header row and the date and amount columns.");
-  commitRows(m.kind, rows, srcLabel(m), how);
+  // A single upload lands on the Data view; a workbook's queue lands there once it ends (see initWorkbook's done).
+  if (!m.wb) landOnData();
+  commitRows(m.kind, rows, srcLabel(m), how, m.kind === "bm" ? null : provOfMap(m));
   if (m.remember && how !== "saved column mapping") mapStore.put(sigOf(m.kind, m.cols.map(c => c.header)), { kind: m.kind, fields: m.cols.map(c => c.field), typeMap: m.typeMap, dateOrder: m.dateOrder, constFund: m.constFund, file: m.fileName });
   M = null; renderMapper();
 }
-function commitRows(kind, rows, fileName, how) {
+const NORM = { cf: normCf, inv: normInv, hist: normHist, team: normTeam };
+function commitRows(kind, rows, fileName, how, P) {
   if (kind === "cf") state.isSample = false;
   if (kind === "bm") { if (state.bmSrc === "sample") { state.bmSrc = "custom"; document.getElementById("bmSrc").value = "custom" } state.bm = normBm(rows); bmStore.save(state.bmSrc, state.bm); renderBm() }
-  else { state[kind] = kind === "cf" ? normCf(rows) : kind === "team" ? normTeam(rows) : kind === "hist" ? normHist(rows) : normInv(rows); state.raw[kind] = rows }
+  else { state[kind] = NORM[kind](rows); state.raw[kind] = rows;
+    // Rows the mapping itself dropped keep their reason; dvFill adds what the normaliser dropped.
+    if (P) { rows.skips.forEach(([j, why]) => Object.assign(P.rows[j], { skip: why, pre: 1 })); state.prov[kind] = dvFill(P, rows.src, state[kind]) } else delete state.prov[kind] }
   setStatus(kind, `${fileName} · ${kind === "bm" ? Object.keys(state.bm).length + " vintages" : state[kind].length + " rows"}${how ? " · " + how : ""}`, "ok");
   render();
 }
+// ---------- provenance ----------
+// What the Data view shows about each load (dataview.js has the shape). A mapped sheet records the
+// matcher's columns, how each was matched and how each type label counts.
+function provOfMap(m) {
+  const P = dvCapture({ file: m.fileName, sheet: /\.xlsx?$/i.test(m.fileName) ? m.sheet : null, via: m.wb ? "workbook" : "upload", aoa: m.sheets[m.sheet], h: m.headerRow,
+    cols: m.cols.map(c => ({ field: c.field, how: c.how === "name" ? c.by || "synonym" : c.how, conf: c.conf })) });
+  if (m.constFund && !P.fields.some(f => f.key === "fund") && FIELDS[m.kind].some(f => f.key === "fund")) P.fields.unshift({ key: "fund", i: -1, col: null, header: "", how: "typed", value: m.constFund });
+  P.opt = { dateOrder: m.dateOrder, types: distinctTypes(m).map(v => ({ raw: v, to: m.typeMap[v] || typeFromSyn(v) || "", by: m.typeMap[v] ? m.typeBy[v] || "you" : "list" })) };
+  return P;
+}
+// The sample CSVs are already in the app's own columns: every header is its field's own name.
+function provSample(kind, file, aoa) {
+  const keys = new Set(FIELDS[kind].map(f => f.key));
+  return dvCapture({ file, via: "sample", aoa, h: 0, cols: aoa[0].map(h => { const k = String(h).trim().toLowerCase(); return keys.has(k) ? { field: k, how: "exact" } : {} }) });
+}
+function landOnData() { state.top = "data"; try { history.replaceState(null, "", "#data") } catch {} }
+const DV_KINDS = { cf: { label: "Fund cash flows", off: "Needed for every analysis." }, inv: { label: "Portfolio companies", off: "Loading it adds the gross charts, return concentration, deal outcomes and company profiles." },
+  hist: { label: "Company history", off: "Loading it adds runway and round tracking, gross margin and growth." }, team: { label: "Firm staff", off: "Loading it adds headcount and partner bios." } };
+// Where a field lands in the normalised rows, where the name differs.
+const NORM_KEY = { cf: { fund_size: "size", contributions: "amount", distributions: "amount", nav: "amount" }, inv: { entry_date: "entry", exit_date: "exit" } };
+const TYPE_NAME = { contribution: "Contribution", distribution: "Distribution", nav: "NAV" }, LEVEL_NAME = { ...Object.fromEntries(LEVELS), other: "Unclassified" };
+const fnum = (v, d = 2) => v.toLocaleString("en-US", { maximumFractionDigits: d });
+const isMapped = P => P.via === "upload" || P.via === "workbook";
+// Percentages are read as such on mapped sheets, and gross and profit margin always (normHist).
+const isPct = (k, key, P) => (isMapped(P) && PCT_OF[k]?.includes(key)) || (k === "hist" && /margin$/.test(key));
+// The value the app uses for one field of one source row: amounts in full units, as the analyses read them.
+function dvUsed(k, key, outs) {
+  const [n] = outs.find(([, f]) => f === key) || outs.find(([, f]) => !f || f === "amount") || outs[0], o = state[k][n], v = o[NORM_KEY[k]?.[key] || key];
+  if (k === "team" && key === "level") return LEVEL_NAME[o.level];
+  if (k === "cf" && key === "type") return TYPE_NAME[v] || v;
+  if (v instanceof Date) return isoDate(v);
+  if (typeof v === "number") { if (!isFinite(v)) return "– (blank or not a number)";
+    if (MONEY_OF[k]?.includes(key)) return fnum(v * state.inUnit) + (k === "cf" && o.currency ? " " + o.currency : "");
+    return isPct(k, key, state.prov[k]) || (k === "inv" && /^ownership/.test(key)) || (k === "hist" && key === "ownership") ? `${fnum(v, 4)} (${fp(v)})` : String(v) }
+  return v === "" || v == null ? "(blank)" : String(v);
+}
+function dvTransforms(k, key, P) {
+  const T = [], f = P.fields.find(x => x.key === key), vals = P.rows.map(r => r.v[key]).filter(v => v !== "" && v != null), types = P.opt?.types || [];
+  const has = x => P.fields.some(f => f.key === x), u = state.inUnit;
+  if ((DATE_OF[k] || []).includes(key)) T.push(f?.dates ? "Excel dates, read as calendar dates (YYYY-MM-DD)." : `Read as dates (YYYY-MM-DD)${P.opt?.dateOrder === "dmy" ? "; dates like 03/04/2021 as day/month" : P.opt?.dateOrder === "mdy" ? "; dates like 03/04/2021 as month/day" : ""}.`);
+  if (MONEY_OF[k]?.includes(key)) {
+    if (vals.some(v => typeof v === "string" && /[$,()]/.test(v))) T.push("Text like $1,234 or (1,234) read as numbers; brackets mean negative.");
+    if (u !== 1) T.push(`Multiplied by ${u.toLocaleString("en-US")} (files in ${u === 1000 ? "thousands" : "millions"}).`);
+  }
+  if (isPct(k, key, P)) { const ex = vals.find(v => /%/.test(String(v)) || Math.abs(num(String(v).replace("%", ""))) > 1.5);
+    T.push(ex != null ? `Percent: ${String(ex).trim()} read as ${fnum(pctIn(ex), 4)}.` : "Read as a decimal (0.62 = 62%).") }
+  if (k === "cf") {
+    if (key === "amount") {
+      if (!isMapped(P)) T.push("Used with the sign in the file: contributions negative, distributions positive.");
+      else if (has("type")) { const flipped = P.rows.filter(r => r.out.some(([n, f]) => f === "amount" && Math.sign(state.cf[n].amount) !== Math.sign(num(r.v.amount)))).length;
+        T.push(`Contributions made negative and distributions positive, whatever sign the file uses${flipped ? ` (${flipped} row${flipped > 1 ? "s" : ""} changed sign)` : ""}.`) }
+      else T.push("No type column: negative amounts count as contributions, positive as distributions.");
+    }
+    if (key === "contributions") T.push("Each value is a contribution, made negative.");
+    if (key === "distributions") T.push("Each value is a distribution, made positive.");
+    if (key === "nav") T.push("Each value is the NAV reported at the row's date.");
+    if (key === "type") T.push(isMapped(P) && types.length ? types.map(t => `“${t.raw}” → ${t.to === "Ignore" ? "ignored" : t.to || "not set"}${t.by === "list" ? "" : ` (${{ you: "chosen by you", claude: "suggested by Claude", saved: "remembered" }[t.by]})`}`).join(", ") + "." : "Read as Contribution, Distribution or NAV, ignoring case.");
+    if (key === "currency") T.push("Read as an ISO code in capitals; a fund with none counts as USD.");
+  }
+  if (k === "inv" && (key === "realized" || key === "unrealized")) T.push("Blank read as 0.");
+  if (k === "team" && key === "level") T.push("Read as partner, mid-level, junior or back office from the words used.");
+  if (k === "team" && key === "title" && !has("level")) T.push("Also used to work out each person's level.");
+  return T;
+}
+function dvDerived(k, P) {
+  const D = [], has = x => P.fields.some(f => f.key === x), u = state.inUnit;
+  if (u !== 1 && MONEY_OF[k].length) D.push({ label: "Amounts", text: `Multiplied by ${u.toLocaleString("en-US")}: files are in ${u === 1000 ? "thousands" : "millions"} (set under Settings).` });
+  if (k === "cf") {
+    if (isMapped(P) && has("type")) D.push({ label: "Sign", text: "Contributions negative, distributions positive, whatever sign the file uses." });
+    if (!has("currency")) D.push({ label: "Currency", text: "No currency column: every fund counts as USD." });
+    if (!has("vintage")) D.push({ label: "Vintage", text: "No vintage column: each fund's vintage is the year of its first cash flow." });
+  }
+  if (k === "team" && !has("level")) D.push({ label: "Level", text: "No level column: each person's level is read from their title." });
+  return D;
+}
 
+// ---------- data view ----------
+// Shared by both modules: build.py inlines this file (with dataview.css) into each page.
+// The Data view lists what each upload was identified as, and lets the viewer audit any field: which
+// file, sheet, column and header it came from, how it was matched, what the app did to it, and the
+// source cells next to the values the app uses. Provenance is captured when a sheet loads:
+//   P = { file, sheet, via, headerRow, fields: [{ key, i, col, header, how, conf, value }], ignored: [{ col, header }],
+//         rows: [{ r, v: { key: raw }, out: [[n, f]], skip }], ws: { file, savedAt }, noSource }
+// where r is the sheet row (1-based, as Excel shows it), out lists the normalised rows (state[kind][n])
+// the source row became (f: the field that made it, where one row makes several), and skip says why a
+// row was dropped. via is upload, workbook, sample or workspace.
+// Page interface: initDataView({ box, kinds, fields, prov, count, used, transforms, derived }), where
+//   kinds          { kind: { label, off } }: off says what loading an optional kind adds (required kinds say so too);
+//   fields(k)      [{ key, label }] the kind accepts;  prov(k) its P, or null when nothing is loaded;
+//   count(k)       rows loaded;  used(k, key, out) the value the app uses for that row, as text;
+//   transforms(k, key, P) [plain sentences];  derived(k, P) [{ label, text }] for values the app works out.
+// The page calls dv.render() from its own render(), dv.summary() for the HTML report and dv.sources() for the Excel sheet.
+const dv = { o: null, open: null };
+// A1 column letters: 0 -> A, 25 -> Z, 26 -> AA.
+const dvCol = i => { let s = ""; for (i++; i > 0; i = Math.floor((i - 1) / 26)) s = String.fromCharCode(65 + (i - 1) % 26) + s; return s };
+const dvEsc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const dvIso = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+// Raw cells kept JSON-safe (they travel in the workspace): Excel dates as YYYY-MM-DD.
+const dvRaw = v => v instanceof Date ? (isNaN(v) ? "" : dvIso(v)) : v ?? "";
+// Drop blank rows but keep each kept row's sheet row number and the sheet's first column, so cells can be named later.
+function dvRows(all, rowNo, col0 = 0) {
+  const n = [], out = all.filter((r, i) => r.some(x => String(x ?? "").trim() !== "") && n.push(rowNo(i)));
+  out.rowNo = n; out.col0 = col0; return out;
+}
+// Filter that remembers which input rows survived (idx) and why the rest did not (drop), for the audit.
+function dvKeep(rows, pred, why) {
+  const idx = [], drop = [], out = rows.filter((r, i) => pred(r) ? idx.push(i) : (drop.push([i, why(r)]), false));
+  out.idx = idx; out.drop = drop; return out;
+}
+// Provenance of one sheet as matched: cols[i] = { field, how, conf } for each column of the header row.
+function dvCapture({ file, sheet, via, aoa, h, cols }) {
+  const rn = j => aoa.rowNo?.[j] ?? j + 1, c0 = aoa.col0 || 0, head = aoa[h] || [], data = aoa.slice(h + 1);
+  const width = data.reduce((w, r) => Math.max(w, r.length), Math.max(head.length, cols.length)), fields = [], ignored = [];
+  for (let i = 0; i < width; i++) { const c = cols[i] || {}, hdr = String(head[i] ?? "").trim();
+    if (c.field) fields.push({ key: c.field, i, col: dvCol(c0 + i), header: hdr, how: c.how || "", conf: c.conf || "", dates: data.some(r => r[i] instanceof Date) });
+    else if (hdr || data.some(r => String(r[i] ?? "").trim())) ignored.push({ col: dvCol(c0 + i), header: hdr }) }
+  const rows = data.map((r, j) => ({ r: rn(h + 1 + j), v: Object.fromEntries(fields.map(f => [f.key, dvRaw(r[f.i])])), out: [], skip: null }));
+  return { file, sheet: sheet || null, via, headerRow: rn(h), fields, ignored, rows };
+}
+// Rows that arrive already in the app's own columns, with no sheet behind them (an old workspace).
+function dvFromRows({ file, savedAt, rows, keys }) {
+  const have = keys.filter(k => rows.some(r => k in r));
+  return { file: null, sheet: null, via: "workspace", ws: { file, savedAt }, noSource: true, headerRow: null, ignored: [],
+    fields: have.map(k => ({ key: k, i: -1, col: null, header: k, how: "workspace" })), rows: rows.map((o, j) => ({ r: j + 1, v: Object.fromEntries(have.map(k => [k, dvRaw(o[k])])), out: [], skip: null })) };
+}
+// After a normaliser ran (its output from dvKeep): src[i] = { j, f } names the source row of input row i (identity when absent).
+function dvFill(P, src, norm) {
+  P.rows.forEach(r => { r.out = []; if (!r.pre) r.skip = null });
+  norm.idx.forEach((i, n) => { const s = src ? src[i] : { j: i }; P.rows[s.j]?.out.push([n, s.f || null]) });
+  norm.drop.forEach(([i, why]) => { const s = src ? src[i] : { j: i }, r = P.rows[s.j]; if (r && !r.out.length) r.skip = why });
+  return P;
+}
+function initDataView(opts) {
+  dv.o = opts;
+  opts.box.addEventListener("click", e => { const b = e.target.closest("button"); if (!b) return;
+    if (b.dataset.dvk) dvOpen(b.dataset.dvk, b.dataset.dvf);
+    else if (b.id === "dvClose") dvClose();
+    else if (b.id === "dvAll") { dv.open.all = !dv.open.all; dvPane(); opts.box.querySelector("#dvAll")?.focus() } });
+  opts.box.addEventListener("keydown", e => { if (e.key === "Escape" && dv.open && e.target.closest("#dvPane")) dvClose() });
+  return dv;
+}
+const dvRef = (P, r) => P.noSource ? `saved row ${r.r}` : P.sheet ? `${P.sheet}!${r.col}${r.r}` : `${P.file} row ${r.r}`;
+const dvShow = v => v === "" || v == null ? "(blank)" : String(v);
+const dvLabel = (k, key) => dv.o.fields(k).find(f => f.key === key)?.label || key;
+const dvFieldTxt = (k, f) => f.col ? `${f.col} · ${f.header || "(no header)"}` : f.how === "typed" ? `typed “${f.value}”` : `${f.header} (saved)`;
+function dvHow(k, f) {
+  const lab = dvLabel(k, f.key);
+  return { exact: `Exact name: the header “${f.header}” is the field's own name.`, synonym: `Recognised the header “${f.header}” as ${lab.toLowerCase()}.`,
+    saved: "Remembered mapping, from an earlier file with these columns.", you: "Chosen by you in the column matcher.",
+    claude: `Suggested by Claude${f.conf ? ` (${f.conf} confidence)` : ""}, then confirmed by you.`, typed: `Typed into the column matcher: every row is “${f.value}”.`,
+    workspace: "From a saved workspace; the original column wasn't recorded." }[f.how] || "Matched when the file loaded.";
+}
+function dvStats(P) {
+  const rows = P.rows, used = rows.filter(r => r.out.length).length, why = {};
+  rows.forEach(r => { if (!r.out.length && r.skip) why[r.skip] = (why[r.skip] || 0) + 1 });
+  return { read: rows.length, used, skipped: rows.length - used, why };
+}
+const dvWhy = why => Object.entries(why).map(([w, n]) => `${n} ${w.charAt(0).toLowerCase() + w.slice(1)}`).join(", ");
+function dvSrcText(P) {
+  if (!P) return "";
+  if (P.noSource) return `Saved workspace (${P.ws.file}, saved ${P.ws.savedAt || "date unknown"})`;
+  if (P.via === "sample") return `Sample data (${P.file})`;
+  return `${P.file}${P.sheet ? ` › ${P.sheet}` : ""}, header row ${P.headerRow}`;
+}
+// One card per kind. live: buttons that open the audit pane; otherwise plain text for the report.
+function dvCard(k, live) {
+  const o = dv.o, K = o.kinds[k], P = o.prov(k), n = o.count(k);
+  if (P === null || n == null) return `<article class="dv-card dv-off"><h3>${dvEsc(K.label)}</h3><p class="note">Not loaded. ${dvEsc(K.off)}</p></article>`;
+  const S = P ? dvStats(P) : null, acc = o.fields(k), have = new Set((P?.fields || []).map(f => f.key)), D = P ? o.derived(k, P) : [];
+  const fld = f => { const lab = dvEsc(dvLabel(k, f.key)), src = dvEsc(dvFieldTxt(k, f)), open = dv.open?.k === k && dv.open?.key === f.key;
+    return `<li>${live ? `<button type="button" class="dv-f" data-dvk="${k}" data-dvf="${f.key}" aria-expanded="${open}" aria-controls="dvPane"${open ? ' aria-current="true"' : ""}><span class="dv-fl">${lab}</span> <span aria-hidden="true">←</span><span class="sr"> from </span> <span class="dv-fs">${src}</span></button>`
+      : `<span class="dv-fl">${lab}</span> ← <span class="dv-fs">${src}</span>`}</li>` };
+  const miss = acc.filter(f => !have.has(f.key));
+  return `<article class="dv-card" aria-labelledby="dvH-${k}">
+    <div class="dv-head"><h3 id="dvH-${k}">${dvEsc(K.label)}</h3><span class="dv-n">${n.toLocaleString("en-US")} rows</span></div>
+    <p class="dv-src">${dvEsc(dvSrcText(P))}${P?.ws && !P.noSource ? `<span class="note"> · opened from ${dvEsc(P.ws.file)}, saved ${dvEsc(P.ws.savedAt || "")}</span>` : ""}</p>
+    ${!P ? `<p class="note">The source details weren't saved, so fields can't be traced.</p>` : P.noSource ? `<p class="note warn-text">The source details weren't saved with this workspace, so columns and cells can't be traced. Fields below are the saved rows' own columns.</p>` : ""}
+    ${S ? `<p class="dv-q">${S.read.toLocaleString("en-US")} rows read · ${S.used.toLocaleString("en-US")} used${S.skipped ? ` · <span class="warn-text">${S.skipped} skipped: ${dvEsc(dvWhy(S.why))}</span>` : ""}</p>` : ""}
+    ${P?.fields.length ? `<h4>Identified fields</h4><ul class="dv-fields">${P.fields.map(fld).join("")}</ul>` : ""}
+    ${D.length ? `<h4>Worked out by the app</h4><ul class="dv-der">${D.map(d => `<li><b>${dvEsc(d.label)}</b>: ${dvEsc(d.text)}</li>`).join("")}</ul>` : ""}
+    ${P && miss.length ? `<p class="note"><b>Not in this file:</b> ${dvEsc(miss.map(f => f.label).join(", "))}</p>` : ""}
+    ${P?.ignored.length ? `<p class="note"><b>Ignored columns:</b> ${dvEsc(P.ignored.map(c => `${c.col} · ${c.header || "(no header)"}`).join(", "))}</p>` : ""}
+  </article>`;
+}
+dv.render = () => {
+  const o = dv.o, ks = Object.keys(o.kinds), any = ks.some(k => o.prov(k) !== null && o.count(k) != null);
+  if (dv.open && !(o.prov(dv.open.k)?.fields.some(f => f.key === dv.open.key))) dv.open = null;
+  // With nothing loaded the uploads come first: there is nothing to identify yet.
+  o.box.hidden = !any;
+  o.box.innerHTML = `<div class="panel-head"><h2 id="dvH" tabindex="-1">Identified data</h2>${any ? `<p class="note">Pick a field to see where it came from.</p>` : ""}</div>
+    ${any ? `<div class="dv-grid${dv.open ? " open" : ""}"><div class="dv-cards">${ks.map(k => dvCard(k, true)).join("")}</div>
+      <aside class="dv-pane" id="dvPane" tabindex="-1" aria-labelledby="dvPaneH"${dv.open ? "" : " hidden"}></aside></div>`
+      : `<p class="note">Nothing loaded yet. Add files below, or load the sample data.</p>`}`;
+  if (dv.open) dvPane();
+};
+dv.summary = () => { const o = dv.o; return `<section class="panel dv"><div class="panel-head"><h2>Identified data</h2></div><div class="dv-cards">${Object.keys(o.kinds).map(k => dvCard(k, false)).join("")}</div></section>` };
+// One row per kind and field, for the Excel "Sources" sheet.
+dv.sources = () => {
+  const o = dv.o, rows = [["Data", "Field", "Source file", "Sheet", "Column", "Header", "Header row", "How matched", "Transform", "Rows read", "Rows used", "Rows skipped", "Why skipped"]];
+  Object.keys(o.kinds).forEach(k => { const P = o.prov(k); if (!P || o.count(k) == null) return; const S = dvStats(P), tail = [S.read, S.used, S.skipped, dvWhy(S.why)];
+    const file = P.noSource ? `Saved workspace (${P.ws.file})` : P.file;
+    P.fields.forEach(f => rows.push([o.kinds[k].label, dvLabel(k, f.key), file, P.sheet || "", f.col || "", f.how === "typed" ? f.value : f.header, P.headerRow ?? "", dvHow(k, f), o.transforms(k, f.key, P).join(" "), ...tail]));
+    o.derived(k, P).forEach(d => rows.push([o.kinds[k].label, d.label, file, P.sheet || "", "", "", "", "Worked out by the app", d.text, ...tail])) });
+  return rows;
+};
+function dvOpen(k, key) { dv.open = dv.open?.k === k && dv.open?.key === key ? null : { k, key, all: false }; dv.render();
+  if (dv.open) { const p = dv.o.box.querySelector("#dvPane"); p.scrollIntoView({ block: "nearest" }); p.focus({ preventScroll: true }) }
+  else dv.o.box.querySelector(`[data-dvk="${k}"][data-dvf="${key}"]`)?.focus() }
+function dvClose() { const x = dv.open; dv.open = null; dv.render(); if (x) dv.o.box.querySelector(`[data-dvk="${x.k}"][data-dvf="${x.key}"]`)?.focus() }
+const DV_CAP = 500;
+function dvPane() {
+  const o = dv.o, { k, key, all } = dv.open, P = o.prov(k), f = P.fields.find(x => x.key === key), pane = o.box.querySelector("#dvPane"), lab = dvLabel(k, key);
+  const rows = P.rows, used = rows.filter(r => r.out.length);
+  // A sample: the first rows, plus the first skipped row for each reason and the first blank cell in this column, so odd rows show up.
+  let pick = all ? rows.slice(0, DV_CAP) : used.slice(0, 8);
+  if (!all) { const why = new Set(), odd = rows.filter(r => !r.out.length && !why.has(r.skip) && why.add(r.skip)).slice(0, 3);
+    odd.push(rows.find(r => r.out.length && dvShow(r.v[key]) === "(blank)" && !pick.includes(r)));
+    pick = [...new Set([...pick, ...odd.filter(Boolean)])].sort((a, b) => a.r - b.r) }
+  const nSkip = pick.filter(r => !r.out.length).length, T = o.transforms(k, key, P), ref = r => dvRef(P, { col: f.col, r: r.r });
+  const raw = r => f.how === "typed" ? `(typed) ${f.value}` : dvShow(r.v[key]);
+  pane.innerHTML = `<div class="panel-head"><h3 id="dvPaneH">${dvEsc(o.kinds[k].label)} · ${dvEsc(lab)}</h3><button type="button" id="dvClose" aria-label="Close the audit of ${dvEsc(lab)}">Close</button></div>
+    <h4>Mapped from</h4>
+    <dl class="dv-dl">${P.noSource ? `<dt>Source</dt><dd>${dvEsc(dvSrcText(P))}. The original file, sheet and column weren't saved.</dd>` : `<dt>File</dt><dd>${dvEsc(P.file)}</dd>${P.sheet ? `<dt>Sheet</dt><dd>${dvEsc(P.sheet)}</dd>` : ""}
+      <dt>Column</dt><dd>${f.col ? `${f.col} · ${dvEsc(f.header || "(no header)")}` : "None: typed in"}</dd><dt>Header row</dt><dd>${P.headerRow}</dd>`}
+      <dt>How matched</dt><dd>${dvEsc(dvHow(k, f))}</dd>${P.ws && !P.noSource ? `<dt>Opened from</dt><dd>${dvEsc(P.ws.file)}, saved ${dvEsc(P.ws.savedAt || "")}</dd>` : ""}</dl>
+    <h4>Transform</h4>${T.length ? `<ul class="dv-tr">${T.map(t => `<li>${dvEsc(t)}</li>`).join("")}</ul>` : `<p class="note">Used as written.</p>`}
+    <h4>${all ? "All rows" : "Sample"}</h4>
+    <p class="note">${all ? (rows.length > DV_CAP ? `The first ${DV_CAP} of ${rows.length.toLocaleString("en-US")} rows.` : `All ${rows.length.toLocaleString("en-US")} rows.`) : `${pick.length} of ${rows.length.toLocaleString("en-US")} rows${nSkip ? `, including ${nSkip > 1 ? nSkip + " skipped rows" : "a skipped row"}` : ""}.`}</p>
+    <div class="dv-tbl"><table class="dv-tab"><thead><tr><th scope="col">Cell</th><th scope="col">In the file</th><th scope="col">Used as</th></tr></thead><tbody>
+    ${pick.map(r => `<tr${r.out.length ? "" : ' class="dv-skip"'}><td>${dvEsc(ref(r))}</td><td>${dvEsc(raw(r))}</td><td>${r.out.length ? dvEsc(o.used(k, key, r.out)) : `Skipped: ${dvEsc((r.skip || "not used").toLowerCase())}`}</td></tr>`).join("")}</tbody></table></div>
+    ${rows.length > pick.length || all ? `<button type="button" id="dvAll" aria-expanded="${!!all}">${all ? "Show a sample" : `Show all ${Math.min(rows.length, DV_CAP).toLocaleString("en-US")} rows`}</button>` : ""}`;
+}
+initDataView({ box: document.getElementById("dvBox"), kinds: DV_KINDS, fields: k => FIELDS[k].map(f => ({ key: f.key, label: f.label })),
+  prov: k => state[k] ? state.prov[k] : null, count: k => state[k]?.length, used: dvUsed, transforms: dvTransforms, derived: dvDerived });
 // ---------- workbook ----------
 // Shared by both modules: build.py inlines this file (with workbook.css) into each page.
 // Firms often keep everything in one Excel file, a tab each for cash flows, portfolio, KPIs and staff.
@@ -1478,8 +1809,10 @@ function commitRows(kind, rows, fileName, how) {
 //   load(k, sheet, info) loads one sheet (info: { fileName, sheets, label, step, total }); returns true
 //              when done, false when it waits on the viewer (the page then calls wbook.next() or
 //              wbook.stop()), and throws to report the sheet as not loaded;
-//   abort(k)   closes whatever step the page left open for kind k.
+//   abort(k)   closes whatever step the page left open for kind k;
+//   done(Q)    (optional) runs once the queue ends, with Q.done the sheets that loaded.
 // The page calls wbook.offer(fileName, sheets, kind) on an upload: false means "not a workbook", carry on as before.
+// wbook.offer(fileName, sheets, "", true) proposes even a single sheet, so a file of unknown kind is recognised first.
 const wbook = { opts: null, P: null, Q: null };
 function initWorkbook(opts) {
   wbook.opts = opts;
@@ -1510,8 +1843,8 @@ function wbAssign(rows, kinds, prefer) {
   pairs.forEach(p => { if (!take.has(p.i) && !used.has(p.k)) { take.set(p.i, p.k); used.add(p.k) } });
   rows.forEach((r, i) => r.kind = take.get(i) || "");
 }
-wbook.offer = (fileName, sheets, prefer) => {
-  const names = Object.keys(sheets); if (names.length < 2) return false;
+wbook.offer = (fileName, sheets, prefer, any) => {
+  const names = Object.keys(sheets); if (names.length < (any ? 1 : 2)) return false;
   const o = wbook.opts, kinds = Object.keys(o.kinds);
   wbook.close();
   const rows = names.map(name => { const aoa = sheets[name], h = o.headerRow(aoa);
@@ -1534,14 +1867,14 @@ function wbHint(r) {
 function wbDraw() {
   const o = wbook.opts, P = wbook.P, kinds = Object.entries(o.kinds), n = P.rows.length, picked = P.rows.filter(r => r.kind).length;
   o.box.hidden = false;
-  o.box.innerHTML = `<div class="panel-head"><h3 id="wbH" tabindex="-1">Workbook: ${wbEsc(P.fileName)}</h3></div>
-    <p class="note">This workbook has ${n} sheets. Here's what each one looks like:</p>
+  o.box.innerHTML = `<div class="panel-head"><h3 id="wbH" tabindex="-1">${n > 1 ? "Workbook" : "File"}: ${wbEsc(P.fileName)}</h3></div>
+    <p class="note">${n > 1 ? `This workbook has ${n} sheets. Here's what each one looks like:` : "Here's what this file looks like. Check the kind of data before it loads:"}</p>
     <ul class="wb-list">${P.rows.map((r, i) => { const hint = wbHint(r), more = r.headers.length - 4;
       return `<li class="wb-row"><div class="wb-sheet"><label for="wbSel${i}">${wbEsc(r.name)}</label>
         <span class="wb-cols" id="wbCols${i}">${r.headers.length ? wbEsc(r.headers.slice(0, 4).join(", ")) + (more > 0 ? `, +${more} more` : "") : "No column headers"}</span></div>
         <div class="wb-pick"><select id="wbSel${i}" data-wb="${i}" aria-describedby="wbCols${i}${hint ? ` wbHint${i}` : ""}">${kinds.map(([k, l]) => `<option value="${k}"${r.kind === k ? " selected" : ""}>${wbEsc(l)}</option>`).join("")}<option value=""${r.kind ? "" : " selected"}>Not used</option></select>
         ${hint ? `<span class="wb-hint${r.kind ? " warn" : ""}" id="wbHint${i}">${wbEsc(hint)}</span>` : ""}</div></li>` }).join("")}</ul>
-    <p class="note" id="wbNote" role="status">${wbEsc(P.note || (picked ? `${picked} of ${n} sheets will load. Each kind takes one sheet.` : "Pick at least one sheet to load."))}</p>
+    <p class="note" id="wbNote" role="status">${wbEsc(P.note || (n === 1 ? (picked ? "It will load as the kind picked." : "Pick the kind of data to load it as.") : picked ? `${picked} of ${n} sheets will load. Each kind takes one sheet.` : "Pick at least one sheet to load."))}</p>
     <div class="row"><button type="button" class="primary" id="wbLoad"${picked ? "" : " disabled"}>Load these</button><button type="button" id="wbCancel">Cancel</button></div>`;
 }
 function wbPick(i, kind) {
@@ -1595,6 +1928,7 @@ function wbFinish() {
     ${Q.failed.map(f => `<p class="wb-hint warn wb-fail">${wbEsc(f)}</p>`).join("")}
     <div class="row"><button type="button" id="wbClose">Close</button></div>`;
   if (had) o.box.querySelector("#wbStep").focus({ preventScroll: true });
+  o.done?.(Q);
 }
 // Hides the panel; a queue that is still running is dropped (its open step closed) without loading more.
 wbook.close = () => { const Q = wbook.Q; wbook.Q = null; wbook.P = null; if (Q && Q.items[Q.i]) wbook.opts.abort(Q.items[Q.i].kind);
@@ -1621,7 +1955,8 @@ initWorkbook({ box: document.getElementById("wbook"), kinds: { cf: "Fund cash fl
     setStatus(k, "Matching columns…");
     try { const done = mapSheet(k, info.fileName, info.sheets, sheet, true); if (!done) document.getElementById("mapper").scrollIntoView({ block: "nearest" }); return done }
     catch (e) { setStatus(k, "Could not read sheet", "err"); throw e } },
-  abort(k) { if (M?.wb && M.kind === k) { mCtl?.abort(); M = null; renderMapper() } if (wbPrev[k]) setStatus(k, ...wbPrev[k]) } });
+  abort(k) { if (M?.wb && M.kind === k) { mCtl?.abort(); M = null; renderMapper() } if (wbPrev[k]) setStatus(k, ...wbPrev[k]) },
+  done(Q) { if (Q.done.length) { landOnData(); render() } } });
 
 // ---------- brand ----------
 // Shared by both modules: build.py inlines this file (with brand.css and the brand.html row) into each page.
@@ -1816,7 +2151,7 @@ document.getElementById("wsSave").addEventListener("click", () => {
   if (!state.cf) return dlMsg("Load data first.", true);
   const ws = { app: "venture-track-record", version: 1, savedAt: new Date().toISOString(), title: document.getElementById("gpTitle").textContent, isSample: state.isSample,
     raw: state.raw, benchmarks: Object.fromEntries(["carta", "cambridge", "custom"].map(k => [k, bmStore.load(k)])), bmSrc: state.bmSrc,
-    rates: state.rates, curMode: state.curMode, inUnit: state.inUnit, mappings: mapStore.all(), brand: { colors: brand.cur.colors, font: brand.cur.font }, scenarios: state.scen ? (({ key, ...r }) => r)(state.scen) : null };
+    rates: state.rates, curMode: state.curMode, inUnit: state.inUnit, mappings: mapStore.all(), prov: state.prov, brand: { colors: brand.cur.colors, font: brand.cur.font }, scenarios: state.scen ? (({ key, ...r }) => r)(state.scen) : null };
   saveFile(`${slug(ws.title)}-workspace.json`, JSON.stringify(ws));
 });
 document.getElementById("wsOpen").addEventListener("change", async e => {
@@ -1831,12 +2166,15 @@ document.getElementById("wsOpen").addEventListener("change", async e => {
     Object.assign(state, { rates: ws.rates || {}, curMode: ws.curMode || "local", inUnit: ws.inUnit || 1, isSample: !!ws.isSample, raw: ws.raw });
     document.getElementById("inUnit").value = String(state.inUnit);
     state.cf = normCf(ws.raw.cf); state.inv = ws.raw.inv ? normInv(ws.raw.inv) : null; state.hist = ws.raw.hist ? normHist(ws.raw.hist) : null; state.team = ws.raw.team ? normTeam(ws.raw.team) : null;
+    // Where each kind came from travels in the workspace; an older workspace without it still opens, and the Data view says so.
+    const saved = String(ws.savedAt || "").slice(0, 10); state.prov = {}; dv.open = null;
+    ["cf", "inv", "hist", "team"].forEach(k => { if (state[k]) state.prov[k] = ws.prov?.[k] ? { ...ws.prov[k], ws: { file: f.name, savedAt: saved } } : dvFill(dvFromRows({ file: f.name, savedAt: saved, rows: ws.raw[k], keys: FIELDS[k].map(x => x.key) }), null, state[k]) });
     ["cf", "inv", "hist", "team"].forEach(k => setStatus(k, state[k] ? `${f.name} · ${state[k].length} rows` : "Not loaded", state[k] ? "ok" : ""));
     state.bmSrc = ws.bmSrc || "custom"; if (state.bmSrc === "sample") state.bmSample = normBm(parseCSV(SAMPLE.bm));
     document.getElementById("bmSrc").value = state.bmSrc;
     document.getElementById("gpTitle").textContent = ws.title || "Venture Track Record";
     state.scen = null; if (ws.scenarios?.list?.length) { state.scen = { ...ws.scenarios, key: scenKey() }; saveScen() }
-    renderBm(); render(); dlMsg(`Opened workspace saved ${String(ws.savedAt || "").slice(0, 10)}.`);
+    renderBm(); landOnData(); render(); dlMsg(`Opened workspace saved ${String(ws.savedAt || "").slice(0, 10)}.`);
   } catch (x) { err.textContent = x instanceof SyntaxError ? "That file could not be read as a workspace." : x.message }
 });
 document.getElementById("wsOpenBtn").addEventListener("click", () => document.getElementById("wsOpen").click());
@@ -2187,6 +2525,8 @@ document.getElementById("dlXlsx").addEventListener("click", async () => {
   if (kpis.length > 1) addSheet(wb, "Key figures", sheetFrom(kpis));
   // Key figures first: it is the summary a reader opens to.
   wb.SheetNames.unshift(wb.SheetNames.pop());
+  // Where every field came from, one row per kind and field (the Data view's audit, in figures).
+  addSheet(wb, "Sources", sheetFrom(dv.sources()));
   await saveFile(`${fileBase()}.xlsx`, new Uint8Array(XLSX.write(wb, { type: "array", bookType: "xlsx" })));
 });
 document.getElementById("dlHtml").addEventListener("click", async () => {
@@ -2202,6 +2542,8 @@ document.getElementById("dlHtml").addEventListener("click", async () => {
     clone.querySelectorAll("details").forEach(d => d.open = true);
     parts.push(`<h2 class="view-h">${esc(label)}</h2>${clone.innerHTML}`);
   }));
+  // The Data view's summary cards lead the report, without the interactive audit pane.
+  parts.unshift(`<h2 class="view-h">Data</h2>${dv.summary()}`);
   const cssText = [...document.querySelectorAll("style")].map(s => s.textContent).join("\n");
   const title = `${document.getElementById("gpTitle").textContent} · ${document.getElementById("asOf").textContent}`;
   const doc = `<!doctype html><html lang="en" data-theme="light"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${esc(title)}</title>

@@ -1,8 +1,9 @@
 """Bakes the sample CSVs, and the shared partials, into each module's page so it runs from a single
 file with no server. The partials are the Brand row (brand.css, brand.js, brand.html), the top bar's
 Light/Dark toggle (theme.css, theme.js, theme.html) and the multi-sheet workbook proposal (workbook.css,
-workbook.js); each template has exactly one placeholder per file (/*BRAND_CSS*/, /*BRAND_JS*/,
-<!--BRAND_HTML-->, /*THEME_CSS*/, /*THEME_JS*/, <!--THEME_HTML-->, /*WORKBOOK_CSS*/, /*WORKBOOK_JS*/).
+workbook.js) and the Data view with its source audit (dataview.css, dataview.js); each template has
+exactly one placeholder per file (/*BRAND_CSS*/, /*BRAND_JS*/, <!--BRAND_HTML-->, /*THEME_CSS*/,
+/*THEME_JS*/, <!--THEME_HTML-->, /*WORKBOOK_CSS*/, /*WORKBOOK_JS*/, /*DATAVIEW_CSS*/, /*DATAVIEW_JS*/).
 
 python3 build.py
     writes index.html (fund performance) and exposure.html (LP exposure), which open from disk.
@@ -24,7 +25,8 @@ a = ap.parse_args()
 # Shared partials, inlined so each page stays one self-contained file.
 partials = {"/*BRAND_CSS*/": "brand.css", "/*BRAND_JS*/": "brand.js", "<!--BRAND_HTML-->": "brand.html",
             "/*THEME_CSS*/": "theme.css", "/*THEME_JS*/": "theme.js", "<!--THEME_HTML-->": "theme.html",
-            "/*WORKBOOK_CSS*/": "workbook.css", "/*WORKBOOK_JS*/": "workbook.js"}
+            "/*WORKBOOK_CSS*/": "workbook.css", "/*WORKBOOK_JS*/": "workbook.js",
+            "/*DATAVIEW_CSS*/": "dataview.css", "/*DATAVIEW_JS*/": "dataview.js"}
 for key, template, page, files in modules:
     s = {k: (here / "sample" / f).read_text() for k, f in files}
     body = (here / template).read_text()

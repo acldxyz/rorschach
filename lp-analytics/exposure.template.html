@@ -111,6 +111,9 @@ td.lo { color: var(--bad) } td.hi { color: var(--good) }
 /*BRAND_CSS*/
 /*THEME_CSS*/
 /*WORKBOOK_CSS*/
+/*DATAVIEW_CSS*/
+#analysisView > .assume { border-top: 0; padding-top: 0 }
+#exportBar #addData { margin-right: 10px }
 .welcome { border-color: var(--accent) }
 .welcome h2:focus { outline: none }
 /* Arriving (nothing loaded, no choice made): the card is the whole page, centred. */
@@ -148,9 +151,17 @@ td.lo { color: var(--bad) } td.hi { color: var(--good) }
     <p class="note switch">Looking for something else? <a href="index.html">Switch to Fund performance</a></p>
   </section>
 
+  <div class="viewsw" role="tablist" aria-label="Page view">
+    <button type="button" role="tab" id="view-analysis" data-top="analysis" aria-controls="analysisView" aria-selected="false">Analysis</button><button type="button" role="tab" id="view-data" data-top="data" aria-controls="dataView" aria-selected="true">Data</button>
+  </div>
+  <p class="note" id="dlMsg" role="status"></p>
+
+  <!-- Data view: what was identified (with the source audit) first, then uploads, then the settings that describe the files. -->
+  <div class="pane" id="dataView" role="tabpanel" aria-labelledby="view-data">
+  <section class="panel dv" id="dvBox" aria-labelledby="dvH"></section>
   <section class="panel" aria-labelledby="loadH">
     <div class="panel-head">
-      <h2 id="loadH">Data</h2>
+      <h2 id="loadH">Add or replace data</h2>
       <div class="row">
         <button class="primary" id="sampleBtn" type="button">Load sample data</button>
         <button id="clearBtn" type="button">Clear</button>
@@ -161,14 +172,6 @@ td.lo { color: var(--bad) } td.hi { color: var(--good) }
       <label class="drop" data-kind="hold"><b>Fund holdings</b><span class="note">One row per fund, company and security from each manager's schedule of investments: round, shares, cost, fair value. CSV or XLSX.</span><input type="file" accept=".csv,.xlsx,.xls"><span class="status">Not loaded</span></label>
     </div>
     <div class="wbook panel" id="wbook" hidden></div>
-    <div class="assume">
-      <label for="inUnit">Amounts in files are in <select id="inUnit"><option value="1">full units</option><option value="1000">thousands</option><option value="1000000">millions</option></select></label>
-      <label for="dil">Dilution before exit <input class="num-in" id="dil" inputmode="decimal" value="15">%</label>
-      <label for="t1">Target multiples <input class="num-in" id="t1" inputmode="decimal" value="3">x <input class="num-in" id="t2" inputmode="decimal" value="4" aria-label="Second target multiple">x</label>
-      <span class="row"><span class="note">Returns</span><span class="seg" role="group" aria-label="Return basis"><button type="button" data-basis="gross">Gross</button><button type="button" data-basis="net">Net of carry</button></span></span>
-    </div>
-    <p class="note">Exit values assume every class converts to common, which holds for most 3x+ outcomes; below that, liquidation preferences change who gets what. Net of carry takes each fund's carry off each position's gain, a deal-by-deal estimate that ignores fees and whole-fund netting.</p>
-    <!--BRAND_HTML-->
     <p class="errors" id="errors" role="alert"></p>
     <details>
       <summary>File formats</summary>
@@ -182,7 +185,14 @@ holdings:    manager, fund, company, sector, security (e.g. Series B Preferred),
              or ownership</pre>
     </details>
   </section>
+  <section class="panel" aria-labelledby="setH">
+    <h2 id="setH">Settings</h2>
+    <div class="row"><label for="inUnit" class="note">Amounts in files are in</label> <select id="inUnit"><option value="1">full units</option><option value="1000">thousands</option><option value="1000000">millions</option></select></div>
+    <!--BRAND_HTML-->
+  </section>
+  </div>
 
+  <div class="pane" id="analysisView" role="tabpanel" aria-labelledby="view-analysis" hidden>
   <div class="viewbar">
     <nav class="tabs" role="tablist" aria-label="Views">
       <button type="button" role="tab" id="tab-exposure" data-view="exposure" aria-selected="true">Exposure</button>
@@ -190,18 +200,25 @@ holdings:    manager, fund, company, sector, security (e.g. Series B Preferred),
       <button type="button" role="tab" id="tab-managers" data-view="managers" aria-selected="false">Managers</button>
       <button type="button" role="tab" id="tab-company" data-view="company" aria-selected="false">Company</button>
     </nav>
-    <div class="exports"><span class="note">Download everything:</span>
+    <div class="exports" id="exportBar"><button type="button" id="addData" aria-describedby="addDataD">Add data</button><input type="file" id="addFile" accept=".csv,.xlsx,.xls" hidden><span class="sr" id="addDataD">Opens a file; it is matched to the kind of data it holds, then shown in the Data view.</span><span class="note">Download everything:</span>
       <button type="button" id="dlXlsx">Excel workbook</button><button type="button" id="dlHtml">HTML report</button></div>
   </div>
-  <p class="note" id="dlMsg" role="status"></p>
+  <!-- Exit assumptions change the analyses, not the data, so they sit with them. -->
+  <div class="assume" role="group" aria-label="Exit assumptions">
+    <label for="dil">Dilution before exit <input class="num-in" id="dil" inputmode="decimal" value="15">%</label>
+    <label for="t1">Target multiples <input class="num-in" id="t1" inputmode="decimal" value="3">x <input class="num-in" id="t2" inputmode="decimal" value="4" aria-label="Second target multiple">x</label>
+    <span class="row"><span class="note">Returns</span><span class="seg" role="group" aria-label="Return basis"><button type="button" data-basis="gross">Gross</button><button type="button" data-basis="net">Net of carry</button></span></span>
+  </div>
+  <p class="note">Exit values assume every class converts to common, which holds for most 3x+ outcomes; below that, liquidation preferences change who gets what. Net of carry takes each fund's carry off each position's gain, a deal-by-deal estimate that ignores fees and whole-fund netting.</p>
   <div id="out" class="wrap" style="padding:0;margin:0;max-width:none" role="tabpanel"></div>
+  </div>
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script>
 const SAMPLE = /*SAMPLE*/null;
-const state = { commit: null, hold: null, view: "exposure", company: null, dil: 0.15, targets: [3, 4], basis: "gross", inUnit: 1, isSample: false,
+const state = { commit: null, hold: null, view: "exposure", top: "data", prov: {}, company: null, dil: 0.15, targets: [3, 4], basis: "gross", inUnit: 1, isSample: false,
   sort: { k: "lpFv", dir: -1 }, q: "", sector: "", mgr: "", minMgr: 1, capturing: false };
 let charts = [];
 const DEFAULT_CARRY = 0.2, DISPERSION_FLAG = 0.15;
@@ -218,14 +235,16 @@ function parseCSVRows(text) {
     else f += c;
   }
   if (f || row.length) { row.push(f); rows.push(row) }
-  return rows.filter(r => r.some(x => String(x).trim() !== ""));
+  return dvRows(rows, i => i + 1);
 }
 // Every non-empty sheet, as { name: rows }; a CSV is one sheet.
 async function readSheets(file) {
   if (/\.xlsx?$/i.test(file.name)) {
     if (typeof XLSX === "undefined") throw new Error("The spreadsheet library did not load, so XLSX files cannot be read. Try a CSV.");
     const wb = XLSX.read(await file.arrayBuffer(), { cellDates: true });
-    return Object.fromEntries(wb.SheetNames.map(n => [n, XLSX.utils.sheet_to_json(wb.Sheets[n], { header: 1, raw: true, defval: "" }).filter(r => r.some(x => String(x).trim() !== ""))]).filter(([, a]) => a.length));
+    // dvRows drops blank rows but keeps sheet row numbers and the first column, so the Data view can name cells.
+    return Object.fromEntries(wb.SheetNames.map(n => { const ws = wb.Sheets[n], R = XLSX.utils.decode_range(ws["!ref"] || "A1");
+      return [n, dvRows(XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: "" }), i => R.s.r + i + 1, R.s.c)] }).filter(([, a]) => a.length));
   }
   return { Sheet1: parseCSVRows(await file.text()) };
 }
@@ -272,21 +291,23 @@ function normCommit(rows) {
   const miss = ["fund"].filter(k => !rows.some(r => str(r[k])));
   if (!rows.some(r => isFinite(num(r.lp_share)) || (isFinite(num(r.commitment)) && isFinite(num(r.fund_size))))) miss.push("commitment and fund_size (or lp_share)");
   if (miss.length) throw new Error(`Fund commitments: could not find ${miss.join(", ")}. Check the column names under File formats.`);
-  return rows.map(r => { const commitment = num(r.commitment) * state.inUnit, size = num(r.fund_size) * state.inUnit, given = pctIn(r.lp_share), carry = pctIn(r.carry);
+  // dvKeep filters as before, noting which rows went and why for the Data view.
+  return dvKeep(rows.map(r => { const commitment = num(r.commitment) * state.inUnit, size = num(r.fund_size) * state.inUnit, given = pctIn(r.lp_share), carry = pctIn(r.carry);
     return { manager: str(r.manager) || str(r.fund), fund: str(r.fund), vintage: num(r.vintage), size, commitment, carry: isFinite(carry) ? carry : DEFAULT_CARRY, currency: str(r.currency).toUpperCase(),
-      share: isFinite(given) ? given : commitment / size } }).filter(r => r.fund);
+      share: isFinite(given) ? given : commitment / size } }), r => r.fund, () => "No fund name");
 }
 function normHold(rows) {
   const miss = ["fund", "company", "cost", "fair_value"].filter(k => !rows.some(r => str(r[k])));
   if (!rows.some(r => isFinite(num(r.ownership)) || (num(r.shares) > 0 && num(r.company_fd_shares) > 0))) miss.push("shares and company_fd_shares (or ownership)");
   if (miss.length) throw new Error(`Fund holdings: could not find ${miss.join(", ")}. Check the column names under File formats.`);
-  return rows.map(r => { const u = state.inUnit, o = { manager: str(r.manager), fund: str(r.fund), company: str(r.company), sector: str(r.sector) || "Unclassified",
+  return dvKeep(rows.map(r => { const u = state.inUnit, o = { manager: str(r.manager), fund: str(r.fund), company: str(r.company), sector: str(r.sector) || "Unclassified",
       round: str(r.round), security: str(r.security) || str(r.round) || "Unspecified", date: isoOf(r.investment_date), asOf: isoOf(r.as_of),
       shares: num(r.shares), fd: num(r.company_fd_shares), cost: num(r.cost) * u, fv: num(r.fair_value) * u, pricePaid: num(r.price_paid), markPS: num(r.mark_per_share), ownIn: pctIn(r.ownership) };
     o.own = o.shares > 0 && o.fd > 0 ? o.shares / o.fd : o.ownIn;
     if (!isFinite(o.markPS) && o.shares > 0 && isFinite(o.fv)) o.markPS = o.fv / o.shares;
     if (!isFinite(o.pricePaid) && o.shares > 0 && isFinite(o.cost)) o.pricePaid = o.cost / o.shares;
-    return o }).filter(r => r.company && r.fund && isFinite(r.cost) && isFinite(r.fv));
+    return o }), r => r.company && r.fund && isFinite(r.cost) && isFinite(r.fv),
+    r => !r.company ? "No company name" : !r.fund ? "No fund name" : !isFinite(r.cost) ? "Cost blank or not a number" : "Fair value blank or not a number");
 }
 
 // ---------- model ----------
@@ -383,7 +404,7 @@ function setChartDefaults() {
   Chart.defaults.plugins.tooltip.backgroundColor = css("--ink"); Chart.defaults.plugins.tooltip.titleColor = css("--bg"); Chart.defaults.plugins.tooltip.bodyColor = css("--bg");
   Chart.defaults.maintainAspectRatio = false; Chart.defaults.animation = state.capturing || matchMedia("(prefers-reduced-motion: reduce)").matches ? false : { duration: 300 };
 }
-function render() { renderView(); decorateDownloads(); syncWelcome() }
+function render() { renderView(); decorateDownloads(); dv.render(); syncTop(); syncWelcome() }
 function renderView() {
   charts.forEach(c => c.destroy()); charts = [];
   document.querySelectorAll(".tabs [role=tab]").forEach(b => b.setAttribute("aria-selected", String(b.dataset.view === state.view)));
@@ -593,12 +614,20 @@ function renderCompany(D, warn) {
       tooltip: { filter: i => !i.dataset.targetLine, callbacks: { title: it => `Exit at ${fm(it[0].raw.x)}`, label: i => `${i.dataset.label}: ${fx(i.raw.y)}` } } } } }));
 }
 
-function openCompany(name) { state.company = name; state.view = "company"; render(); window.scrollTo({ top: document.querySelector(".viewbar").offsetTop - 8, behavior: state.capturing ? "auto" : "smooth" }) }
+function openCompany(name) { state.company = name; state.view = "company"; state.top = "analysis"; render(); window.scrollTo({ top: document.querySelector(".viewbar").offsetTop - 8, behavior: state.capturing ? "auto" : "smooth" }) }
 
 // ---------- wiring ----------
 function setStatus(kind, text, cls) { const s = document.querySelector(`.drop[data-kind="${kind}"] .status`); s.textContent = text; s.className = "status " + (cls || "") }
 state.raw = {};
-function apply(kind, rows) { state[kind] = kind === "commit" ? normCommit(rows) : normHold(rows); state.raw[kind] = rows }
+// P (provenance, see dataview.js) comes with a fresh load; a re-read for a new unit keeps it and refreshes which rows were used.
+function apply(kind, rows, P) { state[kind] = kind === "commit" ? normCommit(rows) : normHold(rows); state.raw[kind] = rows; if (P) state.prov[kind] = P; if (state.prov[kind]) dvFill(state.prov[kind], null, state[kind]) }
+// One sheet through the synonym list: "how" is whether a header was the field's own name or a recognised synonym.
+function loadAoa(kind, aoa, src) {
+  const h = headerRow(aoa), cols = matchCols(kind, aoa[h]);
+  const P = dvCapture({ ...src, aoa, h, cols: cols.map((k, i) => k ? { field: k, how: normH(aoa[h][i]) === k.replace(/_/g, "") ? "exact" : "synonym" } : {}) });
+  apply(kind, toObjects(kind, aoa), P);
+}
+function landOnData() { state.top = "data"; try { history.replaceState(null, "", "#data") } catch {} }
 async function load(kind, file) {
   dismissWelcome(); wbook.close();
   const err = document.getElementById("errors"); err.textContent = "";
@@ -606,7 +635,7 @@ async function load(kind, file) {
     if (!names.length) throw new Error(`${file.name} has no rows.`);
     // Several data sheets in one workbook: propose which holds what before loading any (workbook.js).
     if (wbook.offer(file.name, sheets, kind)) return;
-    const rows = toObjects(kind, sheets[names[0]]); apply(kind, rows); state.isSample = false; setStatus(kind, `${file.name} · ${state[kind].length} rows`, "ok"); render() }
+    loadAoa(kind, sheets[names[0]], { file: file.name, sheet: /\.xlsx?$/i.test(file.name) ? names[0] : null, via: "upload" }); state.isSample = false; setStatus(kind, `${file.name} · ${state[kind].length} rows`, "ok"); landOnData(); render() }
   catch (e) { err.textContent = e.message; setStatus(kind, "Could not read file", "err") }
 }
 /*WORKBOOK_JS*/
@@ -619,9 +648,11 @@ initWorkbook({ box: document.getElementById("wbook"), kinds: { commit: "Fund com
   match: (k, headers) => matchCols(k, headers).map(x => x || ""), headerRow,
   names: { commit: /commit/i, hold: /holding|schedule|\bsoi\b|position|investment|portfolio/i },
   load(k, sheet, info) {
-    try { apply(k, toObjects(k, info.sheets[sheet])); state.isSample = false; setStatus(k, `${info.label} · ${state[k].length} rows`, "ok"); render(); return true }
+    try { loadAoa(k, info.sheets[sheet], { file: info.fileName, sheet: /\.xlsx?$/i.test(info.fileName) ? sheet : null, via: "workbook" }); state.isSample = false; setStatus(k, `${sheet === info.fileName ? sheet : info.label} · ${state[k].length} rows`, "ok"); render(); return true }
     catch (e) { setStatus(k, "Could not read sheet", "err"); throw e } },
-  abort() {} });
+  abort() {},
+  // The queue lands on the Data view once it ends, not between sheets.
+  done(Q) { if (Q.done.length) { landOnData(); render() } } });
 document.querySelectorAll(".drop").forEach(el => {
   const kind = el.dataset.kind, input = el.querySelector("input");
   input.addEventListener("change", () => input.files[0] && load(kind, input.files[0]));
@@ -631,9 +662,9 @@ document.querySelectorAll(".drop").forEach(el => {
 });
 document.getElementById("sampleBtn").addEventListener("click", () => {
   state.inUnit = 1; document.getElementById("inUnit").value = "1";
-  apply("commit", toObjects("commit", parseCSVRows(SAMPLE.commit))); apply("hold", toObjects("hold", parseCSVRows(SAMPLE.hold)));
+  loadAoa("commit", parseCSVRows(SAMPLE.commit), { file: "lp_commitments.csv", via: "sample" }); loadAoa("hold", parseCSVRows(SAMPLE.hold), { file: "lp_holdings.csv", via: "sample" });
   setStatus("commit", `Sample · ${state.commit.length} funds`, "ok"); setStatus("hold", `Sample · ${state.hold.length} positions`, "ok");
-  state.isSample = true; document.getElementById("lpTitle").textContent = "LP Look-through Exposure (sample)"; render();
+  state.isSample = true; document.getElementById("lpTitle").textContent = "LP Look-through Exposure (sample)"; landOnData(); render();
 });
 // ---------- welcome ----------
 // With nothing loaded, the welcome card asks how to start. Loading anything (sample or upload) hides it;
@@ -643,13 +674,13 @@ function syncWelcome() {
   card.hidden = !!(state.commit || state.hold) || card.dataset.dismissed === "1";
   // A choice that loaded data hid the button it was on: carry focus on to the views.
   document.getElementById("app").classList.toggle("arriving", !card.hidden);
-  if (card.hidden && had) document.querySelector('.tabs [aria-selected="true"]')?.focus();
+  if (card.hidden && had) document.querySelector('.viewsw [aria-selected="true"]')?.focus();
 }
 function dismissWelcome() { document.getElementById("welcome").dataset.dismissed = "1"; syncWelcome() }
 document.getElementById("wUpload").addEventListener("click", () => {
   // Close the card (showing the page), then open the file picker for the one file the page needs. The
   // click has to happen inside this click handler, or the browser blocks the picker; cancel leaves the Data panel.
-  dismissWelcome();
+  dismissWelcome(); state.top = "data"; render();
   const input = document.querySelector('.drop[data-kind="hold"] input'); input.focus({ preventScroll: true });
   document.getElementById("loadH").closest("section").scrollIntoView({ block: "start", behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
   input.click();
@@ -657,7 +688,7 @@ document.getElementById("wUpload").addEventListener("click", () => {
 document.getElementById("wSample").addEventListener("click", () => document.getElementById("sampleBtn").click());
 document.getElementById("clearBtn").addEventListener("click", () => {
   delete document.getElementById("welcome").dataset.dismissed; wbook.close();
-  Object.assign(state, { commit: null, hold: null, raw: {}, company: null, isSample: false }); ["commit", "hold"].forEach(k => setStatus(k, "Not loaded"));
+  Object.assign(state, { commit: null, hold: null, raw: {}, prov: {}, company: null, isSample: false }); dv.open = null; ["commit", "hold"].forEach(k => setStatus(k, "Not loaded"));
   document.querySelectorAll(".drop input").forEach(i => i.value = ""); document.getElementById("lpTitle").textContent = "LP Look-through Exposure"; render();
 });
 // Units apply when a file is read, so re-read what is loaded.
@@ -665,9 +696,37 @@ document.getElementById("inUnit").addEventListener("change", e => { state.inUnit
 document.getElementById("dil").addEventListener("change", e => { const x = pctIn(e.target.value); state.dil = isFinite(x) && x >= 0 && x < 0.95 ? x : 0.15; e.target.value = +(state.dil * 100).toFixed(1); render() });
 ["t1", "t2"].forEach((id, i) => document.getElementById(id).addEventListener("change", e => { const x = num(e.target.value); state.targets[i] = x > 0 ? x : [3, 4][i]; e.target.value = state.targets[i]; render() }));
 document.querySelectorAll("[data-basis]").forEach(b => b.addEventListener("click", () => { state.basis = b.dataset.basis; render() }));
-function setView(v) { state.view = v; render() }
+// A sub-tab belongs to the Analysis view, so picking one shows Analysis.
+function setView(v) { state.view = v; state.top = "analysis"; render() }
 document.querySelectorAll(".tabs [role=tab]").forEach(b => b.addEventListener("click", () => setView(b.dataset.view)));
-if (["#overlap", "#managers", "#company"].includes(location.hash)) state.view = location.hash.slice(1);
+if (["#overlap", "#managers", "#company"].includes(location.hash)) { state.view = location.hash.slice(1); state.top = "analysis" }
+if (location.hash === "#analysis") state.top = "analysis";
+// ---------- Analysis / Data ----------
+// Two top-level views: Analysis (the sub-tabs, which keep their selection, and the exit assumptions) and Data
+// (the identified data with its source audit, uploads and the settings that describe the files). The hash names the one showing.
+function syncTop() {
+  const d = state.top === "data"; document.getElementById("dataView").hidden = !d; document.getElementById("analysisView").hidden = d;
+  document.querySelectorAll(".viewsw [role=tab]").forEach(b => { const on = b.dataset.top === state.top; b.setAttribute("aria-selected", String(on)); b.tabIndex = on ? 0 : -1 });
+}
+function setTop(v, focus) {
+  const was = state.top; state.top = v; try { history.replaceState(null, "", "#" + v) } catch {}
+  if (was !== v) render(); if (focus) document.getElementById("view-" + v).focus();
+}
+document.querySelector(".viewsw").addEventListener("click", e => { const b = e.target.closest("[data-top]"); if (b) setTop(b.dataset.top) });
+document.querySelector(".viewsw").addEventListener("keydown", e => { if (["ArrowLeft", "ArrowRight", "Home", "End"].includes(e.key)) { e.preventDefault(); setTop(state.top === "data" ? "analysis" : "data", true) } });
+addEventListener("hashchange", () => { const h = location.hash.slice(1); if ((h === "data" || h === "analysis") && h !== state.top) setTop(h) });
+// Add data (Analysis view): pick a file, then every file, even a CSV, goes through the workbook proposal in the
+// Data view so its kind is recognised and confirmed before it loads. Cancelling the picker changes nothing.
+document.getElementById("addData").addEventListener("click", () => document.getElementById("addFile").click());
+document.getElementById("addFile").addEventListener("change", async e => {
+  const file = e.target.files[0]; e.target.value = ""; if (!file) return;
+  const err = document.getElementById("errors"); err.textContent = ""; wbook.close(); setTop("data");
+  try { let sheets = await readSheets(file);
+    if (!Object.values(sheets).some(a => a.length)) throw new Error(`${file.name} has no rows.`);
+    if (!/\.xlsx?$/i.test(file.name)) sheets = { [file.name]: sheets.Sheet1 };
+    wbook.offer(file.name, sheets, "", true) }
+  catch (x) { err.textContent = x.message }
+});
 document.getElementById("out").addEventListener("click", e => {
   const co = e.target.closest("[data-co]"); if (co) return openCompany(co.dataset.co);
   const th = e.target.closest("th[data-sort]"); if (th) { const k = th.dataset.sort; state.sort = { k, dir: state.sort.k === k ? -state.sort.dir : ["name", "sector", "lastRound"].includes(k) ? 1 : -1 }; render() }
@@ -684,6 +743,48 @@ document.getElementById("out").addEventListener("input", e => { if (e.target.id 
 matchMedia("(prefers-color-scheme: dark)").addEventListener("change", render);
 new MutationObserver(render).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
 
+/*DATAVIEW_JS*/
+// What the Data view says about each kind, field and value.
+const DV_LABEL = { manager: "Manager", fund: "Fund", vintage: "Vintage", fund_size: "Fund size", commitment: "Commitment", lp_share: "LP share of fund", carry: "Carry", currency: "Currency",
+  company: "Company", sector: "Sector", security: "Security", round: "Round", investment_date: "Investment date", shares: "Shares", cost: "Cost", price_paid: "Price paid per share",
+  fair_value: "Fair value", mark_per_share: "Mark per share", as_of: "As of", company_fd_shares: "Company FD shares", ownership: "Ownership" };
+// Where a field lands in the normalised rows, where the name differs.
+const NORM_KEY = { commit: { fund_size: "size", lp_share: "share" }, hold: { investment_date: "date", as_of: "asOf", company_fd_shares: "fd", fair_value: "fv", price_paid: "pricePaid", mark_per_share: "markPS", ownership: "ownIn" } };
+const MONEY_OF = { commit: ["fund_size", "commitment"], hold: ["cost", "fair_value"] }, PCT_OF = { commit: ["lp_share", "carry"], hold: ["ownership"] };
+const fnum = (v, d = 2) => v.toLocaleString("en-US", { maximumFractionDigits: d });
+function dvUsed(k, key, outs) {
+  const o = state[k][outs[0][0]], v = o[NORM_KEY[k][key] || key];
+  if (typeof v === "number") return !isFinite(v) ? "– (blank or not a number)" : PCT_OF[k].includes(key) ? `${fnum(v, 5)} (${fp(v)})` : fnum(v, MONEY_OF[k].includes(key) ? 2 : 6);
+  return v === "" || v == null ? "(blank)" : String(v);
+}
+function dvTransforms(k, key, P) {
+  const T = [], f = P.fields.find(x => x.key === key), vals = P.rows.map(r => r.v[key]), filled = vals.filter(v => v !== "" && v != null), blank = vals.length - filled.length, u = state.inUnit;
+  if (key === "investment_date" || key === "as_of") T.push(f?.dates ? "Excel dates, read as calendar dates (YYYY-MM-DD)." : "Read as dates (YYYY-MM-DD).");
+  if (MONEY_OF[k].includes(key)) { if (filled.some(v => typeof v === "string" && /[$€£,()]/.test(v))) T.push("Text like $1,234 or (1,234) read as numbers; brackets mean negative.");
+    if (u !== 1) T.push(`Multiplied by ${u.toLocaleString("en-US")} (files in ${u === 1000 ? "thousands" : "millions"}).`) }
+  if (PCT_OF[k].includes(key)) { const ex = filled.find(v => /%/.test(String(v)) || Math.abs(num(String(v).replace("%", ""))) > 1.5);
+    T.push(ex != null ? `Percent: ${String(ex).trim()} read as ${fnum(pctIn(ex), 5)}.` : "Read as a decimal (0.052 = 5.2%).") }
+  if (key === "carry" && blank) T.push(`Blank carry read as ${fp(DEFAULT_CARRY, 0)} (${blank} row${blank > 1 ? "s" : ""}).`);
+  if (key === "manager" && blank) T.push(k === "commit" ? "Where blank, the fund name is used." : "Where blank, taken from the commitments file.");
+  if (key === "sector" && blank) T.push("Blank read as Unclassified.");
+  if (key === "security") T.push("Where blank, the round is used, else Unspecified.");
+  if (key === "price_paid") T.push("Where blank, worked out as cost ÷ shares.");
+  if (key === "mark_per_share") T.push("Where blank, worked out as fair value ÷ shares.");
+  if (key === "ownership") T.push("Used where shares and company FD shares aren't both given.");
+  if (key === "currency") T.push("Read as an ISO code in capitals.");
+  return T;
+}
+function dvDerived(k, P) {
+  const D = [], u = state.inUnit, rows = state[k] || [];
+  if (u !== 1) D.push({ label: "Amounts", text: `Multiplied by ${u.toLocaleString("en-US")}: files are in ${u === 1000 ? "thousands" : "millions"} (set under Settings).` });
+  if (k === "commit") { const given = rows.filter((r, i) => isFinite(pctIn(state.raw.commit[rows.idx?.[i] ?? i]?.lp_share))).length;
+    D.push({ label: "Your share of the fund", text: given === rows.length ? "Given in the LP share column." : `Commitment ÷ fund size${given ? ` (${rows.length - given} funds; the LP share column for ${given})` : ""}.` }) }
+  if (k === "hold") { const n = rows.filter(r => r.shares > 0 && r.fd > 0).length;
+    D.push({ label: "Ownership", text: n === rows.length ? `Shares ÷ company FD shares (all ${n} rows).` : `Shares ÷ company FD shares (${n} rows); the ownership column for the other ${rows.length - n}.` }) }
+  return D;
+}
+initDataView({ box: document.getElementById("dvBox"), kinds: { commit: { label: "Fund commitments", off: "Loading it scales each position to your share of the fund; without it, figures are whole-fund." }, hold: { label: "Fund holdings", off: "Needed for every analysis." } },
+  fields: k => Object.keys(SYN[k]).map(key => ({ key, label: DV_LABEL[key] })), prov: k => state[k] ? state.prov[k] : null, count: k => state[k]?.length, used: dvUsed, transforms: dvTransforms, derived: dvDerived });
 /*BRAND_JS*/
 // Charts and manager swatches read the colour tokens when drawn, so redraw. Before any data, render() shows the empty state.
 initBrand({ onChange: render });
@@ -803,6 +904,8 @@ document.getElementById("dlXlsx").addEventListener("click", async () => {
   addSheet(wb, "Key figures", sheetFrom(kpis)); wb.SheetNames.unshift(wb.SheetNames.pop());
   const a = [["Assumption", "Value"], ["Dilution before exit", fp(state.dil, 1)], ["Targets", state.targets.map(tLabel).join(", ")], ["Return basis", state.basis === "net" ? "Net of carry (deal-by-deal estimate)" : "Gross"], ["Exit maths", "All classes convert to common at exit"]];
   addSheet(wb, "Assumptions", sheetFrom(a));
+  // Where every field came from, one row per kind and field (the Data view's audit, in figures).
+  addSheet(wb, "Sources", sheetFrom(dv.sources()));
   await saveFile(`${fileBase()}.xlsx`, new Uint8Array(XLSX.write(wb, { type: "array", bookType: "xlsx" })));
 });
 document.getElementById("dlHtml").addEventListener("click", async () => {
@@ -818,6 +921,8 @@ document.getElementById("dlHtml").addEventListener("click", async () => {
     clone.querySelectorAll("button.lnk").forEach(b => b.replaceWith(document.createTextNode(b.textContent)));
     parts.push(`<h2 class="view-h">${esc(label)}</h2>${clone.innerHTML}`);
   }));
+  // The Data view's summary cards lead the report, without the interactive audit pane.
+  parts.unshift(`<h2 class="view-h">Data</h2>${dv.summary()}`);
   const cssText = [...document.querySelectorAll("style")].map(s => s.textContent).join("\n");
   const title = document.getElementById("lpTitle").textContent, meta = `${document.getElementById("asOf").textContent} · ${fp(state.dil, 0)} dilution to exit · ${basisWord()} returns`;
   const doc = `<!doctype html><html lang="en" data-theme="light"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${esc(title)}</title>

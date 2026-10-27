@@ -15,8 +15,10 @@
 //   load(k, sheet, info) loads one sheet (info: { fileName, sheets, label, step, total }); returns true
 //              when done, false when it waits on the viewer (the page then calls wbook.next() or
 //              wbook.stop()), and throws to report the sheet as not loaded;
-//   abort(k)   closes whatever step the page left open for kind k.
+//   abort(k)   closes whatever step the page left open for kind k;
+//   done(Q)    (optional) runs once the queue ends, with Q.done the sheets that loaded.
 // The page calls wbook.offer(fileName, sheets, kind) on an upload: false means "not a workbook", carry on as before.
+// wbook.offer(fileName, sheets, "", true) proposes even a single sheet, so a file of unknown kind is recognised first.
 const wbook = { opts: null, P: null, Q: null };
 function initWorkbook(opts) {
   wbook.opts = opts;
@@ -47,8 +49,8 @@ function wbAssign(rows, kinds, prefer) {
   pairs.forEach(p => { if (!take.has(p.i) && !used.has(p.k)) { take.set(p.i, p.k); used.add(p.k) } });
   rows.forEach((r, i) => r.kind = take.get(i) || "");
 }
-wbook.offer = (fileName, sheets, prefer) => {
-  const names = Object.keys(sheets); if (names.length < 2) return false;
+wbook.offer = (fileName, sheets, prefer, any) => {
+  const names = Object.keys(sheets); if (names.length < (any ? 1 : 2)) return false;
   const o = wbook.opts, kinds = Object.keys(o.kinds);
   wbook.close();
   const rows = names.map(name => { const aoa = sheets[name], h = o.headerRow(aoa);
@@ -71,14 +73,14 @@ function wbHint(r) {
 function wbDraw() {
   const o = wbook.opts, P = wbook.P, kinds = Object.entries(o.kinds), n = P.rows.length, picked = P.rows.filter(r => r.kind).length;
   o.box.hidden = false;
-  o.box.innerHTML = `<div class="panel-head"><h3 id="wbH" tabindex="-1">Workbook: ${wbEsc(P.fileName)}</h3></div>
-    <p class="note">This workbook has ${n} sheets. Here's what each one looks like:</p>
+  o.box.innerHTML = `<div class="panel-head"><h3 id="wbH" tabindex="-1">${n > 1 ? "Workbook" : "File"}: ${wbEsc(P.fileName)}</h3></div>
+    <p class="note">${n > 1 ? `This workbook has ${n} sheets. Here's what each one looks like:` : "Here's what this file looks like. Check the kind of data before it loads:"}</p>
     <ul class="wb-list">${P.rows.map((r, i) => { const hint = wbHint(r), more = r.headers.length - 4;
       return `<li class="wb-row"><div class="wb-sheet"><label for="wbSel${i}">${wbEsc(r.name)}</label>
         <span class="wb-cols" id="wbCols${i}">${r.headers.length ? wbEsc(r.headers.slice(0, 4).join(", ")) + (more > 0 ? `, +${more} more` : "") : "No column headers"}</span></div>
         <div class="wb-pick"><select id="wbSel${i}" data-wb="${i}" aria-describedby="wbCols${i}${hint ? ` wbHint${i}` : ""}">${kinds.map(([k, l]) => `<option value="${k}"${r.kind === k ? " selected" : ""}>${wbEsc(l)}</option>`).join("")}<option value=""${r.kind ? "" : " selected"}>Not used</option></select>
         ${hint ? `<span class="wb-hint${r.kind ? " warn" : ""}" id="wbHint${i}">${wbEsc(hint)}</span>` : ""}</div></li>` }).join("")}</ul>
-    <p class="note" id="wbNote" role="status">${wbEsc(P.note || (picked ? `${picked} of ${n} sheets will load. Each kind takes one sheet.` : "Pick at least one sheet to load."))}</p>
+    <p class="note" id="wbNote" role="status">${wbEsc(P.note || (n === 1 ? (picked ? "It will load as the kind picked." : "Pick the kind of data to load it as.") : picked ? `${picked} of ${n} sheets will load. Each kind takes one sheet.` : "Pick at least one sheet to load."))}</p>
     <div class="row"><button type="button" class="primary" id="wbLoad"${picked ? "" : " disabled"}>Load these</button><button type="button" id="wbCancel">Cancel</button></div>`;
 }
 function wbPick(i, kind) {
@@ -132,6 +134,7 @@ function wbFinish() {
     ${Q.failed.map(f => `<p class="wb-hint warn wb-fail">${wbEsc(f)}</p>`).join("")}
     <div class="row"><button type="button" id="wbClose">Close</button></div>`;
   if (had) o.box.querySelector("#wbStep").focus({ preventScroll: true });
+  o.done?.(Q);
 }
 // Hides the panel; a queue that is still running is dropped (its open step closed) without loading more.
 wbook.close = () => { const Q = wbook.Q; wbook.Q = null; wbook.P = null; if (Q && Q.items[Q.i]) wbook.opts.abort(Q.items[Q.i].kind);

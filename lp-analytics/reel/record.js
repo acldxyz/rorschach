@@ -126,7 +126,8 @@ async function main() {
   page.on("pageerror", e => console.error("page error:", e.message));
   await page.goto(APP);
   // The page opens empty, on its welcome card. Click in-page: Playwright's click waits on animation frames, which the virtual clock holds.
-  await page.evaluate(() => document.getElementById("sampleBtn").click());
+  // Data lands on the Data view; picking a sub-tab shows the Analysis view, where the scenes are.
+  await page.evaluate(() => { document.getElementById("sampleBtn").click(); document.getElementById("tab-record").click() });
   await page.waitForFunction(() => window.Chart && document.querySelector("#cJ"));
   await page.evaluate(() => document.fonts.ready);
   await page.evaluate(HELPERS);
