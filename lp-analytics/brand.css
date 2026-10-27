@@ -7,4 +7,5 @@
 .brand-row #brandFont { width: 13em }
 .brand-row input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px }
 .swatches { display: flex; gap: 3px } .swatches span { width: 18px; height: 18px; border-radius: 3px; border: 1px solid var(--rule) }
+#brandFileHint { flex-basis: 100%; font-size: 12px }
 #brandNote:empty { display: none } #brandNote.warn { color: var(--warn) }

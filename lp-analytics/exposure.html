@@ -119,6 +119,7 @@ td.lo { color: var(--bad) } td.hi { color: var(--good) }
 .brand-row #brandFont { width: 13em }
 .brand-row input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px }
 .swatches { display: flex; gap: 3px } .swatches span { width: 18px; height: 18px; border-radius: 3px; border: 1px solid var(--rule) }
+#brandFileHint { flex-basis: 100%; font-size: 12px }
 #brandNote:empty { display: none } #brandNote.warn { color: var(--warn) }
 /* Top bar (module links + Light/Dark toggle), shared by both modules (build.py inlines this file, theme.js and theme.html). */
 .topbar { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; justify-content: space-between }
@@ -202,7 +203,9 @@ td.lo { color: var(--bad) } td.hi { color: var(--good) }
         <label for="brandColors">Colours <input id="brandColors" spellcheck="false" autocomplete="off" placeholder="#0B3D91, #F2A900, #6C757D"></label>
         <span class="swatches" id="brandSwatches" aria-hidden="true"></span>
         <label for="brandFont">Font <input id="brandFont" spellcheck="false" autocomplete="off" placeholder="e.g. Inter or Calibri"></label>
+        <button type="button" id="brandFileBtn" aria-describedby="brandFileHint">Load colour template</button><input type="file" id="brandFile" accept=".potx,.pptx,.thmx,.dotx,.docx,.xltx,.xlsx,.txt,.csv,.json" hidden>
         <button type="button" id="brandReset">Reset</button>
+        <span class="note" id="brandFileHint">Reads the colours and font from your firm's PowerPoint, Word or Excel template or theme (.potx, .thmx and the like), or a text list of colour codes.</span>
       </div>
       <p class="note" id="brandNote" role="status"></p>
     </div>
@@ -758,7 +761,7 @@ async function googleFont(f) {
   }
   return null;
 }
-async function applyBrand(b, { save = true } = {}) {
+async function applyBrand(b, { save = true, lead } = {}) {
   const bad = b.bad || []; brand.cur = b = { colors: b.colors || [], font: (b.font || "").trim() };
   if (save) brandStore.save(b);
   const note = document.getElementById("brandNote"), msgs = [], warn = [];
@@ -785,6 +788,7 @@ async function applyBrand(b, { save = true } = {}) {
   el.textContent = rules;
   const n = b.colors.length, second = brand.opts.second;
   if (n) msgs.push(`${n} colour${n > 1 ? "s" : ""}: the first is the accent${n > 1 && second ? `, the second ${second}` : ""}${n < 8 ? "; charts with more series than colours use tints and shades of these" : ""}.`);
+  if (lead) msgs.unshift(lead);
   if (bad.length) warn.push(`Could not read ${bad.map(t => `"${t}"`).join(", ")} as a colour.`);
   note.textContent = [...warn, ...msgs].join(" "); note.className = "note" + (warn.length ? " warn" : "");
   brand.opts.onChange?.();
@@ -797,9 +801,85 @@ function showBrand(b) {
   document.getElementById("brandColors").value = (b.colors || []).join(", ");
   document.getElementById("brandFont").value = b.font || "";
 }
+// ---------- colour template files ----------
+// Firms keep their palette in an Office theme: a .potx/.pptx, .dotx/.docx, .xltx/.xlsx or .thmx is a ZIP
+// holding DrawingML theme XML. Its accent1-6 are the colours Office itself gives chart series, in order, so
+// they map straight onto ours. dk1/lt1 are text and background, and dk2/lt2 are usually a near-black and a
+// near-white for text, so they are left out; a firm whose main colour sits in dk2 can type it first.
+const DML = "http://schemas.openxmlformats.org/drawingml/2006/main";
+const xmlDoc = s => { const d = new DOMParser().parseFromString(s, "application/xml"); return d.getElementsByTagName("parsererror").length ? null : d };
+const utf8 = b => new TextDecoder().decode(b instanceof Uint8Array ? b : new Uint8Array(b));
+// SheetJS, already on both pages for spreadsheets, reads (and inflates) ZIPs through its CFB module.
+function unzip(bytes) {
+  const c = XLSX.CFB.read(bytes, { type: "array" }), files = {};
+  c.FileIndex.forEach((e, i) => { if (e.type === 2 && e.content) files[c.FullPaths[i].replace(/^[^/]*\//, "")] = e.content });
+  return files;
+}
+function pickTheme(files) {
+  // PowerPoint also keeps themes for the notes and handout masters; the slide master's is the deck's.
+  const rels = files["ppt/slideMasters/_rels/slideMaster1.xml.rels"], d = rels && xmlDoc(utf8(rels));
+  for (const r of d ? d.getElementsByTagName("Relationship") : []) {
+    if (!/\/theme$/.test(r.getAttribute("Type") || "")) continue;
+    const p = decodeURI(new URL(r.getAttribute("Target"), "http://x/ppt/slideMasters/").pathname.slice(1));
+    if (files[p]) return p;
+  }
+  const num = p => +p.match(/(\d+)\.xml$/)[1];
+  return Object.keys(files).filter(p => /^(ppt|word|xl|theme)\/theme\/theme\d+\.xml$/.test(p)).sort((a, b) => num(a) - num(b))[0];
+}
+function readTheme(xml) {
+  const d = xmlDoc(xml), one = (el, tag) => el?.getElementsByTagNameNS(DML, tag)[0], colors = [];
+  for (let i = 1; i <= 6; i++) {
+    const c = one(one(d, "clrScheme"), `accent${i}`)?.firstElementChild;
+    const v = c && (c.localName === "srgbClr" ? c.getAttribute("val") : c.localName === "sysClr" ? c.getAttribute("lastClr") : null);
+    if (/^[0-9a-f]{6}$/i.test(v || "")) colors.push("#" + v.toLowerCase());
+  }
+  // "+mn-lt" and the like point back into the theme, so they name no font of their own.
+  const face = tag => { const t = one(one(one(d, "fontScheme"), tag), "latin")?.getAttribute("typeface")?.trim(); return t && !t.startsWith("+") ? t : "" };
+  return { colors: [...new Set(colors)], font: face("minorFont"), heading: face("majorFont") };
+}
+// A brand guide exported as text, CSV or JSON. Where it has colour codes, words are ignored, as
+// "Navy #0B3D91" would otherwise add CSS navy too. A line like "font: Inter" (or a JSON "font" key) fills the font.
+function readColorText(text) {
+  const fm = /(?:^|[{,])\s*["']?(?:font|typeface|font[-_ ]?family)["']?\s*[:=]\s*["']?([^"',;\n}]+)/im.exec(text);
+  if (fm) text = text.replace(fm[0], "");
+  const codes = text.match(/rgba?\([^)]*\)|hsla?\([^)]*\)|#[0-9a-f]{6}\b|#[0-9a-f]{3}\b|\b[0-9a-f]{6}\b/gi);
+  return { colors: parseColors(codes ? codes.join(" ") : text).colors, font: fm ? fm[1].trim() : "" };
+}
+async function readTemplate(file) {
+  if (file.size > 20e6) throw `${file.name} is over 20 MB, too big for a colour template.`;
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  if (bytes[0] !== 0x50 || bytes[1] !== 0x4b) {  // no "PK": not a ZIP
+    if (/\.(potx|pptx|thmx|dotx|docx|xltx|xlsx)$/i.test(file.name)) throw `${file.name} is not a ZIP package, so it can't be read as an Office file. Open it in PowerPoint, Word or Excel and save it again.`;
+    // Binary (an old .ppt, an image) would throw up stray hex-like runs, so only text is read for codes.
+    if (bytes.subarray(0, 4096).includes(0)) throw `${file.name} is neither an Office template nor a text list of colours.`;
+    const r = readColorText(utf8(bytes));
+    if (!r.colors.length) throw `Found no colours in ${file.name}. Use an Office template or theme, or a list of colour codes such as #0B3D91.`;
+    return r;
+  }
+  let files; try { files = unzip(bytes) } catch { throw `Could not open ${file.name}: the file is damaged or encrypted.` }
+  const p = pickTheme(files);
+  if (!p) throw `${file.name} has no Office theme inside. Use a PowerPoint, Word or Excel template or document, or a .thmx theme.`;
+  const r = readTheme(utf8(files[p]));
+  if (!r.colors.length) throw `The theme in ${file.name} has no accent colours.`;
+  if (!r.font) r.font = r.heading;
+  return r;
+}
+// Same as typing the values and pressing Enter, with what was read leading the note.
+async function brandFromFile(file) {
+  const note = document.getElementById("brandNote");
+  let r; try { r = await readTemplate(file) } catch (e) { note.textContent = typeof e === "string" ? e : `Could not read ${file.name}.`; note.className = "note warn"; return }
+  const n = r.colors.length, font = r.font || document.getElementById("brandFont").value.trim();  // a bare colour list keeps the font
+  const lead = `Read ${n} colour${n > 1 ? "s" : ""}${r.font ? ` and the font ${r.font}${r.heading && r.heading !== r.font ? ` (headings: ${r.heading})` : ""}` : ""} from ${file.name}.`;
+  showBrand({ colors: r.colors, font }); note.textContent = lead; note.className = "note";
+  await applyBrand({ colors: r.colors, font }, { lead });
+}
 function initBrand(opts = {}) {
   brand.opts = opts;
   ["brandColors", "brandFont"].forEach(id => { const i = document.getElementById(id); i.addEventListener("change", brandFromInputs); i.addEventListener("keydown", e => { if (e.key === "Enter") brandFromInputs() }) });
+  const fi = document.getElementById("brandFile");
+  document.getElementById("brandFileBtn").addEventListener("click", () => fi.click());
+  // Cleared after each read so choosing the same file again still fires change.
+  fi.addEventListener("change", async () => { const f = fi.files[0]; fi.value = ""; if (f) await brandFromFile(f) });
   document.getElementById("brandReset").addEventListener("click", () => { showBrand({}); applyBrand({}) });
   brand.cur = brandStore.load(); showBrand(brand.cur); if (brand.cur.colors?.length || brand.cur.font) applyBrand(brand.cur, { save: false });
 }
