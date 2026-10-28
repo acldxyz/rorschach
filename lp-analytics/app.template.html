@@ -1562,10 +1562,19 @@ function dvDerived(k, P) {
   if (k === "team" && !has("level")) D.push({ label: "Level", text: "No level column: each person's level is read from their title." });
   return D;
 }
+// Row categories for the source grid, read off what each row became: cash flows after the type mapping (so a
+// "Paid-in" row shows as Contribution), history rounds apart from quarterly reports, and staff by level.
+function dvCats(k) {
+  if (k === "cf") return { list: [["contribution", "Contribution", "C"], ["distribution", "Distribution", "D"], ["nav", "NAV", "N"], ["several", "Several types", "+"]],
+    of: r => { const t = new Set(r.out.map(([n]) => state.cf[n].type)); return t.size > 1 ? "several" : [...t][0] } };
+  if (k === "hist") return { list: [["round", "Funding round", "R"], ["report", "Quarterly report", "Q"]], of: r => state.hist[r.out[0][0]].round ? "round" : "report" };
+  if (k === "team") return { list: [...LEVELS.map(([id, label]) => [id, label, label[0]]), ["other", LEVEL_NAME.other, "?"]], of: r => state.team[r.out[0][0]].level };
+  return null;
+}
 
 /*DATAVIEW_JS*/
 initDataView({ box: document.getElementById("dvBox"), kinds: DV_KINDS, fields: k => FIELDS[k].map(f => ({ key: f.key, label: f.label })),
-  prov: k => state[k] ? state.prov[k] : null, count: k => state[k]?.length, used: dvUsed, transforms: dvTransforms, derived: dvDerived });
+  prov: k => state[k] ? state.prov[k] : null, count: k => state[k]?.length, used: dvUsed, transforms: dvTransforms, derived: dvDerived, cats: dvCats });
 /*WORKBOOK_JS*/
 // A column of Contribution / Distribution / NAV labels marks a cash flow ledger, whatever its header says.
 function hasTypeColumn(aoa, h) {
