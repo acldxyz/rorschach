@@ -1,4 +1,4 @@
-// Records a looping, muted sizzle reel of lp-analytics for use as a background video (e.g. behind a signup form).
+// Records a looping, muted sizzle reel of GP Diligence for use as a background video (e.g. behind a signup form).
 //
 //   node reel/record.js [--theme light|dark] [--out reel/out] [--fps 30]
 //

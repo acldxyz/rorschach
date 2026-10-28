@@ -1,4 +1,4 @@
-/* Brand row, shared by both modules (build.py inlines this file and brand.js, brand.html). */
+/* Brand row, shared by both products (build.py inlines this file and brand.js, brand.html). */
 .brand { display: grid; gap: 8px; border-top: 1px solid var(--rule); padding-top: 12px }
 .brand .bm-title { font-family: var(--display); font-weight: 600; font-size: 15px }
 .brand-row { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center }

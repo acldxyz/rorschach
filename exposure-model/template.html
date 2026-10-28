@@ -1,4 +1,4 @@
-<title>LP Look-through Exposure</title>
+<title>Exposure Model</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+Condensed:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
 <style>
@@ -31,10 +31,6 @@ body { background: var(--bg); color: var(--ink); font: 14px/1.5 var(--body); mar
 h1, h2, h3 { font-family: var(--display); font-weight: 600; margin: 0; text-wrap: balance; letter-spacing: .01em }
 h1 { font-size: 26px } h2 { font-size: 18px } h3 { font-size: 14px; color: var(--ink-2); text-transform: uppercase; letter-spacing: .08em }
 header { display: flex; flex-wrap: wrap; gap: 8px 24px; align-items: baseline; justify-content: space-between }
-.modules { display: flex; gap: 4px; font: 600 12px var(--body); letter-spacing: .04em; text-transform: uppercase }
-.modules a { color: var(--ink-3); text-decoration: none; padding: 3px 10px; border: 1px solid var(--rule); border-radius: 999px }
-.modules a:hover { color: var(--accent); border-color: var(--accent) }
-.modules a[aria-current="page"] { color: var(--panel); background: var(--accent); border-color: var(--accent) }
 .sub { color: var(--ink-2); margin: 2px 0 0; max-width: 80ch }
 .meta { font-family: var(--mono); font-size: 12px; color: var(--ink-3) }
 .panel { background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 16px; min-width: 0; display: grid; gap: 12px; align-content: start; grid-template-columns: minmax(0, 1fr) }
@@ -121,21 +117,20 @@ td.lo { color: var(--bad) } td.hi { color: var(--good) }
 #app.arriving > :not(#welcome) { display: none }
 #app.arriving #welcome { max-width: 920px; width: 100%; justify-self: center; padding: 24px }
 .welcome .eyebrow { font: 600 12px var(--body); letter-spacing: .06em; text-transform: uppercase; color: var(--accent); margin: 0 0 4px }
-.welcome .switch { margin: 0 } .welcome .switch a { color: var(--accent) }
 .choices { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr)); gap: 12px }
 .choice { display: grid; gap: 6px; align-content: start; justify-items: start; padding: 12px; border: 1px solid var(--rule); border-radius: 6px; background: var(--bg) }
 @media (prefers-reduced-motion: reduce) { * { transition-duration: .01s !important } }
 </style>
 
 <div class="wrap arriving" id="app">
-  <div class="topbar"><nav class="modules" aria-label="Modules"><a href="index.html">Fund performance</a><a href="exposure.html" aria-current="page">LP exposure</a></nav>
+  <div class="topbar"><p class="product">Exposure Model</p>
     <!--THEME_HTML--></div>
   <script>
 /*THEME_JS*/
   </script>
   <header>
     <div>
-      <h1 id="lpTitle">LP Look-through Exposure</h1>
+      <h1 id="lpTitle">Exposure Model</h1>
       <p class="sub">Every company you own through your fund commitments, scaled to your share of each fund: how much you hold, which managers hold it, at what round and what mark, and what exit it would take to return 3x or 4x.</p>
     </div>
     <div class="meta" id="asOf"></div>
@@ -143,12 +138,11 @@ td.lo { color: var(--bad) } td.hi { color: var(--good) }
 
   <!-- Shown whenever nothing is loaded (see syncWelcome), so the first visit asks rather than assumes. -->
   <section class="panel welcome" id="welcome" aria-labelledby="welcomeH">
-    <div><p class="eyebrow">LP exposure</p><h2 id="welcomeH" tabindex="-1">How would you like to start?</h2><p class="sub">See every company you own through your fund commitments, scaled to your share of each fund.</p></div>
+    <div><p class="eyebrow">Exposure Model</p><h2 id="welcomeH" tabindex="-1">How would you like to start?</h2><p class="sub">See every company you own through your fund commitments, scaled to your share of each fund.</p></div>
     <div class="choices">
       <div class="choice"><button type="button" class="primary" id="wUpload" aria-describedby="wUploadD">Upload your data</button><p class="note" id="wUploadD">Pick your fund holdings file, each manager's schedule of investments (CSV or XLSX), or one workbook with holdings and commitments on separate sheets. You can add your commitments after.</p></div>
       <div class="choice"><button type="button" id="wSample" aria-describedby="wSampleD">Use sample data</button><p class="note" id="wSampleD">Explore with a fictional LP's commitments to ten funds.</p></div>
     </div>
-    <p class="note switch">Looking for something else? <a href="index.html">Switch to Fund performance</a></p>
   </section>
 
   <div class="viewsw" role="tablist" aria-label="Page view">
@@ -671,7 +665,7 @@ document.getElementById("sampleBtn").addEventListener("click", () => {
   state.inUnit = 1; document.getElementById("inUnit").value = "1";
   loadAoa("commit", parseCSVRows(SAMPLE.commit), { file: "lp_commitments.csv", via: "sample" }); loadAoa("hold", parseCSVRows(SAMPLE.hold), { file: "lp_holdings.csv", via: "sample" });
   setStatus("commit", `Sample · ${state.commit.length} funds`, "ok"); setStatus("hold", `Sample · ${state.hold.length} positions`, "ok");
-  state.isSample = true; document.getElementById("lpTitle").textContent = "LP Look-through Exposure (sample)"; landOnData(); render();
+  state.isSample = true; document.getElementById("lpTitle").textContent = "Exposure Model (sample)"; landOnData(); render();
 });
 // ---------- welcome ----------
 // With nothing loaded, the welcome card asks how to start. Loading anything (sample or upload) hides it;
@@ -696,7 +690,7 @@ document.getElementById("wSample").addEventListener("click", () => document.getE
 document.getElementById("clearBtn").addEventListener("click", () => {
   delete document.getElementById("welcome").dataset.dismissed; wbook.close();
   Object.assign(state, { commit: null, hold: null, raw: {}, prov: {}, company: null, isSample: false }); dv.open = null; ["commit", "hold"].forEach(k => setStatus(k, "Not loaded"));
-  document.querySelectorAll(".drop input").forEach(i => i.value = ""); document.getElementById("lpTitle").textContent = "LP Look-through Exposure"; render();
+  document.querySelectorAll(".drop input").forEach(i => i.value = ""); document.getElementById("lpTitle").textContent = "Exposure Model"; render();
 });
 // Units apply when a file is read, so re-read what is loaded.
 document.getElementById("inUnit").addEventListener("change", e => { state.inUnit = +e.target.value; try { ["commit", "hold"].forEach(k => state.raw[k] && apply(k, state.raw[k])) } catch (x) { document.getElementById("errors").textContent = x.message } render() });
@@ -794,7 +788,7 @@ initDataView({ box: document.getElementById("dvBox"), kinds: { commit: { label: 
   fields: k => Object.keys(SYN[k]).map(key => ({ key, label: DV_LABEL[key] })), prov: k => state[k] ? state.prov[k] : null, count: k => state[k]?.length, used: dvUsed, transforms: dvTransforms, derived: dvDerived });
 /*BRAND_JS*/
 // Charts and manager swatches read the colour tokens when drawn, so redraw. Before any data, render() shows the empty state.
-initBrand({ onChange: render });
+initBrand({ storeKey: "exposure-model:brand", onChange: render });
 
 // ---------- downloads ----------
 // Inside the claude.ai viewer, files go through the downloads capability (the viewer confirms each
@@ -935,7 +929,7 @@ document.getElementById("dlHtml").addEventListener("click", async () => {
   const doc = `<!doctype html><html lang="en" data-theme="light"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${esc(title)}</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+Condensed:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">${brand.fontHref ? `\n<link rel="stylesheet" href="${esc(brand.fontHref)}">` : ""}
 <style>${cssText}\n.view-h{font-size:22px;margin:24px 0 0;padding-top:16px;border-top:2px solid var(--ink)}</style></head>
-<body><div class="wrap"><header><div><h1>${esc(title)}</h1><p class="sub">Look-through exposure report</p></div><div class="meta">${esc(meta)}</div></header>
+<body><div class="wrap"><header><div><h1>${esc(title)}</h1><p class="sub">Exposure model report</p></div><div class="meta">${esc(meta)}</div></header>
 ${parts.join("\n")}</div></body></html>`;
   await saveFile(`${fileBase()}-report.html`, doc);
 });

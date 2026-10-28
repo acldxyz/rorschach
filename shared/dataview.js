@@ -1,5 +1,5 @@
 // ---------- data view ----------
-// Shared by both modules: build.py inlines this file (with dataview.css) into each page.
+// Shared by both products: build.py inlines this file (with dataview.css) into each page.
 // The Data view lists what each upload was identified as, and lets the viewer audit any field: which
 // file, sheet, column and header it came from, how it was matched, what the app did to it, and the
 // source cells next to the values the app uses. Provenance is captured when a sheet loads:

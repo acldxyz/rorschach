@@ -1,5 +1,5 @@
 // ---------- theme ----------
-// Light/Dark toggle, shared by both modules: build.py inlines this file (with theme.css and the theme.html
+// Light/Dark toggle, shared by both products: build.py inlines this file (with theme.css and the theme.html
 // buttons) in a script right after the buttons, so a stored choice is applied before the page paints.
 // The choice lives in data-theme on <html> and in localStorage ("theme"). With no stored choice the
 // attribute stays absent and the CSS follows the system setting, live. Pages re-render their charts when

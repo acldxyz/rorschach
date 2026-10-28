@@ -1,5 +1,5 @@
 // ---------- workbook ----------
-// Shared by both modules: build.py inlines this file (with workbook.css) into each page.
+// Shared by both products: build.py inlines this file (with workbook.css) into each page.
 // Firms often keep everything in one Excel file, a tab each for cash flows, portfolio, KPIs and staff.
 // When an upload has two or more non-empty sheets, every sheet is scored against every data kind the
 // page takes, each kind gets at most one sheet, and a proposal panel lets the viewer confirm or change

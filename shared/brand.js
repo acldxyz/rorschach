@@ -1,17 +1,17 @@
 // ---------- brand ----------
-// Shared by both modules: build.py inlines this file (with brand.css and the brand.html row) into each page.
+// Shared by both products: build.py inlines this file (with brand.css and the brand.html row) into each page.
 // The user's own colours and font. The first colour becomes the accent, the second the base of the
 // performance page's quartile scale (kept apart so the fund marker stands out against its benchmark
 // bands), and the list in order becomes the chart series (topped up to eight with tints and shades).
 // Everything is written as CSS custom properties, so the page, the charts (which read them through
-// css()) and the HTML report all follow. Kept in this browser under one key, so both modules served
-// from the same place share it.
-// Page interface: call initBrand({ onChange, second }) once the page's render code exists. onChange()
+// css()) and the HTML report all follow. Kept in this browser under the page's own storeKey.
+// Page interface: call initBrand({ storeKey, onChange, second }) once the page's render code exists. onChange()
 // runs after every change (re-render the charts, which bake colours in when drawn); second describes
 // the second colour's extra role in the note. The page reads brand.cur (for its workspace file) and
 // brand.fontHref (a Google Fonts stylesheet to link from its HTML report), and may call applyBrand/showBrand.
 const brand = { cur: {}, fontHref: null, opts: {} };
-const brandStore = { load() { try { return JSON.parse(localStorage.getItem("brand")) || {} } catch { return {} } }, save(v) { try { localStorage.setItem("brand", JSON.stringify(v)) } catch {} } };
+// Each product passes its own storeKey (initBrand), so the two products keep separate brand settings.
+const brandStore = { key: () => brand.opts.storeKey || "brand", load() { try { return JSON.parse(localStorage.getItem(this.key())) || {} } catch { return {} } }, save(v) { try { localStorage.setItem(this.key(), JSON.stringify(v)) } catch {} } };
 const LIGHT = { panel: "#ffffff", ink: "#16201e" }, DARK = { panel: "#192120", ink: "#eef2f0" };
 // Any CSS colour (hex with or without #, rgb(), hsl(), a name) to #rrggbb, or null.
 function toHex(s) {

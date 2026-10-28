@@ -1,4 +1,5 @@
-/* Top bar (module links + Light/Dark toggle), shared by both modules (build.py inlines this file, theme.js and theme.html). */
+/* Top bar (product name + Light/Dark toggle), shared by both products (build.py inlines this file, theme.js and theme.html). */
+.product { margin: 0; font: 600 12px var(--body); letter-spacing: .06em; text-transform: uppercase; color: var(--accent) }
 .topbar { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; justify-content: space-between }
 .theme-seg { display: inline-flex; margin-left: auto; border: 1px solid var(--rule); border-radius: 999px; overflow: hidden }
 .theme-seg button { font: 600 12px var(--body); letter-spacing: .04em; text-transform: uppercase; color: var(--ink-3); background: none; border: 0; border-radius: 0; padding: 3px 10px }

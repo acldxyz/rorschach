@@ -1,4 +1,4 @@
-/* Workbook proposal (workbook.js), shared by both modules: one row per sheet, its first headers and a kind picker. */
+/* Workbook proposal (workbook.js), shared by both products: one row per sheet, its first headers and a kind picker. */
 .wbook { border-color: var(--accent); gap: 10px }
 .wbook h3:focus, .wb-step:focus { outline: none }
 .wb-list { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--rule) }

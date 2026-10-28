@@ -1,4 +1,4 @@
-/* Analysis / Data switch and the Data view's identified-data cards with their audit pane (dataview.js), shared by both modules. */
+/* Analysis / Data switch and the Data view's identified-data cards with their audit pane (dataview.js), shared by both products. */
 .viewsw { display: inline-flex; justify-self: start; border: 1px solid var(--rule); border-radius: 6px; overflow: hidden; background: var(--panel) }
 .viewsw button { border: 0; border-radius: 0; padding: 7px 18px; font: 600 14px var(--display); color: var(--ink-2); background: none }
 .viewsw button + button { border-left: 1px solid var(--rule) }

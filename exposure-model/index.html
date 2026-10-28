@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>LP Look-through Exposure</title>
+<title>Exposure Model</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+Condensed:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
 <style>
@@ -33,10 +33,6 @@ body { background: var(--bg); color: var(--ink); font: 14px/1.5 var(--body); mar
 h1, h2, h3 { font-family: var(--display); font-weight: 600; margin: 0; text-wrap: balance; letter-spacing: .01em }
 h1 { font-size: 26px } h2 { font-size: 18px } h3 { font-size: 14px; color: var(--ink-2); text-transform: uppercase; letter-spacing: .08em }
 header { display: flex; flex-wrap: wrap; gap: 8px 24px; align-items: baseline; justify-content: space-between }
-.modules { display: flex; gap: 4px; font: 600 12px var(--body); letter-spacing: .04em; text-transform: uppercase }
-.modules a { color: var(--ink-3); text-decoration: none; padding: 3px 10px; border: 1px solid var(--rule); border-radius: 999px }
-.modules a:hover { color: var(--accent); border-color: var(--accent) }
-.modules a[aria-current="page"] { color: var(--panel); background: var(--accent); border-color: var(--accent) }
 .sub { color: var(--ink-2); margin: 2px 0 0; max-width: 80ch }
 .meta { font-family: var(--mono); font-size: 12px; color: var(--ink-3) }
 .panel { background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 16px; min-width: 0; display: grid; gap: 12px; align-content: start; grid-template-columns: minmax(0, 1fr) }
@@ -110,7 +106,7 @@ td.lo { color: var(--bad) } td.hi { color: var(--good) }
 .co-head h2 { font-size: 24px }
 .matrix td { vertical-align: top } .matrix td small { display: block; font: 11px var(--body); color: var(--ink-3) }
 .bar-in { display: inline-block; height: 8px; background: var(--accent); border-radius: 2px; vertical-align: 1px; margin-left: 6px; opacity: .6 }
-/* Brand row, shared by both modules (build.py inlines this file and brand.js, brand.html). */
+/* Brand row, shared by both products (build.py inlines this file and brand.js, brand.html). */
 .brand { display: grid; gap: 8px; border-top: 1px solid var(--rule); padding-top: 12px }
 .brand .bm-title { font-family: var(--display); font-weight: 600; font-size: 15px }
 .brand-row { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center }
@@ -121,14 +117,15 @@ td.lo { color: var(--bad) } td.hi { color: var(--good) }
 .swatches { display: flex; gap: 3px } .swatches span { width: 18px; height: 18px; border-radius: 3px; border: 1px solid var(--rule) }
 #brandFileHint { flex-basis: 100%; font-size: 12px }
 #brandNote:empty { display: none } #brandNote.warn { color: var(--warn) }
-/* Top bar (module links + Light/Dark toggle), shared by both modules (build.py inlines this file, theme.js and theme.html). */
+/* Top bar (product name + Light/Dark toggle), shared by both products (build.py inlines this file, theme.js and theme.html). */
+.product { margin: 0; font: 600 12px var(--body); letter-spacing: .06em; text-transform: uppercase; color: var(--accent) }
 .topbar { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; justify-content: space-between }
 .theme-seg { display: inline-flex; margin-left: auto; border: 1px solid var(--rule); border-radius: 999px; overflow: hidden }
 .theme-seg button { font: 600 12px var(--body); letter-spacing: .04em; text-transform: uppercase; color: var(--ink-3); background: none; border: 0; border-radius: 0; padding: 3px 10px }
 .theme-seg button:hover { color: var(--accent) }
 .theme-seg button[aria-pressed="true"] { color: var(--panel); background: var(--accent) }
 .theme-seg button:focus-visible { outline: 2px solid var(--ink); outline-offset: -2px }
-/* Workbook proposal (workbook.js), shared by both modules: one row per sheet, its first headers and a kind picker. */
+/* Workbook proposal (workbook.js), shared by both products: one row per sheet, its first headers and a kind picker. */
 .wbook { border-color: var(--accent); gap: 10px }
 .wbook h3:focus, .wb-step:focus { outline: none }
 .wb-list { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--rule) }
@@ -141,7 +138,7 @@ td.lo { color: var(--bad) } td.hi { color: var(--good) }
 .wb-hint { font-size: 12px; color: var(--ink-3); margin: 0; text-align: right } .wb-hint.warn { color: var(--warn) } .wb-fail { text-align: left }
 .wb-step { color: var(--ink-2); font-size: 13px }
 @media (max-width: 560px) { .wb-row { grid-template-columns: minmax(0, 1fr) } .wb-pick { justify-items: start } .wb-hint { text-align: left } }
-/* Analysis / Data switch and the Data view's identified-data cards with their audit pane (dataview.js), shared by both modules. */
+/* Analysis / Data switch and the Data view's identified-data cards with their audit pane (dataview.js), shared by both products. */
 .viewsw { display: inline-flex; justify-self: start; border: 1px solid var(--rule); border-radius: 6px; overflow: hidden; background: var(--panel) }
 .viewsw button { border: 0; border-radius: 0; padding: 7px 18px; font: 600 14px var(--display); color: var(--ink-2); background: none }
 .viewsw button + button { border-left: 1px solid var(--rule) }
@@ -234,18 +231,17 @@ td.lo { color: var(--bad) } td.hi { color: var(--good) }
 #app.arriving > :not(#welcome) { display: none }
 #app.arriving #welcome { max-width: 920px; width: 100%; justify-self: center; padding: 24px }
 .welcome .eyebrow { font: 600 12px var(--body); letter-spacing: .06em; text-transform: uppercase; color: var(--accent); margin: 0 0 4px }
-.welcome .switch { margin: 0 } .welcome .switch a { color: var(--accent) }
 .choices { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr)); gap: 12px }
 .choice { display: grid; gap: 6px; align-content: start; justify-items: start; padding: 12px; border: 1px solid var(--rule); border-radius: 6px; background: var(--bg) }
 @media (prefers-reduced-motion: reduce) { * { transition-duration: .01s !important } }
 </style>
 
 <div class="wrap arriving" id="app">
-  <div class="topbar"><nav class="modules" aria-label="Modules"><a href="index.html">Fund performance</a><a href="exposure.html" aria-current="page">LP exposure</a></nav>
+  <div class="topbar"><p class="product">Exposure Model</p>
     <div class="theme-seg" role="group" aria-label="Colour theme"><button type="button" data-theme-set="light" aria-pressed="false">Light</button><button type="button" data-theme-set="dark" aria-pressed="false">Dark</button></div></div>
   <script>
 // ---------- theme ----------
-// Light/Dark toggle, shared by both modules: build.py inlines this file (with theme.css and the theme.html
+// Light/Dark toggle, shared by both products: build.py inlines this file (with theme.css and the theme.html
 // buttons) in a script right after the buttons, so a stored choice is applied before the page paints.
 // The choice lives in data-theme on <html> and in localStorage ("theme"). With no stored choice the
 // attribute stays absent and the CSS follows the system setting, live. Pages re-render their charts when
@@ -268,7 +264,7 @@ td.lo { color: var(--bad) } td.hi { color: var(--good) }
   </script>
   <header>
     <div>
-      <h1 id="lpTitle">LP Look-through Exposure</h1>
+      <h1 id="lpTitle">Exposure Model</h1>
       <p class="sub">Every company you own through your fund commitments, scaled to your share of each fund: how much you hold, which managers hold it, at what round and what mark, and what exit it would take to return 3x or 4x.</p>
     </div>
     <div class="meta" id="asOf"></div>
@@ -276,12 +272,11 @@ td.lo { color: var(--bad) } td.hi { color: var(--good) }
 
   <!-- Shown whenever nothing is loaded (see syncWelcome), so the first visit asks rather than assumes. -->
   <section class="panel welcome" id="welcome" aria-labelledby="welcomeH">
-    <div><p class="eyebrow">LP exposure</p><h2 id="welcomeH" tabindex="-1">How would you like to start?</h2><p class="sub">See every company you own through your fund commitments, scaled to your share of each fund.</p></div>
+    <div><p class="eyebrow">Exposure Model</p><h2 id="welcomeH" tabindex="-1">How would you like to start?</h2><p class="sub">See every company you own through your fund commitments, scaled to your share of each fund.</p></div>
     <div class="choices">
       <div class="choice"><button type="button" class="primary" id="wUpload" aria-describedby="wUploadD">Upload your data</button><p class="note" id="wUploadD">Pick your fund holdings file, each manager's schedule of investments (CSV or XLSX), or one workbook with holdings and commitments on separate sheets. You can add your commitments after.</p></div>
       <div class="choice"><button type="button" id="wSample" aria-describedby="wSampleD">Use sample data</button><p class="note" id="wSampleD">Explore with a fictional LP's commitments to ten funds.</p></div>
     </div>
-    <p class="note switch">Looking for something else? <a href="index.html">Switch to Fund performance</a></p>
   </section>
 
   <div class="viewsw" role="tablist" aria-label="Page view">
@@ -790,7 +785,7 @@ async function load(kind, file) {
   catch (e) { err.textContent = e.message; setStatus(kind, "Could not read file", "err") }
 }
 // ---------- workbook ----------
-// Shared by both modules: build.py inlines this file (with workbook.css) into each page.
+// Shared by both products: build.py inlines this file (with workbook.css) into each page.
 // Firms often keep everything in one Excel file, a tab each for cash flows, portfolio, KPIs and staff.
 // When an upload has two or more non-empty sheets, every sheet is scored against every data kind the
 // page takes, each kind gets at most one sheet, and a proposal panel lets the viewer confirm or change
@@ -955,7 +950,7 @@ document.getElementById("sampleBtn").addEventListener("click", () => {
   state.inUnit = 1; document.getElementById("inUnit").value = "1";
   loadAoa("commit", parseCSVRows(SAMPLE.commit), { file: "lp_commitments.csv", via: "sample" }); loadAoa("hold", parseCSVRows(SAMPLE.hold), { file: "lp_holdings.csv", via: "sample" });
   setStatus("commit", `Sample · ${state.commit.length} funds`, "ok"); setStatus("hold", `Sample · ${state.hold.length} positions`, "ok");
-  state.isSample = true; document.getElementById("lpTitle").textContent = "LP Look-through Exposure (sample)"; landOnData(); render();
+  state.isSample = true; document.getElementById("lpTitle").textContent = "Exposure Model (sample)"; landOnData(); render();
 });
 // ---------- welcome ----------
 // With nothing loaded, the welcome card asks how to start. Loading anything (sample or upload) hides it;
@@ -980,7 +975,7 @@ document.getElementById("wSample").addEventListener("click", () => document.getE
 document.getElementById("clearBtn").addEventListener("click", () => {
   delete document.getElementById("welcome").dataset.dismissed; wbook.close();
   Object.assign(state, { commit: null, hold: null, raw: {}, prov: {}, company: null, isSample: false }); dv.open = null; ["commit", "hold"].forEach(k => setStatus(k, "Not loaded"));
-  document.querySelectorAll(".drop input").forEach(i => i.value = ""); document.getElementById("lpTitle").textContent = "LP Look-through Exposure"; render();
+  document.querySelectorAll(".drop input").forEach(i => i.value = ""); document.getElementById("lpTitle").textContent = "Exposure Model"; render();
 });
 // Units apply when a file is read, so re-read what is loaded.
 document.getElementById("inUnit").addEventListener("change", e => { state.inUnit = +e.target.value; try { ["commit", "hold"].forEach(k => state.raw[k] && apply(k, state.raw[k])) } catch (x) { document.getElementById("errors").textContent = x.message } render() });
@@ -1035,7 +1030,7 @@ matchMedia("(prefers-color-scheme: dark)").addEventListener("change", render);
 new MutationObserver(render).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
 
 // ---------- data view ----------
-// Shared by both modules: build.py inlines this file (with dataview.css) into each page.
+// Shared by both products: build.py inlines this file (with dataview.css) into each page.
 // The Data view lists what each upload was identified as, and lets the viewer audit any field: which
 // file, sheet, column and header it came from, how it was matched, what the app did to it, and the
 // source cells next to the values the app uses. Provenance is captured when a sheet loads:
@@ -1411,19 +1406,19 @@ function dvDerived(k, P) {
 initDataView({ box: document.getElementById("dvBox"), kinds: { commit: { label: "Fund commitments", off: "Loading it scales each position to your share of the fund; without it, figures are whole-fund." }, hold: { label: "Fund holdings", off: "Needed for every analysis." } },
   fields: k => Object.keys(SYN[k]).map(key => ({ key, label: DV_LABEL[key] })), prov: k => state[k] ? state.prov[k] : null, count: k => state[k]?.length, used: dvUsed, transforms: dvTransforms, derived: dvDerived });
 // ---------- brand ----------
-// Shared by both modules: build.py inlines this file (with brand.css and the brand.html row) into each page.
+// Shared by both products: build.py inlines this file (with brand.css and the brand.html row) into each page.
 // The user's own colours and font. The first colour becomes the accent, the second the base of the
 // performance page's quartile scale (kept apart so the fund marker stands out against its benchmark
 // bands), and the list in order becomes the chart series (topped up to eight with tints and shades).
 // Everything is written as CSS custom properties, so the page, the charts (which read them through
-// css()) and the HTML report all follow. Kept in this browser under one key, so both modules served
-// from the same place share it.
-// Page interface: call initBrand({ onChange, second }) once the page's render code exists. onChange()
+// css()) and the HTML report all follow. Kept in this browser under the page's own storeKey.
+// Page interface: call initBrand({ storeKey, onChange, second }) once the page's render code exists. onChange()
 // runs after every change (re-render the charts, which bake colours in when drawn); second describes
 // the second colour's extra role in the note. The page reads brand.cur (for its workspace file) and
 // brand.fontHref (a Google Fonts stylesheet to link from its HTML report), and may call applyBrand/showBrand.
 const brand = { cur: {}, fontHref: null, opts: {} };
-const brandStore = { load() { try { return JSON.parse(localStorage.getItem("brand")) || {} } catch { return {} } }, save(v) { try { localStorage.setItem("brand", JSON.stringify(v)) } catch {} } };
+// Each product passes its own storeKey (initBrand), so the two products keep separate brand settings.
+const brandStore = { key: () => brand.opts.storeKey || "brand", load() { try { return JSON.parse(localStorage.getItem(this.key())) || {} } catch { return {} } }, save(v) { try { localStorage.setItem(this.key(), JSON.stringify(v)) } catch {} } };
 const LIGHT = { panel: "#ffffff", ink: "#16201e" }, DARK = { panel: "#192120", ink: "#eef2f0" };
 // Any CSS colour (hex with or without #, rgb(), hsl(), a name) to #rrggbb, or null.
 function toHex(s) {
@@ -1595,7 +1590,7 @@ function initBrand(opts = {}) {
   brand.cur = brandStore.load(); showBrand(brand.cur); if (brand.cur.colors?.length || brand.cur.font) applyBrand(brand.cur, { save: false });
 }
 // Charts and manager swatches read the colour tokens when drawn, so redraw. Before any data, render() shows the empty state.
-initBrand({ onChange: render });
+initBrand({ storeKey: "exposure-model:brand", onChange: render });
 
 // ---------- downloads ----------
 // Inside the claude.ai viewer, files go through the downloads capability (the viewer confirms each
@@ -1736,7 +1731,7 @@ document.getElementById("dlHtml").addEventListener("click", async () => {
   const doc = `<!doctype html><html lang="en" data-theme="light"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${esc(title)}</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+Condensed:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">${brand.fontHref ? `\n<link rel="stylesheet" href="${esc(brand.fontHref)}">` : ""}
 <style>${cssText}\n.view-h{font-size:22px;margin:24px 0 0;padding-top:16px;border-top:2px solid var(--ink)}</style></head>
-<body><div class="wrap"><header><div><h1>${esc(title)}</h1><p class="sub">Look-through exposure report</p></div><div class="meta">${esc(meta)}</div></header>
+<body><div class="wrap"><header><div><h1>${esc(title)}</h1><p class="sub">Exposure model report</p></div><div class="meta">${esc(meta)}</div></header>
 ${parts.join("\n")}</div></body></html>`;
   await saveFile(`${fileBase()}-report.html`, doc);
 });
