@@ -2,11 +2,13 @@
 
 Diligence on one venture GP. Load the GP's fund cash flows (required) and, optionally, portfolio company data, company history and firm staff to see:
 
-- **Track record:** a net performance summary per fund (vintage, size, % invested, years since first cash flow, how many companies make up 90% of value, net TVPI, DPI and IRR), with a Detailed view adding paid-in, distributed, NAV, RVPI and benchmark quartiles; relative performance against vintage benchmarks; the J-curve and annual cash flows.
-- **Portfolio:** slices by stage, sector, outcome and more; return concentration; time to write-off and follow-on rounds before write-off; gross margin and growth.
-- **Portfolio companies:** a profile per company, with runway and round tracking from the history file.
+- **Track record:** a net performance summary per fund (vintage, size, % invested, years active since the first capital call, how many companies make up 90% of value, net TVPI, DPI and IRR), with a Detailed view adding paid-in, distributed, NAV, RVPI and benchmark quartiles; relative performance against vintage benchmarks; the J-curve and annual cash flows.
+- **Portfolio:** slices by stage, sector, outcome and more; return concentration; time to write-off and follow-on rounds before write-off; gross margin.
+- **Portfolio companies:** growth vs profitability, with one line per company (year-over-year revenue growth against profit margin, quarter by quarter), a diamond on the quarter each company closed a funding round, and filters for fund, industry and period; then a profile per company, with runway and round tracking from the history file.
 - **Team & partners:** headcount and partner track records.
 - **Scenarios:** exit forecasts with dilution, liquidation preferences and the fund waterfall.
+
+**Excel workbook** downloads every table and chart's figures, a Key figures and a Sources sheet, then one `Data · …` sheet per kind loaded (fund cash flows, portfolio companies, company history, firm staff): the cleaned rows in the app's own columns, with typed numbers and dates, amounts in full units of the display currency, and the source cell each row came from, so the file doubles as one consolidated copy of the uploads.
 
 **Save workspace** downloads one file holding everything loaded and set up: the data, column matches, source details for the audit, brand, units, benchmarks and scenarios. **Open workspace** restores it. Workspaces saved under the old name (Track Record Analyzer) still open.
 
