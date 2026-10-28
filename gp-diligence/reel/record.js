@@ -111,7 +111,7 @@ const SCENES = [
     cam: async p => { const r = await p.evaluate(() => __rect("LP cash flows", 1)); return [fit(r, { zoom: 1.28, fx: .36 }), fit(r, { zoom: 1.1, fx: .5 })] },
     setup: p => p.evaluate(() => { document.querySelector("[data-scen]:nth-of-type(1)").click(); __replay(["cScFlows", "cScCo"], 1500, 50) }),
     frame: async (p, t) => { if (Math.abs(t - 2.6) < .5 / FPS) await p.evaluate(() => { window.__dur = 900; document.querySelector("[data-scen]:nth-of-type(3)").click() }) } },
-  { name: "growth", dur: 4.6, tab: "record",
+  { name: "growth", dur: 4.6, tab: "companies",
     cam: async p => { const r = await p.evaluate(() => __rect("Growth vs profitability")); return [fit(r, { zoom: 1.3, fx: .45, fy: .56 }), fit(r, { zoom: 1.08 })] },
     setup: p => p.evaluate(() => __replay(["cGp"], 1800, 8)) },
 ];
