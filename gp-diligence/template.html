@@ -193,6 +193,7 @@ sup.fn { font-size: .75em; margin-left: 1px; color: var(--ink-3) }
 .sectbl th:first-child, .sectbl td:first-child { position: sticky; left: 0; z-index: 1; background: var(--panel); white-space: normal; min-width: 9.5em; box-shadow: inset -1px 0 0 var(--rule) }
 .sectbl th.t, .sectbl td.t { text-align: left; font-family: var(--body) }
 .sectbl td.t { font-size: 12px; color: var(--ink-2) }
+@media (max-width: 520px) { .sectbl th:first-child, .sectbl td:first-child { min-width: 7.5em } }
 @media (prefers-reduced-motion: reduce) { * { transition-duration: .01s !important } }
 </style>
 
