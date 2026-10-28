@@ -1719,36 +1719,41 @@ document.getElementById("dlXlsx").addEventListener("click", async () => {
   DATA_KINDS.forEach(([k, label]) => state[k] && addSheet(wb, `Data · ${label}`, dataSheet(k)));
   await saveFile(`${fileBase()}.xlsx`, new Uint8Array(XLSX.write(wb, { type: "array", bookType: "xlsx" })));
 });
-// The cleaned rows, in the app's own columns: [key, header, Excel number format ("date" for a calendar date)].
-// Amounts are in full units (the unit setting already applied); every row ends with the source it came from.
+// One sheet per loaded kind with the cleaned rows in the app's own columns, so the workbook doubles as one
+// consolidated copy of everything uploaded (named and typed as in GP Diligence's "Data · …" sheets). Amounts are
+// in full units, the unit setting already applied; the last column names the source cell each row came from.
+// Columns: [key, header, kind]: money (an amount), ps (per share), pct, pct2 (finer percent), date, year, n.
 const DATA_KINDS = [["commit", "Fund commitments"], ["hold", "Fund holdings"]];
 const DATA_COLS = {
-  commit: [["manager", "Manager"], ["fund", "Fund"], ["vintage", "Vintage", "0"], ["currency", "Currency"], ["size", "Fund size", "#,##0"], ["commitment", "Commitment", "#,##0"],
-    ["share", "LP share of fund", "0.0000%"], ["carry", "Carry", "0.0%"]],
+  commit: [["manager", "Manager"], ["fund", "Fund"], ["vintage", "Vintage", "year"], ["currency", "Currency"], ["size", "Fund size", "money"], ["commitment", "Commitment", "money"],
+    ["share", "LP share of fund", "pct2"], ["carry", "Carry", "pct"]],
   hold: [["manager", "Manager"], ["fund", "Fund"], ["company", "Company"], ["sector", "Sector"], ["security", "Security"], ["round", "Round"], ["date", "Investment date", "date"],
-    ["asOf", "As of", "date"], ["shares", "Shares", "#,##0"], ["fd", "Company FD shares", "#,##0"], ["cost", "Cost", "#,##0"], ["fv", "Fair value", "#,##0"],
-    ["pricePaid", "Price paid per share", "#,##0.00##"], ["markPS", "Mark per share", "#,##0.00##"], ["own", "Ownership (fully diluted)", "0.0000%"]] };
-// Where source row i came from: the sheet and the row's mapped cells (Holdings!A12:N12), the CSV row, or the saved row.
-function srcRef(P, i) {
-  const r = P?.rows[i]; if (!r) return "";
-  if (P.noSource) return `saved row ${r.r}`;
-  if (!P.sheet) return `${P.file} row ${r.r}`;
-  const cs = P.fields.filter(f => f.col).map(f => dvColNo(f.col)), a = dvCol(Math.min(...cs)), b = dvCol(Math.max(...cs));
-  const sh = /^[A-Za-z_][A-Za-z0-9_.]*$/.test(P.sheet) ? P.sheet : `'${P.sheet.replace(/'/g, "''")}'`;
-  return `${sh}!${a}${r.r}${a === b ? "" : `:${b}${r.r}`}`;
-}
+    ["asOf", "As of", "date"], ["shares", "Shares", "n"], ["fd", "Company FD shares", "n"], ["cost", "Cost", "money"], ["fv", "Fair value", "money"],
+    ["pricePaid", "Price paid per share", "ps"], ["markPS", "Mark per share", "ps"], ["own", "Ownership (fully diluted)", "pct2"]] };
+const DATA_FMT = { money: "#,##0", ps: "#,##0.00##", pct: "0.0%", pct2: "0.00%", year: "0", n: "#,##0" };
+// The column a row is traced by: the fund for a commitment, the company for a holding.
+const DATA_KEY = { commit: "fund", hold: "company" };
 function dataSheet(k) {
-  const cols = DATA_COLS[k], P = state.prov[k], rows = state[k], ws = {}, put = (r, c, cell) => ws[XLSX.utils.encode_cell({ r, c })] = cell;
-  const heads = [...cols.map(c => c[1]), "Source"], wid = heads.map(h => h.length);
+  const P = state.prov[k], rows = state[k], ws = {}, put = (r, c, cell) => ws[XLSX.utils.encode_cell({ r, c })] = cell;
+  // One reporting currency names the unit, as the analyses do; several are added as given, in their own currencies.
+  const cur = [...new Set((state.commit || []).map(f => f.currency).filter(Boolean))], ccy = cur.length > 1 ? null : cur[0] || "USD";
+  const cell = (o, key, t) => { const v = o[key], d = t === "date" && /^(\d{4})-(\d\d)-(\d\d)$/.exec(v);
+    if (d) return { t: "n", v: Date.UTC(+d[1], d[2] - 1, +d[3]) / 864e5 + 25569, z: "yyyy-mm-dd" };
+    if (typeof v === "number") return isFinite(v) ? { t: "n", v, ...(DATA_FMT[t] ? { z: DATA_FMT[t] } : {}) } : null;
+    const s = String(v ?? "").trim(); return s ? { t: "s", v: s } : null };
+  // Columns no row fills (an optional field the files did not have) are left out.
+  const cols = DATA_COLS[k].filter(([key, , t]) => rows.some(o => cell(o, key, t)));
+  const head = cols.map(([, l, t]) => t === "money" ? `${l} (${ccy ? ccy + ", full units" : "each fund's own currency, full units"})` : t === "ps" ? `${l} (${ccy || "fund currency"})` : l);
+  // Source cell: the row's key column, as file › sheet!C12 (file!C12 for a CSV).
+  const where = !P ? "" : P.noSource ? `Saved workspace ${P.ws?.file || ""}`.trim() : P.file + (P.sheet ? ` › ${P.sheet}` : ""), col = P?.fields.find(f => f.key === DATA_KEY[k])?.col;
+  const ref = n => { const r = P?.rows[rows.idx ? rows.idx[n] : n]; return !r ? "" : P.noSource || !col ? `${where}, row ${r.r}` : `${where}!${col}${r.r}` };
+  const heads = [...head, "Source cell"], wid = heads.map(h => h.length);
   heads.forEach((h, c) => put(0, c, { t: "s", v: h }));
   rows.forEach((o, n) => {
-    cols.forEach(([key, , z], c) => { const v = o[key], d = z === "date" && /^(\d{4})-(\d\d)-(\d\d)$/.exec(v);
-      if (d) put(n + 1, c, { t: "n", v: Date.UTC(+d[1], d[2] - 1, +d[3]) / 864e5 + 25569, z: "yyyy-mm-dd" });
-      else if (typeof v === "number") { if (isFinite(v)) put(n + 1, c, { t: "n", v, ...(z ? { z } : {}) }) }
-      else if (v != null && v !== "") { put(n + 1, c, { t: "s", v: String(v) }); wid[c] = Math.max(wid[c], String(v).length) } });
-    const ref = srcRef(P, rows.idx ? rows.idx[n] : n); put(n + 1, cols.length, { t: "s", v: ref }); wid[cols.length] = Math.max(wid[cols.length], ref.length) });
+    cols.forEach(([key, , t], c) => { const x = cell(o, key, t); if (!x) return; put(n + 1, c, x); wid[c] = Math.max(wid[c], x.t === "s" ? x.v.length : 12) });
+    const s = ref(n); put(n + 1, cols.length, { t: "s", v: s }); wid[cols.length] = Math.max(wid[cols.length], s.length) });
   ws["!ref"] = XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: rows.length, c: cols.length } });
-  ws["!cols"] = wid.map((w, c) => ({ wch: Math.min(40, Math.max(cols[c]?.[2] ? 12 : 8, w + 2)) }));
+  ws["!cols"] = wid.map(w => ({ wch: Math.min(50, Math.max(8, w + 2)) }));
   return ws;
 }
 document.getElementById("dlHtml").addEventListener("click", async () => {

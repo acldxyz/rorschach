@@ -35,6 +35,6 @@ Both products work the same way around their analyses:
 - **Workbooks:** upload a workbook with several sheets and each sheet's kind of data is recognised from its headers and tab name. You confirm the list before it loads.
 - **Brand:** your colours and font, typed in or read from the firm's Office template (`.potx`, `.pptx`, `.thmx`, `.dotx`, `.docx`, `.xltx`, `.xlsx`), restyle the page, charts and downloads. Each product keeps its own brand settings in the browser.
 - **Light/Dark:** follows the system until you pick one. Downloads (PNG, HTML report) always come out light.
-- **Downloads:** an Excel workbook (with a **Sources** sheet recording where every field came from) and an HTML report. The Excel workbook carries figures only: the spreadsheet library the app uses can't write fonts or fills.
+- **Downloads:** an Excel workbook (with a **Sources** sheet recording where every field came from, then a "Data · …" sheet per kind loaded with the cleaned rows and the source cell of each) and an HTML report. The Excel workbook carries figures only: the spreadsheet library the app uses can't write fonts or fills.
 
 The history was moved over from `acldxyz/personal-site` (branch `claude/amazing-heisenberg-48gqo9`).
