@@ -337,7 +337,7 @@ function buildModel() {
   const cur = [...new Set(fundList.map(f => f.currency).filter(Boolean))];
   if (cur.length > 1) warn.push(`Funds report in ${cur.join(", ")}; amounts are added as given, without conversion.`);
   const dates = pos.map(p => p.asOf).filter(Boolean).sort();
-  return { pos, cos, funds: fundList, mgrs, mgrFv, color, totFv, totCost, warn, sym: cur.length === 1 ? symbolOf(cur[0]) : "$", asOf: [dates[0], dates[dates.length - 1]] };
+  return { pos, cos, funds: fundList, mgrs, mgrFv, color, totFv, totCost, warn, sym: cur.length === 1 ? symbolOf(cur[0]) : "$", ccy: cur.length === 1 ? cur[0] : "USD", asOf: [dates[0], dates[dates.length - 1]] };
 }
 function companyOf(name, ps) {
   const sum = k => ps.reduce((s, p) => s + (isFinite(p[k]) ? p[k] : 0), 0);
@@ -382,11 +382,18 @@ function fundExitFor(ps, k, basis = state.basis) {
 }
 
 // ---------- formatting ----------
-let SYM = "$";
+let SYM = "$", CCY = "USD";
 const symbolOf = c => { try { return new Intl.NumberFormat("en-US", { style: "currency", currency: c, currencyDisplay: "narrowSymbol" }).formatToParts(0).find(p => p.type === "currency").value } catch { return c + " " } };
 // Money spans LP cheques in thousands to company values in billions, so each figure picks its own unit.
 const fm = v => { if (!isFinite(v)) return "–"; const a = Math.abs(v), [d, s] = a >= 1e9 ? [1e9, "B"] : a >= 1e6 ? [1e6, "M"] : a >= 1e3 ? [1e3, "K"] : [1, ""];
   return (v < 0 ? "-" : "") + SYM + (a / d).toLocaleString("en-US", { minimumFractionDigits: d === 1 ? 0 : 1, maximumFractionDigits: d === 1 ? 0 : 1 }) + s };
+// Chart axes name the unit once in their title ("USD millions") and show bare numbers, negatives in parentheses.
+// The unit follows each axis's own range, since this page spans LP cheques to company values.
+const AX_UNITS = [[1e9, "billions"], [1e6, "millions"], [1e3, "thousands"], [1, ""]];
+const moneyAxis = what => ({ title: { display: true, text: what || CCY },
+  afterBuildTicks: sc => { const top = Math.max(...sc.ticks.map(t => Math.abs(t.value))); sc._u = AX_UNITS.find(([d]) => top >= d * 1.5) || AX_UNITS[3];
+    const u = [CCY, sc._u[1]].filter(Boolean).join(" "); sc.options.title.text = what ? `${what} (${u})` : u },
+  ticks: { callback(v) { const d = this._u?.[0] || 1, t = (Math.abs(v) / d).toLocaleString("en-US", { maximumFractionDigits: 2 }); return v < 0 ? `(${t})` : t } } });
 const fps = v => isFinite(v) ? SYM + v.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: v < 1 ? 4 : 2 }) : "–";
 const fx = (v, d = 2) => isFinite(v) ? v.toFixed(d) + "x" : "–";
 const fp = (v, d) => isFinite(v) ? (v * 100).toFixed(d ?? (Math.abs(v) < 0.01 ? 3 : Math.abs(v) < 0.1 ? 2 : 1)) + "%" : "–";
@@ -411,7 +418,7 @@ function renderView() {
   document.querySelectorAll("[data-basis]").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.basis === state.basis)));
   const out = document.getElementById("out"); out.setAttribute("aria-labelledby", "tab-" + state.view);
   if (!state.hold) { out.innerHTML = `<div class="panel empty">Nothing loaded yet. Upload fund holdings (and your commitments) or use the sample data to see your look-through exposure.</div>`; document.getElementById("asOf").textContent = ""; return }
-  const D = buildModel(); SYM = D.sym;
+  const D = buildModel(); SYM = D.sym; CCY = D.ccy;
   document.getElementById("asOf").textContent = D.asOf[0] ? `Marks as of ${D.asOf[0]}${D.asOf[1] !== D.asOf[0] ? " to " + D.asOf[1] : ""}` : "";
   const warn = D.warn.map(w => `<p class="alert">${esc(w)}</p>`).join("");
   setChartDefaults();
@@ -470,14 +477,14 @@ function renderExposure(D, warn) {
   const top = C.slice(0, 20);
   charts.push(new Chart(document.getElementById("cTop"), { type: "bar", data: { labels: top.map(c => c.name),
     datasets: D.mgrs.map(m => ({ label: m, data: top.map(c => c.ps.filter(p => p.manager === m).reduce((s, p) => s + p.lpFv, 0) || null), backgroundColor: D.color[m], borderColor: css("--panel"), borderWidth: 1 })) },
-    options: { indexAxis: "y", scales: { x: { stacked: true, ticks: { callback: v => fm(v) }, grid: { color: css("--rule") } }, y: { stacked: true, grid: { display: false }, ticks: { autoSkip: false, font: { size: 11 } } } },
+    options: { indexAxis: "y", scales: { x: { stacked: true, ...moneyAxis(), grid: { color: css("--rule") } }, y: { stacked: true, grid: { display: false }, ticks: { autoSkip: false, font: { size: 11 } } } },
       onClick: (e, el) => { if (el[0]) openCompany(top[el[0].index].name) }, onHover: (e, el) => e.native.target.style.cursor = el.length ? "pointer" : "default",
       plugins: { legend: { position: "bottom", labels: { boxWidth: 10, font: { size: 11 } } }, tooltip: { callbacks: { label: c => `${c.dataset.label}: ${fm(c.raw)}`, footer: it => `Total ${fm(top[it[0].dataIndex].lpFv)}` } } } } }));
   const secs = sectors.map(sct => ({ sct, fv: C.filter(c => c.sector === sct).reduce((s, c) => s + c.lpFv, 0), cost: C.filter(c => c.sector === sct).reduce((s, c) => s + c.lpCost, 0) })).sort((a, b) => b.fv - a.fv);
   charts.push(new Chart(document.getElementById("cSector"), { type: "bar", data: { labels: secs.map(x => x.sct), datasets: [
     { label: "Look-through NAV", data: secs.map(x => x.fv), backgroundColor: css("--accent"), borderRadius: 2 },
     { label: "Look-through cost", data: secs.map(x => x.cost), backgroundColor: css("--rule"), borderRadius: 2 }] },
-    options: { indexAxis: "y", scales: { x: { ticks: { callback: v => fm(v) }, grid: { color: css("--rule") } }, y: { grid: { display: false } } },
+    options: { indexAxis: "y", scales: { x: { ...moneyAxis(), grid: { color: css("--rule") } }, y: { grid: { display: false } } },
       plugins: { legend: { position: "bottom", labels: { boxWidth: 10 } }, tooltip: { callbacks: { label: c => `${c.dataset.label}: ${fm(c.raw)} (${fp(c.raw / (c.datasetIndex ? D.totCost : D.totFv), 1)})` } } } } }));
 }
 
@@ -541,7 +548,7 @@ function renderManagers(D, warn) {
   charts.push(new Chart(document.getElementById("cUniq"), { type: "bar", data: { labels: uniq.map(u => u.m), datasets: [
     { label: "Only this manager holds", data: uniq.map(u => u.only), backgroundColor: css("--accent"), borderColor: css("--panel"), borderWidth: 1 },
     { label: "Also held by another manager", data: uniq.map(u => u.shared), backgroundColor: css("--warn"), borderColor: css("--panel"), borderWidth: 1 }] },
-    options: { scales: { x: { stacked: true, grid: { display: false } }, y: { stacked: true, ticks: { callback: v => fm(v) }, grid: { color: css("--rule") } } },
+    options: { scales: { x: { stacked: true, grid: { display: false } }, y: { stacked: true, ...moneyAxis(), grid: { color: css("--rule") } } },
       plugins: { legend: { position: "bottom", labels: { boxWidth: 10 } }, tooltip: { callbacks: { label: c => `${c.dataset.label}: ${fm(c.raw)}` } } } } }));
 }
 

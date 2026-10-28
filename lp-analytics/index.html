@@ -189,6 +189,8 @@ tr.total td { font-weight: 600; border-top: 2px solid var(--ink-3) }
 .welcome .switch { margin: 0 } .welcome .switch a { color: var(--accent) }
 .choices { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 230px), 1fr)); gap: 12px }
 .choice { display: grid; gap: 6px; align-content: start; justify-items: start; padding: 12px; border: 1px solid var(--rule); border-radius: 6px; background: var(--bg) }
+/* Long headers ("Years since first cash flow") wrap so the detailed table fits without sideways scrolling. */
+.sumtbl th { white-space: normal; vertical-align: bottom; min-width: 4.5em }
 .bm th.grp { text-align: center; border-bottom: 1px solid var(--ink-3) }
 .errors { color: var(--bad); font-size: 13px; margin: 0 }
 .empty { color: var(--ink-3); padding: 24px; text-align: center }
@@ -397,7 +399,7 @@ const BM_SOURCES = {
 };
 // Figures typed or uploaded per source stay in this browser only.
 const bmStore = { load(k) { try { return JSON.parse(localStorage.getItem("bm:" + k)) || {} } catch { return {} } }, save(k, v) { try { localStorage.setItem("bm:" + k, JSON.stringify(v)) } catch {} } };
-const state = { cur: { sym: "$", unit: { div: 1, suffix: "", word: "" } }, curMode: "local", inUnit: 1, rates: (() => { try { return JSON.parse(localStorage.getItem("fx-rates")) || {} } catch { return {} } })(), isSample: false, raw: {}, prov: {}, top: "data", samplingOff: false, view: "record", coFund: "all", coFlagOnly: false, cf: null, inv: null, bm: null, bmSrc: "sample", bmSample: null, gp: "", dim: "stage", scFund: "all", gpFund: "all", gpWin: "16", scope: "all" };
+const state = { sumView: (() => { try { return localStorage.getItem("sumView") || "summary" } catch { return "summary" } })(), cur: { sym: "$", unit: { div: 1, suffix: "", word: "" } }, curMode: "local", inUnit: 1, rates: (() => { try { return JSON.parse(localStorage.getItem("fx-rates")) || {} } catch { return {} } })(), isSample: false, raw: {}, prov: {}, top: "data", samplingOff: false, view: "record", coFund: "all", coFlagOnly: false, cf: null, inv: null, bm: null, bmSrc: "sample", bmSample: null, gp: "", dim: "stage", scFund: "all", gpFund: "all", gpWin: "16", scope: "all" };
 let charts = [];
 
 // ---------- parsing ----------
@@ -501,6 +503,11 @@ const fp = (v, d = 1) => isFinite(v) ? (v * 100).toFixed(d) + "%" : "–";
 // shortens and labels. The unit is chosen once per render so every figure on the page shares it.
 const fm = (v, d = 1) => { if (!isFinite(v)) return "–"; const u = state.cur.unit, dd = u.div === 1 ? 0 : d;
   return (v < 0 ? "-" : "") + state.cur.sym + (Math.abs(v) / u.div).toLocaleString("en-US", { minimumFractionDigits: dd, maximumFractionDigits: dd }) + u.suffix };
+// Chart axes name the unit once in their title ("USD millions") and show bare numbers, negatives in parentheses.
+const paren = (v, t) => v < 0 ? `(${t})` : t;
+const fa = v => isFinite(v) ? paren(v, (Math.abs(v) / state.cur.unit.div).toLocaleString("en-US", { maximumFractionDigits: 2 })) : "";
+const fpa = v => isFinite(v) ? paren(v, fp(Math.abs(v), 0)) : "";
+const unitTitle = what => { const u = [state.cur.disp, state.cur.unit.word].filter(Boolean).join(" "); return { display: true, text: what ? `${what} (${u})` : u } };
 const symbolOf = c => { try { return new Intl.NumberFormat("en-US", { style: "currency", currency: c, currencyDisplay: "narrowSymbol" }).formatToParts(0).find(p => p.type === "currency").value } catch { return c + " " } };
 const MONEY_INV = ["invested", "initial_investment", "realized", "unrealized", "entry_post_money", "latest_post_money"];
 function currencySetup() {
@@ -569,14 +576,31 @@ function renderView() {
   if (state.view === "team") return renderTeam(profiles, F, asOf);
   if (state.view === "scen") return renderScen(F, fundColor, asOf);
   const bm = hasBm(state.bm) ? state.bm : {}, bmOn = hasBm(state.bm);
-  const q = (f, m, v) => { const r = quartile(v, bm[f.vintage]?.[m]); return r ? `<span class="pill q${r}">Q${r}</span>` : `<span class="pill na">–</span>` };
   const T = F.reduce((t, f) => ({ paid: t.paid + f.paid, dist: t.dist + f.dist, nav: t.nav + f.nav, size: t.size + (f.size || 0) }), { paid: 0, dist: 0, nav: 0, size: 0 });
   const allFlows = F.flatMap(f => f.rows.map(r => ({ d: r.date, a: r.amount })).concat(f.nav ? [{ d: f.asOf, a: f.nav }] : [])).sort((a, b) => a.d - b.d);
 
-  let html = `<section class="panel"><div class="panel-head"><h2>Net performance summary</h2><p class="note">Quartile pills rank each fund against its vintage benchmark (TVPI · IRR · DPI).</p></div>
-  <div class="tbl"><table><thead><tr><th>Fund</th><th>Vintage</th><th>Size</th><th>Paid-in</th><th>Distributed</th><th>NAV</th><th>TVPI</th><th>DPI</th><th>RVPI</th><th>Net IRR</th><th>Quartile</th></tr></thead><tbody>
-  ${F.map(f => `<tr><td>${esc(f.name)}</td><td>${f.vintage}</td><td>${fm(f.size, 0)}</td><td>${fm(f.paid)}</td><td>${fm(f.dist)}</td><td>${fm(f.nav)}</td><td>${fx(f.tvpi)}</td><td>${fx(f.dpi)}</td><td>${fx(f.rvpi)}</td><td>${fp(f.irr)}</td><td>${q(f, "TVPI", f.tvpi)} ${q(f, "IRR", f.irr)} ${q(f, "DPI", f.dpi)}</td></tr>`).join("")}
-  <tr class="total"><td>Total / pooled</td><td></td><td>${fm(T.size, 0)}</td><td>${fm(T.paid)}</td><td>${fm(T.dist)}</td><td>${fm(T.nav)}</td><td>${fx((T.dist + T.nav) / T.paid)}</td><td>${fx(T.dist / T.paid)}</td><td>${fx(T.nav / T.paid)}</td><td>${fp(xirr(allFlows))}</td><td></td></tr>
+  // Concentration: how few companies carry 90% of gross value (realized + unrealized), as "7 of 22".
+  const deals = state.inv ? dealView(asOf) : null;
+  const conc = ds => { if (!ds || !ds.length) return "–"; const v = ds.map(d => Math.max(0, d.tv || 0)).sort((a, b) => b - a), tot = v.reduce((a, b) => a + b, 0);
+    if (!(tot > 0)) return "–"; let c = 0, n = 0; while (c < 0.9 * tot - 1e-9) c += v[n++]; return `${n} of ${ds.length}` };
+  const firstFlow = fs => Math.min(...fs.flatMap(f => f.rows.map(r => +r.date))), yrs = t => isFinite(t) ? `${((asOf - t) / 31557600000).toFixed(1)}` : "–";
+  const pctIn = (paid, size) => size > 0 ? fp(paid / size, 0) : "–";
+
+  // Summary is the short read; Detailed adds the cash amounts, RVPI and benchmark quartiles (TVPI · IRR · DPI).
+  const det = state.sumView === "detailed", q = (f, m, v) => { const r = quartile(v, bm[f.vintage]?.[m]); return r ? `<span class="pill q${r}">Q${r}</span>` : `<span class="pill na">–</span>` };
+  const cols = [["Fund", f => esc(f.name), "Total / pooled"], ["Vintage", f => f.vintage, ""], ["Size", f => f.size > 0 ? fm(f.size, 0) : "–", fm(T.size, 0)],
+    ...(det ? [["Paid-in", f => fm(f.paid), fm(T.paid)]] : []), ["% invested", f => pctIn(f.paid, f.size), pctIn(T.paid, T.size)],
+    ...(det ? [["Distributed", f => fm(f.dist), fm(T.dist)], ["NAV", f => fm(f.nav), fm(T.nav)]] : []),
+    ["Years since first cash flow", f => yrs(firstFlow([f])), yrs(firstFlow(F))], ["90% of value", f => conc(deals && deals.filter(d => d.fund === f.name)), conc(deals)],
+    ["Net TVPI", f => fx(f.tvpi), fx((T.dist + T.nav) / T.paid)], ["Net DPI", f => fx(f.dpi), fx(T.dist / T.paid)],
+    ...(det ? [["RVPI", f => fx(f.rvpi), fx(T.nav / T.paid)]] : []), ["Net IRR", f => fp(f.irr), fp(xirr(allFlows))],
+    ...(det ? [["Quartile", f => `${q(f, "TVPI", f.tvpi)} ${q(f, "IRR", f.irr)} ${q(f, "DPI", f.dpi)}`, ""]] : [])];
+  let html = `<section class="panel"><div class="panel-head"><h2>Net performance summary</h2>
+    <span class="seg" role="group" aria-label="Table detail">${[["summary", "Summary"], ["detailed", "Detailed"]].map(([k, l]) => `<button type="button" data-sumview="${k}" aria-pressed="${(k === "detailed") === det}">${l}</button>`).join("")}</span></div>
+  <p class="note">% invested is paid-in capital over fund size. 90% of value counts the companies that make up 90% of gross value.${det ? " Quartiles rank each fund against its vintage benchmark (TVPI · IRR · DPI)." : ""}</p>
+  <div class="tbl"><table class="sumtbl"><thead><tr>${cols.map(c => `<th>${c[0]}</th>`).join("")}</tr></thead><tbody>
+  ${F.map(f => `<tr>${cols.map(c => `<td>${c[1](f)}</td>`).join("")}</tr>`).join("")}
+  <tr class="total">${cols.map(c => `<td>${c[2]}</td>`).join("")}</tr>
   </tbody></table></div></section>`;
 
   html += `<section class="panel"><div class="panel-head"><h2>Net relative performance</h2><p class="note">${bmOn ? `Bands show ${esc(document.querySelector("#bmSrc option:checked").textContent)} quartiles for each fund's vintage; the marker is the fund.` : "Pick a benchmark source and fill its quartiles to draw the bands."}</p></div>
@@ -633,7 +657,7 @@ function renderView() {
     const ds = bmOn ? [band("1st quartile", "--q1", b => [b.top, ceil]), band("2nd quartile", "--q2", b => [b.median, b.top]), band("3rd quartile", "--q3", b => [b.bottom, b.median]), band("4th quartile", "--q4", b => [floor, b.bottom])] : [];
     ds.push({ type: "line", label: "Fund", data: F.map(x => x[k]), showLine: false, pointStyle: "rectRot", pointRadius: 8, pointHoverRadius: 10, backgroundColor: css("--accent"), borderColor: css("--panel"), borderWidth: 2, order: 1 });
     charts.push(new Chart(document.getElementById(id), { data: { labels, datasets: ds }, options: {
-      scales: { x: { stacked: true, grid: { display: false } }, y: { stacked: false, min: floor, max: ceil, ticks: { callback: v => f(v, m === "IRR" ? 0 : 1) }, grid: { color: css("--rule") } } },
+      scales: { x: { stacked: true, grid: { display: false } }, y: { stacked: false, min: floor, max: ceil, ticks: { callback: v => m === "IRR" ? fpa(v) : f(v, 1) }, grid: { color: css("--rule") } } },
       plugins: { legend: { position: "bottom", labels: { boxWidth: 10, font: { size: 11 } } }, tooltip: { callbacks: { label: c => Array.isArray(c.raw) ? `${c.dataset.label}: ${f(c.raw[0])} – ${f(c.raw[1])}` : `Fund ${m}: ${f(c.raw)}` } } } } }));
   });
 
@@ -644,7 +668,7 @@ function renderView() {
     for (let i = 0; i <= maxQ; i++) { c += byQ[i] || 0; pts.push({ x: i / 4, y: c }) }
     return { label: f.name, data: pts, borderColor: fundColor[f.name], backgroundColor: fundColor[f.name], borderWidth: 2, pointRadius: 0, pointHoverRadius: 4, tension: 0 } });
   charts.push(new Chart(document.getElementById("cJ"), { type: "line", data: { datasets: jDs }, options: { interaction: { mode: "nearest", intersect: false },
-    scales: { x: { type: "linear", title: { display: true, text: "Years since first call" }, grid: { display: false } }, y: { ticks: { callback: v => fm(v, 0) }, grid: { color: c => c.tick.value === 0 ? css("--ink-3") : css("--rule") } } },
+    scales: { x: { type: "linear", title: { display: true, text: "Years since first call" }, grid: { display: false } }, y: { ticks: { callback: fa }, title: unitTitle(), grid: { color: c => c.tick.value === 0 ? css("--ink-3") : css("--rule") } } },
     plugins: { legend: { position: "bottom", labels: { boxWidth: 10 } }, tooltip: { callbacks: { title: c => `Year ${c[0].raw.x.toFixed(2)}`, label: c => `${c.dataset.label}: ${fm(c.raw.y)}` } } } } }));
 
   const years = [...new Set(F.flatMap(f => f.rows.map(r => r.date.getFullYear())))].sort();
@@ -652,7 +676,7 @@ function renderView() {
   F.forEach(f => ["Called", "Distributed"].forEach(kind => annual.push({ label: `${f.name} · ${kind}`, stack: kind, backgroundColor: fundColor[f.name], borderColor: css("--panel"), borderWidth: 1, borderRadius: 2,
     data: years.map(y => f.rows.filter(r => r.date.getFullYear() === y && (kind === "Called" ? r.amount < 0 : r.amount > 0)).reduce((s, r) => s + r.amount, 0)) })));
   charts.push(new Chart(document.getElementById("cAnnual"), { type: "bar", data: { labels: years, datasets: annual }, options: {
-    scales: { x: { stacked: true, grid: { display: false } }, y: { stacked: true, ticks: { callback: v => fm(v, 0) }, grid: { color: c => c.tick.value === 0 ? css("--ink-3") : css("--rule") } } },
+    scales: { x: { stacked: true, grid: { display: false } }, y: { stacked: true, ticks: { callback: fa }, title: unitTitle(), grid: { color: c => c.tick.value === 0 ? css("--ink-3") : css("--rule") } } },
     plugins: { legend: { position: "bottom", labels: { boxWidth: 10, filter: i => i.text.endsWith("Called"), generateLabels: ch => Chart.defaults.plugins.legend.labels.generateLabels(ch).filter(l => l.text.endsWith("Called")).map(l => ({ ...l, text: l.text.replace(" · Called", "") })) } },
       tooltip: { callbacks: { label: c => `${c.dataset.label}: ${fm(c.raw)}` } } } } }));
 
@@ -909,7 +933,7 @@ function renderGross(F, fundColor, asOf) {
   charts.push(new Chart(document.getElementById("cMix"), { type: "bar", data: { labels: F.map(f => fundShort(f.name)),
     datasets: C.map((c, i) => ({ label: c, backgroundColor: series(i), borderColor: css("--panel"), borderWidth: 1,
       data: F.map(f => { const all = D.filter(d => d.fund === f.name), s = all.reduce((t, d) => t + d.invested, 0); return s ? all.filter(d => catOf(d) === c).reduce((t, d) => t + d.invested, 0) / s : 0 }) })) },
-    options: { indexAxis: "y", scales: { x: { stacked: true, max: 1, ticks: { callback: v => fp(v, 0) } }, y: { stacked: true, grid: { display: false } } },
+    options: { indexAxis: "y", scales: { x: { stacked: true, max: 1, ticks: { callback: fpa } }, y: { stacked: true, grid: { display: false } } },
       plugins: { legend: { position: "bottom", labels: { boxWidth: 10, font: { size: 11 } } }, tooltip: { callbacks: { label: c => `${c.dataset.label}: ${fp(c.raw)}` } } } } }));
   const byCat = C.map(c => agg(D.filter(d => catOf(d) === c)));
   const catBar = (id, key, f) => charts.push(new Chart(document.getElementById(id), { type: "bar", data: { labels: C, datasets: [{ data: byCat.map(a => a[key]), backgroundColor: C.map((_, i) => series(i)), borderRadius: 4, borderSkipped: "start" }] },
@@ -981,7 +1005,7 @@ function renderGross(F, fundColor, asOf) {
     const qs = [...new Set(D.flatMap(d => d.hist.gmRows.map(r => qk(r.d))))].sort();
     charts.push(new Chart(document.getElementById("cGm"), { type: "line", data: { labels: qs, datasets: secs.map((sec, i) => ({ label: sec, borderColor: series(i), backgroundColor: series(i), borderWidth: 2, pointRadius: 0, pointHoverRadius: 4, spanGaps: true, tension: 0,
       data: qs.map(q => { const v = D.filter(d => (d.sector || "Unspecified") === sec).flatMap(d => d.hist.gmRows.filter(r => qk(r.d) === q).map(r => r.v)); return v.length >= 2 ? median(v) : null }) })) },
-      options: { interaction: { mode: "index", intersect: false }, scales: { x: { grid: { display: false }, ticks: { maxTicksLimit: 10, autoSkip: true } }, y: { ticks: { callback: v => fp(v, 0) } } },
+      options: { interaction: { mode: "index", intersect: false }, scales: { x: { grid: { display: false }, ticks: { maxTicksLimit: 10, autoSkip: true } }, y: { ticks: { callback: fpa } } },
         plugins: { legend: { position: "bottom", labels: { boxWidth: 10 } }, tooltip: { callbacks: { label: c => `${c.dataset.label}: ${fp(c.raw, 0)}` } } } } }));
     const held = D.filter(d => d.status !== "Realized" && d.hist.gmLast);
     document.getElementById("gmTbl").innerHTML = `<table><thead><tr><th>Sector</th><th>Companies</th><th>Median margin</th><th>Median 12-mo change</th><th>Improving</th><th>Slipping</th></tr></thead><tbody>
@@ -1016,8 +1040,8 @@ function renderGross(F, fundColor, asOf) {
     if (raised) ds.push({ label: "Companies that raised in the last 12 months", data: [raised], pointStyle: "rect", pointRadius: 9, pointHoverRadius: 11, backgroundColor: "transparent", borderColor: fundColor[funds[0].name], borderWidth: 2 });
     charts.push(new Chart(document.getElementById("cGp"), { type: "scatter", data: { datasets: ds }, plugins: [endLabels],
       options: { layout: { padding: { right: 40, top: 10 } }, scales: {
-        x: { position: "top", title: { display: true, text: "Median revenue growth (YoY)" }, ticks: { callback: v => fp(v, 0) }, grid: { color: css("--rule") } },
-        y: { title: { display: true, text: "Median profit margin" }, ticks: { callback: v => fp(v, 0) }, grid: { color: c => c.tick.value === 0 ? css("--ink-3") : css("--rule") } } },
+        x: { position: "top", title: { display: true, text: "Median revenue growth (YoY)" }, ticks: { callback: fpa }, grid: { color: css("--rule") } },
+        y: { title: { display: true, text: "Median profit margin" }, ticks: { callback: fpa }, grid: { color: c => c.tick.value === 0 ? css("--ink-3") : css("--rule") } } },
         plugins: { legend: { position: "bottom", labels: { usePointStyle: true, boxWidth: 8, boxHeight: 8 } }, tooltip: { callbacks: { title: c => `${c[0].dataset.label} · ${qShort(c[0].raw.q)}`, label: c => [`Growth ${fp(c.raw.x, 0)} · margin ${fp(c.raw.y, 0)}`, `${c.raw.n} companies`] } } } } }));
     const first = paths.map(p => { const a = p.pts[0], b = p.pts[p.pts.length - 1]; return `${esc(fundShort(p.f.name))}: ${qShort(a.q)} growth ${fp(a.x, 0)}, margin ${fp(a.y, 0)} → ${qShort(b.q)} growth ${fp(b.x, 0)}, margin ${fp(b.y, 0)}` });
     const dropped = funds.filter(f => !paths.some(p => p.f === f)).map(f => esc(fundShort(f.name)));
@@ -1058,24 +1082,24 @@ function renderGross(F, fundColor, asOf) {
   charts.push(new Chart(document.getElementById("cConc"), { type: "line", data: { datasets: [
     { label: "Cumulative share of value", data: concPts, borderColor: css("--accent"), backgroundColor: css("--accent-soft"), fill: "origin", borderWidth: 2, pointRadius: 0, pointHoverRadius: 4, order: 2 },
     { label: "If every deal contributed equally", data: [{ x: 0, y: 0 }, { x: ranked.length, y: 1 }], borderColor: css("--ink-2"), borderDash: [5, 4], borderWidth: 1.5, pointRadius: 0, fill: false, order: 1 }] },
-    options: { interaction: { mode: "nearest", intersect: false }, scales: { x: { type: "linear", min: 0, max: ranked.length, title: { display: true, text: "Deals, best first" }, grid: { display: false } }, y: { min: 0, max: 1, ticks: { callback: v => fp(v, 0) } } },
+    options: { interaction: { mode: "nearest", intersect: false }, scales: { x: { type: "linear", min: 0, max: ranked.length, title: { display: true, text: "Deals, best first" }, grid: { display: false } }, y: { min: 0, max: 1, ticks: { callback: fpa } } },
       plugins: { legend: { position: "bottom", labels: { boxWidth: 10 } }, tooltip: { filter: c => c.datasetIndex === 0, callbacks: { title: c => `Top ${c[0].raw.x}: ${c[0].raw.d.company}`, label: c => `${fp(c.raw.y, 0)} of total value` } } } } }));
   const bAgg = BUCKETS.map(b => S.filter(d => d.bucket === b));
   charts.push(new Chart(document.getElementById("cBuckets"), { type: "bar", data: { labels: BUCKETS.map(b => b.replace(" (<0.25x)", "")), datasets: [
     { label: "Share of deals", data: bAgg.map(g => g.length / S.length), backgroundColor: css("--q2"), borderRadius: 4, borderSkipped: "start", n: bAgg.map(g => g.length) },
     { label: "Share of value", data: bAgg.map(g => g.reduce((t, d) => t + d.tv, 0) / sAgg.tv), backgroundColor: css("--q1"), borderRadius: 4, borderSkipped: "start" }] },
-    options: { scales: { x: { grid: { display: false }, ticks: { autoSkip: false, font: { size: 11 } } }, y: { beginAtZero: true, ticks: { callback: v => fp(v, 0) } } },
+    options: { scales: { x: { grid: { display: false }, ticks: { autoSkip: false, font: { size: 11 } } }, y: { beginAtZero: true, ticks: { callback: fpa } } },
       plugins: { legend: { position: "bottom", labels: { boxWidth: 10 } }, tooltip: { callbacks: { label: c => `${c.dataset.label}: ${fp(c.raw, 0)}${c.dataset.n ? ` (${c.dataset.n[c.dataIndex]} deals)` : ""}` } } } } }));
   charts.push(new Chart(document.getElementById("cFollow"), { type: "bar", data: { labels: BUCKETS.map(b => b.replace(" (<0.25x)", "")), datasets: [
     { label: "Initial cheques", data: bAgg.map(g => g.reduce((t, d) => t + d.initial, 0)), backgroundColor: css("--s1"), borderColor: css("--panel"), borderWidth: 1 },
     { label: "Follow-on", data: bAgg.map(g => g.reduce((t, d) => t + d.followOn, 0)), backgroundColor: css("--s2"), borderColor: css("--panel"), borderWidth: 1 }] },
-    options: { scales: { x: { stacked: true, grid: { display: false }, ticks: { autoSkip: false, font: { size: 11 } } }, y: { stacked: true, ticks: { callback: v => fm(v, 0) } } },
+    options: { scales: { x: { stacked: true, grid: { display: false }, ticks: { autoSkip: false, font: { size: 11 } } }, y: { stacked: true, ticks: { callback: fa }, title: unitTitle() } },
       plugins: { legend: { position: "bottom", labels: { boxWidth: 10 } }, tooltip: { callbacks: { label: c => `${c.dataset.label}: ${fm(c.raw)}` } } } } }));
 
   charts.push(new Chart(document.getElementById("cDeals"), { type: "scatter", data: { datasets: F.map(f => ({ label: f.name, backgroundColor: fundColor[f.name], borderColor: css("--panel"), borderWidth: 2, pointRadius: 6, pointHoverRadius: 8,
     // Log scale cannot show zero, so write-offs are drawn on a 0.05x floor; tooltips show the real multiple.
     data: D.filter(d => d.fund === f.name).map(d => ({ x: d.invested, y: Math.max(d.tvm, 0.05), d })) })) },
-    options: { scales: { x: { title: { display: true, text: "Invested" }, beginAtZero: true, ticks: { callback: v => fm(v, 0) } },
+    options: { scales: { x: { title: unitTitle("Invested"), beginAtZero: true, ticks: { callback: fa } },
       y: { type: "logarithmic", min: 0.05, title: { display: true, text: "Gross multiple" }, afterBuildTicks: ax => { ax.ticks = [0.05, 0.1, 0.25, 0.5, 1, 2, 3, 5, 10, 20, 50].filter(v => v <= ax.max * 1.01).map(value => ({ value })) },
         ticks: { callback: v => v === 0.05 ? "≤0.05x" : fx(v, v < 1 ? 2 : 0) }, grid: { color: c => c.tick.value === 1 ? css("--ink-3") : css("--rule") } } },
       plugins: { legend: { position: "bottom", labels: { boxWidth: 10 } }, tooltip: { callbacks: { label: c => `${c.raw.d.company}: ${fm(c.raw.x)} → ${fx(c.raw.d.tvm)} (${c.raw.d.outcome === "Held" ? "held" : c.raw.d.outcome})` } } } } }));
@@ -1122,6 +1146,9 @@ document.getElementById("inUnit").addEventListener("change", e => { state.inUnit
 document.getElementById("curCtl").addEventListener("click", e => { const b = e.target.closest("[data-cur]"); if (b) { state.curMode = b.dataset.cur; render() } });
 document.getElementById("curCtl").addEventListener("change", e => { const c = e.target.dataset.rate; if (!c) return; const x = num(e.target.value);
   if (x > 0) state.rates[c] = x; else delete state.rates[c]; try { localStorage.setItem("fx-rates", JSON.stringify(state.rates)) } catch {} render() });
+document.getElementById("out").addEventListener("click", e => { const b = e.target.closest("[data-sumview]"); if (!b) return;
+  state.sumView = b.dataset.sumview; try { localStorage.setItem("sumView", state.sumView) } catch {} render(); document.querySelector(`[data-sumview="${state.sumView}"]`)?.focus() });
+
 // ---------- welcome ----------
 // With nothing loaded, the welcome card asks how to start. Loading anything (sample, upload, workspace)
 // hides it; Upload also closes it on the way to the drop zones; Clear brings it back.
@@ -2355,13 +2382,13 @@ function renderScen(F, fundColor, asOf) {
     { type: "bar", label: "Actual", data: act, backgroundColor: css("--q1"), stack: "a", borderRadius: 2 },
     { type: "bar", label: `Projected · ${s.name}`, data: fut, backgroundColor: css("--q3"), stack: "a", borderRadius: 2 },
     { type: "line", label: "Cumulative net", data: cumLine, borderColor: css("--accent"), backgroundColor: css("--accent"), borderWidth: 2, pointRadius: 0, pointHoverRadius: 4 }] },
-    options: { interaction: { mode: "index", intersect: false }, scales: { x: { stacked: true, grid: { display: false } }, y: { stacked: false, ticks: { callback: v => fm(v, 0) }, grid: { color: c => c.tick.value === 0 ? css("--ink-3") : css("--rule") } } },
+    options: { interaction: { mode: "index", intersect: false }, scales: { x: { stacked: true, grid: { display: false } }, y: { stacked: false, ticks: { callback: fa }, title: unitTitle(), grid: { color: c => c.tick.value === 0 ? css("--ink-3") : css("--rule") } } },
       plugins: { legend: { position: "bottom", labels: { boxWidth: 10 } }, tooltip: { callbacks: { label: c => `${c.dataset.label}: ${fm(c.raw)}` } } } } }));
   const top = models.filter(m => isFinite(m.proceeds)).slice(0, 12);
   charts.push(new Chart(document.getElementById("cScCo"), { type: "bar", data: { labels: top.map(m => m.d.company), datasets: [
     { label: "Cost", data: top.map(m => m.d.invested), backgroundColor: css("--q3"), borderRadius: 3 },
     { label: `Proceeds · ${s.name}`, data: top.map(m => m.proceeds + m.d.realized), backgroundColor: css("--q1"), borderRadius: 3 }] },
-    options: { indexAxis: "y", scales: { x: { beginAtZero: true, ticks: { callback: v => fm(v, 0) } }, y: { grid: { display: false }, ticks: { font: { size: 11 } } } },
+    options: { indexAxis: "y", scales: { x: { beginAtZero: true, ticks: { callback: fa }, title: unitTitle() }, y: { grid: { display: false }, ticks: { font: { size: 11 } } } },
       plugins: { legend: { position: "bottom", labels: { boxWidth: 10 } }, tooltip: { callbacks: { label: c => `${c.dataset.label}: ${fm(c.raw)}` } } } } }));
 }
 // Inputs are read on change (blur or Enter) so typing is never interrupted by a redraw.
