@@ -117,8 +117,14 @@ tr.total td { font-weight: 600; border-top: 2px solid var(--ink-3) }
 .welcome .eyebrow { font: 600 12px var(--body); letter-spacing: .06em; text-transform: uppercase; color: var(--accent); margin: 0 0 4px }
 .choices { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 230px), 1fr)); gap: 12px }
 .choice { display: grid; gap: 6px; align-content: start; justify-items: start; padding: 12px; border: 1px solid var(--rule); border-radius: 6px; background: var(--bg) }
-/* Long headers ("Years since first cash flow") wrap so the detailed table fits without sideways scrolling. */
+/* Long headers wrap so the detailed table fits without sideways scrolling. */
 .sumtbl th { white-space: normal; vertical-align: bottom; min-width: 4.5em }
+/* Quartile shading: the quartile tokens run strongest (top) to faintest in each theme; mixed into the panel so text stays readable. */
+.qcell.q1 { background: color-mix(in srgb, var(--q1) 42%, var(--panel)) } .qcell.q2 { background: color-mix(in srgb, var(--q2) 34%, var(--panel)) }
+.qcell.q3 { background: color-mix(in srgb, var(--q3) 30%, var(--panel)) } .qcell.q4 { background: color-mix(in srgb, var(--q4) 40%, var(--panel)) }
+.qsw { display: inline-block; padding: 1px 8px; border-radius: 3px; color: var(--ink); font-weight: 500 }
+sup.fn { font-size: .75em; margin-left: 1px; color: var(--ink-3) }
+.footnotes { margin: 0; padding-left: 1.4em; color: var(--ink-3); font-size: 12px; display: grid; gap: 2px } .footnotes li::marker { font-size: .9em }
 .bm th.grp { text-align: center; border-bottom: 1px solid var(--ink-3) }
 .errors { color: var(--bad); font-size: 13px; margin: 0 }
 .empty { color: var(--ink-3); padding: 24px; text-align: center }
@@ -479,25 +485,37 @@ function renderView() {
   const deals = state.inv ? dealView(asOf) : null;
   const conc = ds => { if (!ds || !ds.length) return "–"; const v = ds.map(d => Math.max(0, d.tv || 0)).sort((a, b) => b - a), tot = v.reduce((a, b) => a + b, 0);
     if (!(tot > 0)) return "–"; let c = 0, n = 0; while (c < 0.9 * tot - 1e-9) c += v[n++]; return `${n} of ${ds.length}` };
-  const firstFlow = fs => Math.min(...fs.flatMap(f => f.rows.map(r => +r.date))), yrs = t => isFinite(t) ? `${((asOf - t) / 31557600000).toFixed(1)}` : "–";
+  // Years active run from the first capital call (a contribution), not from any earlier NAV or fee line.
+  const firstFlow = fs => Math.min(...fs.flatMap(f => f.rows.filter(r => r.type !== "nav" && r.amount < 0).map(r => +r.date))), yrs = t => isFinite(t) ? `${((asOf - t) / 31557600000).toFixed(1)}` : "–";
   const pctIn = (paid, size) => size > 0 ? fp(paid / size, 0) : "–";
 
-  // Summary is the short read; Detailed adds the cash amounts, RVPI and benchmark quartiles (TVPI · IRR · DPI).
-  const det = state.sumView === "detailed", q = (f, m, v) => { const r = quartile(v, bm[f.vintage]?.[m]); return r ? `<span class="pill q${r}">Q${r}</span>` : `<span class="pill na">–</span>` };
+  // Summary is the short read; Detailed adds the cash amounts, RVPI and benchmark quartile badges. In both, the net
+  // TVPI, DPI and IRR cells are shaded by quartile against the fund's vintage benchmark (sequential: darker = better).
+  const det = state.sumView === "detailed", qr = (f, m, v) => quartile(v, bm[f.vintage]?.[m]);
+  const q = (f, m, v) => { const r = qr(f, m, v); return r ? `<span class="pill q${r}">Q${r}</span>` : `<span class="pill na">–</span>` };
+  const qcell = (f, m, v, txt) => { const r = bmOn && qr(f, m, v); return r ? `<td class="qcell q${r}" title="${["Top", "2nd", "3rd", "Bottom"][r - 1]} quartile for ${f.vintage}">${txt}</td>` : `<td>${txt}</td>` };
+  const fn = n => `<sup class="fn">${n}</sup>`;
   const cols = [["Fund", f => esc(f.name), "Total / pooled"], ["Vintage", f => f.vintage, ""], ["Size", f => f.size > 0 ? fm(f.size, 0) : "–", fm(T.size, 0)],
-    ...(det ? [["Paid-in", f => fm(f.paid), fm(T.paid)]] : []), ["% invested", f => pctIn(f.paid, f.size), pctIn(T.paid, T.size)],
+    ...(det ? [["Paid-in", f => fm(f.paid), fm(T.paid)]] : []), ["% invested" + fn(1), f => pctIn(f.paid, f.size), pctIn(T.paid, T.size)],
     ...(det ? [["Distributed", f => fm(f.dist), fm(T.dist)], ["NAV", f => fm(f.nav), fm(T.nav)]] : []),
-    ["Years since first cash flow", f => yrs(firstFlow([f])), yrs(firstFlow(F))], ["90% of value", f => conc(deals && deals.filter(d => d.fund === f.name)), conc(deals)],
-    ["Net TVPI", f => fx(f.tvpi), fx((T.dist + T.nav) / T.paid)], ["Net DPI", f => fx(f.dpi), fx(T.dist / T.paid)],
-    ...(det ? [["RVPI", f => fx(f.rvpi), fx(T.nav / T.paid)]] : []), ["Net IRR", f => fp(f.irr), fp(xirr(allFlows))],
-    ...(det ? [["Quartile", f => `${q(f, "TVPI", f.tvpi)} ${q(f, "IRR", f.irr)} ${q(f, "DPI", f.dpi)}`, ""]] : [])];
+    ["Years active" + fn(2), f => yrs(firstFlow([f])), yrs(firstFlow(F))], ["90% of value" + fn(3), f => conc(deals && deals.filter(d => d.fund === f.name)), conc(deals)],
+    ["Net TVPI", f => fx(f.tvpi), fx((T.dist + T.nav) / T.paid), "TVPI"], ["Net DPI", f => fx(f.dpi), fx(T.dist / T.paid), "DPI"],
+    ...(det ? [["RVPI", f => fx(f.rvpi), fx(T.nav / T.paid)]] : []), ["Net IRR", f => fp(f.irr), fp(xirr(allFlows)), "IRR"],
+    ...(det ? [["Quartile" + fn(4), f => `${q(f, "TVPI", f.tvpi)} ${q(f, "IRR", f.irr)} ${q(f, "DPI", f.dpi)}`, ""]] : [])];
+  const metric = { TVPI: "tvpi", DPI: "dpi", IRR: "irr" }, bmName = bmOn ? esc(document.querySelector("#bmSrc option:checked").textContent) : "";
   let html = `<section class="panel"><div class="panel-head"><h2>Net performance summary</h2>
     <span class="seg" role="group" aria-label="Table detail">${[["summary", "Summary"], ["detailed", "Detailed"]].map(([k, l]) => `<button type="button" data-sumview="${k}" aria-pressed="${(k === "detailed") === det}">${l}</button>`).join("")}</span></div>
-  <p class="note">% invested is paid-in capital over fund size. 90% of value counts the companies that make up 90% of gross value.${det ? " Quartiles rank each fund against its vintage benchmark (TVPI · IRR · DPI)." : ""}</p>
   <div class="tbl"><table class="sumtbl"><thead><tr>${cols.map(c => `<th>${c[0]}</th>`).join("")}</tr></thead><tbody>
-  ${F.map(f => `<tr>${cols.map(c => `<td>${c[1](f)}</td>`).join("")}</tr>`).join("")}
+  ${F.map(f => `<tr>${cols.map(c => c[3] ? qcell(f, c[3], f[metric[c[3]]], c[1](f)) : `<td>${c[1](f)}</td>`).join("")}</tr>`).join("")}
   <tr class="total">${cols.map(c => `<td>${c[2]}</td>`).join("")}</tr>
-  </tbody></table></div></section>`;
+  </tbody></table></div>
+  <ol class="footnotes">
+    <li>% invested is paid-in capital as a share of fund size. It can pass 100% when fees and expenses are called on top of commitments.</li>
+    <li>Years active is the time since the fund's first capital call, to the as-of date.</li>
+    <li>90% of value counts the fewest companies that make up 90% of the fund's gross value (realized plus unrealized), out of all its investments.</li>
+    ${det ? `<li>Quartile badges rank TVPI, IRR and DPI, in that order, against the ${bmName || "chosen"} benchmark for each fund's vintage.</li>` : ""}
+  </ol>
+  <p class="note qkey">${bmOn ? `Net TVPI, DPI and IRR are shaded by quartile against the ${bmName} benchmark for each fund's vintage: ${[1, 2, 3, 4].map(r => `<span class="qcell q${r} qsw">${["Top", "2nd", "3rd", "Bottom"][r - 1]}</span>`).join(" ")}` : "Pick a benchmark in the Data view to shade net TVPI, DPI and IRR by quartile."}</p></section>`;
 
   html += `<section class="panel"><div class="panel-head"><h2>Net relative performance</h2><p class="note">${bmOn ? `Bands show ${esc(document.querySelector("#bmSrc option:checked").textContent)} quartiles for each fund's vintage; the marker is the fund.` : "Pick a benchmark source and fill its quartiles to draw the bands."}</p></div>
     <div class="grid3"><div><h3>Net TVPI</h3><div class="chart"><canvas id="cTvpi"></canvas></div></div><div><h3>Net IRR</h3><div class="chart"><canvas id="cIrr"></canvas></div></div><div><h3>DPI</h3><div class="chart"><canvas id="cDpi"></canvas></div></div></div></section>`;
