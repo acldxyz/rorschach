@@ -141,8 +141,10 @@ td.lo { color: var(--bad) } td.hi { color: var(--good) }
     <div><p class="eyebrow">Exposure Model</p><h2 id="welcomeH" tabindex="-1">How would you like to start?</h2><p class="sub">See every company you own through your fund commitments, scaled to your share of each fund.</p></div>
     <div class="choices">
       <div class="choice"><button type="button" class="primary" id="wUpload" aria-describedby="wUploadD">Upload your data</button><p class="note" id="wUploadD">Pick your fund holdings file, each manager's schedule of investments (CSV or XLSX), or one workbook with holdings and commitments on separate sheets. You can add your commitments after.</p></div>
+      <div class="choice"><button type="button" id="wWorkspace" aria-describedby="wWorkspaceD">Open a saved workspace</button><p class="note" id="wWorkspaceD">Pick up where you left off from a workspace file you saved.</p></div>
       <div class="choice"><button type="button" id="wSample" aria-describedby="wSampleD">Use sample data</button><p class="note" id="wSampleD">Explore with a fictional LP's commitments to ten funds.</p></div>
     </div>
+    <p class="errors" id="wErr" role="alert"></p>
   </section>
 
   <div class="viewsw" role="tablist" aria-label="Page view">
@@ -157,6 +159,8 @@ td.lo { color: var(--bad) } td.hi { color: var(--good) }
     <div class="panel-head">
       <h2 id="loadH">Add or replace data</h2>
       <div class="row">
+        <button id="wsSave" type="button">Save workspace</button>
+        <button id="wsOpenBtn" type="button">Open workspace</button><input type="file" id="wsOpen" accept=".json,application/json" hidden>
         <button class="primary" id="sampleBtn" type="button">Load sample data</button>
         <button id="clearBtn" type="button">Clear</button>
       </div>
@@ -169,7 +173,7 @@ td.lo { color: var(--bad) } td.hi { color: var(--good) }
     <p class="errors" id="errors" role="alert"></p>
     <details>
       <summary>File formats</summary>
-      <p class="note">One Excel workbook can hold both: drop it on either box and each sheet is matched to the kind of data it looks like, for you to confirm. Common alternative column names are recognised (for example "Fair Value", "FMV" or "Carrying Value" for fair_value). Ownership may be given as 0.052 or 5.2%. A position needs either shares plus the company's fully diluted share count, or an ownership figure.</p>
+      <p class="note">One Excel workbook can hold both: drop it on either box and each sheet is matched to the kind of data it looks like, for you to confirm. Common alternative column names are recognised (for example "Fair Value", "FMV" or "Carrying Value" for fair_value). Ownership may be given as 0.052 or 5.2%. A position needs either shares plus the company's fully diluted share count, or an ownership figure. A workspace file saves everything you have loaded, with your settings and exit assumptions, so you can pick it up later.</p>
 <pre>commitments: manager, fund, vintage, fund_size, commitment, carry (0.20 or 20%), currency
              or lp_share (your share of the fund) instead of fund_size and commitment
 holdings:    manager, fund, company, sector, security (e.g. Series B Preferred), round,
@@ -411,7 +415,7 @@ function renderView() {
   document.querySelectorAll(".tabs [role=tab]").forEach(b => b.setAttribute("aria-selected", String(b.dataset.view === state.view)));
   document.querySelectorAll("[data-basis]").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.basis === state.basis)));
   const out = document.getElementById("out"); out.setAttribute("aria-labelledby", "tab-" + state.view);
-  if (!state.hold) { out.innerHTML = `<div class="panel empty">Nothing loaded yet. Upload fund holdings (and your commitments) or use the sample data to see your look-through exposure.</div>`; document.getElementById("asOf").textContent = ""; return }
+  if (!state.hold) { out.innerHTML = `<div class="panel empty">Nothing loaded yet. Upload fund holdings (and your commitments), open a saved workspace or use the sample data to see your look-through exposure.</div>`; document.getElementById("asOf").textContent = ""; return }
   const D = buildModel(); SYM = D.sym; CCY = D.ccy;
   document.getElementById("asOf").textContent = D.asOf[0] ? `Marks as of ${D.asOf[0]}${D.asOf[1] !== D.asOf[0] ? " to " + D.asOf[1] : ""}` : "";
   const warn = D.warn.map(w => `<p class="alert">${esc(w)}</p>`).join("");
@@ -668,13 +672,14 @@ document.getElementById("sampleBtn").addEventListener("click", () => {
   state.isSample = true; document.getElementById("lpTitle").textContent = "Exposure Model (sample)"; landOnData(); render();
 });
 // ---------- welcome ----------
-// With nothing loaded, the welcome card asks how to start. Loading anything (sample or upload) hides it;
+// With nothing loaded, the welcome card asks how to start. Loading anything (sample, upload or workspace) hides it;
 // Upload also closes it on the way to the drop zones; Clear brings it back.
 function syncWelcome() {
   const card = document.getElementById("welcome"), had = card.contains(document.activeElement);
   card.hidden = !!(state.commit || state.hold) || card.dataset.dismissed === "1";
   // A choice that loaded data hid the button it was on: carry focus on to the views.
   document.getElementById("app").classList.toggle("arriving", !card.hidden);
+  if (card.hidden) document.getElementById("wErr").textContent = "";
   if (card.hidden && had) document.querySelector('.viewsw [aria-selected="true"]')?.focus();
 }
 function dismissWelcome() { document.getElementById("welcome").dataset.dismissed = "1"; syncWelcome() }
@@ -686,6 +691,7 @@ document.getElementById("wUpload").addEventListener("click", () => {
   document.getElementById("loadH").closest("section").scrollIntoView({ block: "start", behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
   input.click();
 });
+document.getElementById("wWorkspace").addEventListener("click", () => document.getElementById("wsOpen").click());
 document.getElementById("wSample").addEventListener("click", () => document.getElementById("sampleBtn").click());
 document.getElementById("clearBtn").addEventListener("click", () => {
   delete document.getElementById("welcome").dataset.dismissed; wbook.close();
@@ -907,8 +913,42 @@ document.getElementById("dlXlsx").addEventListener("click", async () => {
   addSheet(wb, "Assumptions", sheetFrom(a));
   // Where every field came from, one row per kind and field (the Data view's audit, in figures).
   addSheet(wb, "Sources", sheetFrom(dv.sources()));
+  // Then every loaded kind's cleaned rows, so the workbook doubles as one file of everything uploaded.
+  DATA_KINDS.forEach(([k, label]) => state[k] && addSheet(wb, `Data · ${label}`, dataSheet(k)));
   await saveFile(`${fileBase()}.xlsx`, new Uint8Array(XLSX.write(wb, { type: "array", bookType: "xlsx" })));
 });
+// The cleaned rows, in the app's own columns: [key, header, Excel number format ("date" for a calendar date)].
+// Amounts are in full units (the unit setting already applied); every row ends with the source it came from.
+const DATA_KINDS = [["commit", "Fund commitments"], ["hold", "Fund holdings"]];
+const DATA_COLS = {
+  commit: [["manager", "Manager"], ["fund", "Fund"], ["vintage", "Vintage", "0"], ["currency", "Currency"], ["size", "Fund size", "#,##0"], ["commitment", "Commitment", "#,##0"],
+    ["share", "LP share of fund", "0.0000%"], ["carry", "Carry", "0.0%"]],
+  hold: [["manager", "Manager"], ["fund", "Fund"], ["company", "Company"], ["sector", "Sector"], ["security", "Security"], ["round", "Round"], ["date", "Investment date", "date"],
+    ["asOf", "As of", "date"], ["shares", "Shares", "#,##0"], ["fd", "Company FD shares", "#,##0"], ["cost", "Cost", "#,##0"], ["fv", "Fair value", "#,##0"],
+    ["pricePaid", "Price paid per share", "#,##0.00##"], ["markPS", "Mark per share", "#,##0.00##"], ["own", "Ownership (fully diluted)", "0.0000%"]] };
+// Where source row i came from: the sheet and the row's mapped cells (Holdings!A12:N12), the CSV row, or the saved row.
+function srcRef(P, i) {
+  const r = P?.rows[i]; if (!r) return "";
+  if (P.noSource) return `saved row ${r.r}`;
+  if (!P.sheet) return `${P.file} row ${r.r}`;
+  const cs = P.fields.filter(f => f.col).map(f => dvColNo(f.col)), a = dvCol(Math.min(...cs)), b = dvCol(Math.max(...cs));
+  const sh = /^[A-Za-z_][A-Za-z0-9_.]*$/.test(P.sheet) ? P.sheet : `'${P.sheet.replace(/'/g, "''")}'`;
+  return `${sh}!${a}${r.r}${a === b ? "" : `:${b}${r.r}`}`;
+}
+function dataSheet(k) {
+  const cols = DATA_COLS[k], P = state.prov[k], rows = state[k], ws = {}, put = (r, c, cell) => ws[XLSX.utils.encode_cell({ r, c })] = cell;
+  const heads = [...cols.map(c => c[1]), "Source"], wid = heads.map(h => h.length);
+  heads.forEach((h, c) => put(0, c, { t: "s", v: h }));
+  rows.forEach((o, n) => {
+    cols.forEach(([key, , z], c) => { const v = o[key], d = z === "date" && /^(\d{4})-(\d\d)-(\d\d)$/.exec(v);
+      if (d) put(n + 1, c, { t: "n", v: Date.UTC(+d[1], d[2] - 1, +d[3]) / 864e5 + 25569, z: "yyyy-mm-dd" });
+      else if (typeof v === "number") { if (isFinite(v)) put(n + 1, c, { t: "n", v, ...(z ? { z } : {}) }) }
+      else if (v != null && v !== "") { put(n + 1, c, { t: "s", v: String(v) }); wid[c] = Math.max(wid[c], String(v).length) } });
+    const ref = srcRef(P, rows.idx ? rows.idx[n] : n); put(n + 1, cols.length, { t: "s", v: ref }); wid[cols.length] = Math.max(wid[cols.length], ref.length) });
+  ws["!ref"] = XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: rows.length, c: cols.length } });
+  ws["!cols"] = wid.map((w, c) => ({ wch: Math.min(40, Math.max(cols[c]?.[2] ? 12 : 8, w + 2)) }));
+  return ws;
+}
 document.getElementById("dlHtml").addEventListener("click", async () => {
   if (!state.hold) return dlMsg("Load data first.", true);
   dlMsg("Building report…");
@@ -933,6 +973,53 @@ document.getElementById("dlHtml").addEventListener("click", async () => {
 ${parts.join("\n")}</div></body></html>`;
   await saveFile(`${fileBase()}-report.html`, doc);
 });
+
+// ---------- workspace ----------
+// One JSON file holds everything needed to pick up where you left off: the loaded rows (already in the
+// app's own columns), where each came from (with the source sheet, capped as dataview.js keeps it), the unit
+// setting, the exit assumptions, the brand and the Analysis view's selections.
+const WS_APP = "exposure-model", WS_VERSION = 1;
+// Excel dates in the rows travel as YYYY-MM-DD, which the normalisers read back to the same day.
+const wsJson = ws => JSON.stringify(ws, function (k, v) { const o = this[k]; return o instanceof Date ? isoOf(o) : v });
+document.getElementById("wsSave").addEventListener("click", () => {
+  if (!state.commit && !state.hold) return dlMsg("Load data first.", true);
+  const kinds = ["commit", "hold"].filter(k => state[k]);
+  const ws = { app: WS_APP, version: WS_VERSION, savedAt: new Date().toISOString(), title: document.getElementById("lpTitle").textContent, isSample: state.isSample,
+    raw: Object.fromEntries(kinds.map(k => [k, state.raw[k]])), prov: Object.fromEntries(kinds.filter(k => state.prov[k]).map(k => [k, state.prov[k]])), inUnit: state.inUnit,
+    assumptions: { dil: state.dil, targets: state.targets, basis: state.basis }, brand: { colors: brand.cur.colors, font: brand.cur.font },
+    view: { view: state.view, company: state.company, sort: state.sort, q: state.q, sector: state.sector, mgr: state.mgr, minMgr: state.minMgr } };
+  saveFile(`${slug(ws.title)}-workspace.json`, wsJson(ws));
+});
+document.getElementById("wsOpen").addEventListener("change", async e => {
+  const f = e.target.files[0]; e.target.value = ""; if (!f) return;
+  // Opened from the welcome card, the error shows on the card (the Data view is hidden behind it).
+  const err = document.getElementById(document.getElementById("welcome").hidden ? "errors" : "wErr"); ["errors", "wErr"].forEach(id => document.getElementById(id).textContent = "");
+  // A file that fails part-way leaves the page as it was.
+  const keep = Object.fromEntries(["commit", "hold", "raw", "prov", "inUnit", "dil", "targets", "basis", "isSample", "view", "company", "sort", "q", "sector", "mgr", "minMgr"].map(k => [k, state[k]]));
+  try {
+    const ws = JSON.parse(await f.text());
+    if (["gp-diligence", "venture-track-record"].includes(ws?.app)) throw new Error("That is a GP Diligence workspace. Open it in GP Diligence; this page opens Exposure Model workspaces.");
+    if (ws?.app !== WS_APP || !(ws.raw?.hold || ws.raw?.commit)) throw new Error("That file is not a saved Exposure Model workspace.");
+    if (ws.version > WS_VERSION) throw new Error("That workspace was saved by a newer version of Exposure Model, so this page cannot open it.");
+    const A = ws.assumptions || {}, V = ws.view || {}, saved = String(ws.savedAt || "").slice(0, 10);
+    Object.assign(state, { commit: null, hold: null, raw: {}, prov: {}, inUnit: [1, 1e3, 1e6].includes(ws.inUnit) ? ws.inUnit : 1, isSample: !!ws.isSample,
+      dil: A.dil >= 0 && A.dil < 0.95 ? A.dil : 0.15, targets: [0, 1].map(i => A.targets?.[i] > 0 ? A.targets[i] : [3, 4][i]), basis: A.basis === "net" ? "net" : "gross",
+      view: VIEWS.some(([v]) => v === V.view) ? V.view : "exposure", company: V.company ?? null, sort: V.sort?.k ? { k: V.sort.k, dir: V.sort.dir < 0 ? -1 : 1 } : { k: "lpFv", dir: -1 },
+      q: V.q || "", sector: V.sector || "", mgr: V.mgr || "", minMgr: [1, 2, 3, 4].includes(V.minMgr) ? V.minMgr : 1 });
+    // Where each kind came from travels in the workspace; one without it still opens, and the Data view says so.
+    ["commit", "hold"].forEach(k => { if (!ws.raw[k]) return;
+      apply(k, ws.raw[k], ws.prov?.[k] ? { ...ws.prov[k], ws: { file: f.name, savedAt: saved } } : dvFromRows({ file: f.name, savedAt: saved, rows: ws.raw[k], keys: Object.keys(SYN[k]) })) });
+    wbook.close(); dv.open = null;
+    ["commit", "hold"].forEach(k => setStatus(k, state[k] ? `${f.name} · ${state[k].length} rows` : "Not loaded", state[k] ? "ok" : ""));
+    document.querySelectorAll(".drop input").forEach(i => i.value = "");
+    document.getElementById("inUnit").value = String(state.inUnit);
+    document.getElementById("dil").value = +(state.dil * 100).toFixed(1); ["t1", "t2"].forEach((id, i) => document.getElementById(id).value = state.targets[i]);
+    document.getElementById("lpTitle").textContent = ws.title || "Exposure Model";
+    if (ws.brand) { showBrand(ws.brand); applyBrand(ws.brand) }
+    landOnData(); render(); dlMsg(`Opened workspace saved ${saved}.`);
+  } catch (x) { Object.assign(state, keep); err.textContent = x instanceof SyntaxError ? "That file could not be read as a workspace." : x.message }
+});
+document.getElementById("wsOpenBtn").addEventListener("click", () => document.getElementById("wsOpen").click());
 
 // Open empty: the welcome card asks how to start.
 render();

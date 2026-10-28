@@ -2416,6 +2416,7 @@ document.getElementById("wsOpen").addEventListener("change", async e => {
   try {
     const ws = JSON.parse(await f.text());
     // Workspaces saved before the rename say "venture-track-record"; they open the same way.
+    if (ws?.app === "exposure-model") throw new Error("That is an Exposure Model workspace. Open it in Exposure Model; this page opens GP Diligence workspaces.");
     if (!["gp-diligence", "venture-track-record"].includes(ws.app) || !ws.raw?.cf) throw new Error("That file is not a saved GP Diligence workspace.");
     for (const [k, v] of Object.entries(ws.benchmarks || {})) if (v && Object.keys(v).length) bmStore.save(k, v);
     if (ws.mappings) mapStore.merge(ws.mappings);

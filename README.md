@@ -28,7 +28,7 @@ A change to `shared/` reaches both products on the next build. Product-specific 
 
 Both products work the same way around their analyses:
 
-- **Arrival:** each opens on a single card asking how to start: upload your own files, open a saved workspace (GP Diligence) or use the fictional sample data.
+- **Arrival:** each opens on a single card asking how to start: upload your own files, open a saved workspace or use the fictional sample data. Each saves its own workspace files and refuses the other's.
 - **Analysis and Data views:** a switch at the top moves between the analyses and the Data view. Every load lands on Data.
   - **Data** lists what was identified: per kind of data, the source (file, sheet, header row), rows read, used and skipped (with reasons), the fields found and the columns ignored.
   - **Audit:** pick a field to open a pane that draws the source sheet itself, with each mapped column labelled with the field it feeds, title rows, skipped rows and row categories marked, and a key. Click a cell to see its raw value and the value the app used.
