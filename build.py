@@ -17,7 +17,7 @@ root = pathlib.Path(__file__).parent
 shared = root / "shared"
 head = '<!doctype html>\n<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">\n'
 products = {
-    "gp-diligence": [("cf", "cash_flows.csv"), ("inv", "investments.csv"), ("bm", "benchmarks.csv"), ("team", "team.csv"), ("hist", "company_history.csv")],
+    "gp-diligence": [("cf", "cash_flows.csv"), ("inv", "investments.csv"), ("bm", "benchmarks.csv"), ("team", "team.csv"), ("hist", "company_history.csv"), ("sec", "securities.csv")],
     "exposure-model": [("commit", "lp_commitments.csv"), ("hold", "lp_holdings.csv")],
 }
 partials = {"/*BRAND_CSS*/": "brand.css", "/*BRAND_JS*/": "brand.js", "<!--BRAND_HTML-->": "brand.html",

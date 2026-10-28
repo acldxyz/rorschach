@@ -175,6 +175,14 @@ tr.total td { font-weight: 600; border-top: 2px solid var(--ink-3) }
 .hc-lists { display: flex; flex-wrap: wrap; gap: 8px 24px }
 .hc-lists ul { margin: 6px 0 0; padding-left: 18px }
 .co-head { display: flex; gap: 8px; justify-content: space-between; align-items: start }
+/* Securities held, in each company card: a Priced and a Convertible table, each scrolling inside its own box.
+   The security name stays put while the rest scrolls; text columns read left, figures right. */
+.secs { display: grid; gap: 6px; min-width: 0 }
+.co .secs h4.sub { text-transform: none; letter-spacing: .02em; font-size: 12px; color: var(--ink-2); margin-top: 4px }
+.sectbl th { white-space: normal; vertical-align: bottom; min-width: 5.5em }
+.sectbl th:first-child, .sectbl td:first-child { position: sticky; left: 0; z-index: 1; background: var(--panel); white-space: normal; min-width: 9.5em; box-shadow: inset -1px 0 0 var(--rule) }
+.sectbl th.t, .sectbl td.t { text-align: left; font-family: var(--body) }
+.sectbl td.t { font-size: 12px; color: var(--ink-2) }
 @media (prefers-reduced-motion: reduce) { * { transition-duration: .01s !important } }
 </style>
 
@@ -196,7 +204,7 @@ tr.total td { font-weight: 600; border-top: 2px solid var(--ink-3) }
   <section class="panel welcome" id="welcome" aria-labelledby="welcomeH">
     <div><p class="eyebrow">GP Diligence</p><h2 id="welcomeH" tabindex="-1">How would you like to start?</h2><p class="sub">See a venture GP's net performance, return concentration, follow-on discipline and company progress.</p></div>
     <div class="choices">
-      <div class="choice"><button type="button" class="primary" id="wUpload" aria-describedby="wUploadD">Upload your data</button><p class="note" id="wUploadD">Pick your fund cash flows file (CSV or XLSX), or one workbook with a sheet for each kind of data. You can add portfolio, company history and staff files after.</p></div>
+      <div class="choice"><button type="button" class="primary" id="wUpload" aria-describedby="wUploadD">Upload your data</button><p class="note" id="wUploadD">Pick your fund cash flows file (CSV or XLSX), or one workbook with a sheet for each kind of data. You can add portfolio, company history, securities and staff files after.</p></div>
       <div class="choice"><button type="button" id="wWorkspace" aria-describedby="wWorkspaceD">Open a saved workspace</button><p class="note" id="wWorkspaceD">Pick up where you left off from a workspace file you saved.</p></div>
       <div class="choice"><button type="button" id="wSample" aria-describedby="wSampleD">Use sample data</button><p class="note" id="wSampleD">Explore with a fictional venture firm and its three funds.</p></div>
     </div>
@@ -225,6 +233,7 @@ tr.total td { font-weight: 600; border-top: 2px solid var(--ink-3) }
       <label class="drop" data-kind="inv"><b>Portfolio companies</b><span class="note">One row per company: stage, cheques, valuations, ownership. Optional; powers the gross charts.</span><input type="file" id="fileInv" accept=".csv,.xlsx,.xls"><span class="status">Not loaded</span></label>
       <label class="drop" data-kind="hist"><b>Company history</b><span class="note">One row per funding round and per quarterly report: ownership, cash, burn, revenue, gross margin. Optional; powers runway and round tracking.</span><input type="file" id="fileHist" accept=".csv,.xlsx,.xls"><span class="status">Not loaded</span></label>
       <label class="drop" data-kind="team"><b>Firm staff</b><span class="note">Everyone at the firm with their title; background for partners. Optional; powers headcount and partner bios.</span><input type="file" id="fileTeam" accept=".csv,.xlsx,.xls"><span class="status">Not loaded</span></label>
+      <label class="drop" data-kind="sec"><b>Securities</b><span class="note">One row per security the fund holds in a company: preferred shares with prices and preferences, SAFEs and notes with cap, discount and maturity. Optional; powers the securities tables.</span><input type="file" id="fileSec" accept=".csv,.xlsx,.xls"><span class="status">Not loaded</span></label>
     </div>
     <div class="wbook panel" id="wbook" hidden></div>
     <div class="mapper panel" id="mapper" hidden></div>
@@ -244,6 +253,15 @@ history:     company, date, round (blank on report rows), post_money, amount_rai
              net_income (for the quarter), or profit_margin
 team:        name, title, level (optional), joined, focus, prior, education, boards
              one row per person at the firm; background fields are only needed for partners
+securities:  company, fund, security (e.g. Series A Preferred, 2023 SAFE), type (Preferred|Common|
+             SAFE|Convertible note|Warrant), round, date (purchased), cost, shares, fair_value, as_of
+             priced:      price (per share paid), current_price (per share), liq_pref (1x, 1.5x),
+                          participating (Yes|No), participation_cap, seniority (Pari passu|Senior),
+                          anti_dilution (None|Broad-based|Narrow-based|Full ratchet), dividend_rate,
+                          cumulative (Yes|No), conversion_ratio
+             convertible: valuation_cap, discount (20% or 0.2), interest_rate, maturity_date, mfn,
+                          status (Outstanding|Converted into Series A)
+             one row per fund, company and security; prices per share are not scaled by the units setting
 benchmarks:  vintage, metric (TVPI|IRR|DPI), top, median, bottom</pre>
     </details>
   </section>
@@ -355,6 +373,43 @@ function normTeam(rows) {
   return dvKeep(rows.map(r => ({ name: String(r.name).trim(), title: String(r.title || "").trim(), joined: num(r.joined), focus: String(r.focus || "").trim(),
     prior: String(r.prior || "").trim(), education: String(r.education || "").trim(), boards: String(r.boards || "").trim(),
     level: levelOf(r.level, r.title) })), r => r.name, () => "No name");
+}
+// Securities: one row per fund, company and security held. The type is read from the words used, in the type
+// column or else the security's name; strict reads only explicit words (a column of "Series A" is a stage, not a security).
+function secTypeOf(v, strict) {
+  const s = String(v ?? "").toLowerCase();
+  if (/\bsafe\b|simple agreement for future|\bkiss\b|advance subscription/.test(s)) return "SAFE";
+  if (/pref/.test(s)) return "Preferred";
+  if (/\bnotes?\b|convertible|debenture/.test(s)) return "Note";
+  if (/warrant/.test(s)) return "Warrant";
+  if (/common|ordinary/.test(s)) return "Common";
+  if (!strict && /series|seed|\bclass [a-z]\b/.test(s)) return "Preferred";
+  return "";
+}
+const SEC_TYPE_LABEL = { Preferred: "Preferred", Common: "Common", SAFE: "SAFE", Note: "Convertible note", Warrant: "Warrant", "": "Other" };
+const isConvSec = r => r.type === "SAFE" || r.type === "Note";
+const yesNo = v => { const t = String(v ?? "").trim().toLowerCase(); return /^(y|yes|true|1)$/.test(t) ? "Yes" : /^(n|no|false|0|none)$/.test(t) ? "No" : "" };
+// "Participating, capped at 3x" counts as Yes (and gives the cap); "Non-participating" as No.
+const partOf = v => { const t = String(v ?? "").trim().toLowerCase(); return /non|^no?$|false|^0$|none/.test(t) ? "No" : /partic|cap|^y(es)?$|true|^1$/.test(t) ? "Yes" : "" };
+const multIn = v => num(String(v ?? "").replace(/x\s*$/i, "").trim());
+const antiOf = v => { const s = String(v ?? "").trim(), l = s.toLowerCase(); if (!s) return "";
+  return /full/.test(l) ? "Full ratchet" : /narrow/.test(l) ? "Narrow-based weighted average" : /broad|weighted|\bwa\b|bbwa/.test(l) ? "Broad-based weighted average" : /^(none|no|n\/a|-|–)$/.test(l) ? "None" : s };
+const SEC_PCT = ["discount", "interest_rate", "dividend_rate"];
+function normSec(rows) {
+  need(rows, ["company"], "Securities");
+  return dvKeep(rows.map(r => { const o = { company: String(r.company ?? "").trim(), fund: String(r.fund ?? "").trim(), security: String(r.security ?? "").trim(), round: String(r.round ?? "").trim(),
+      date: date(r.date), as_of: date(r.as_of), maturity_date: date(r.maturity_date), seniority: String(r.seniority ?? "").trim(), status: String(r.status ?? "").trim(),
+      anti_dilution: antiOf(r.anti_dilution), participating: partOf(r.participating), cumulative: yesNo(r.cumulative), mfn: yesNo(r.mfn) };
+    ["cost", "shares", "fair_value", "price", "current_price", "valuation_cap"].forEach(k => o[k] = num(r[k]));
+    ["liq_pref", "participation_cap", "conversion_ratio"].forEach(k => o[k] = multIn(r[k]));
+    SEC_PCT.forEach(k => o[k] = pctIn(r[k]));
+    if (!isFinite(o.participation_cap)) o.participation_cap = multIn((String(r.participating ?? "").match(/([\d.]+)\s*x/i) || [])[1]);
+    // No type column: the name says it, else a maturity or interest means a note and a cap or discount a SAFE.
+    o.type = secTypeOf(r.type) || secTypeOf(o.security) || (o.maturity_date || isFinite(o.interest_rate) ? "Note" : o.valuation_cap > 0 || isFinite(o.discount) ? "SAFE" : "");
+    if (!o.security) o.security = [o.round, o.type && SEC_TYPE_LABEL[o.type]].filter(Boolean).join(" ");
+    // No current price: fair value over shares, while something is still held (a sold holding has no price now).
+    if (!isFinite(o.current_price) && o.fair_value > 0 && o.shares > 0) o.current_price = o.fair_value / o.shares;
+    return o }), r => r.company && r.security, r => !r.company ? "No company name" : "No security name or type");
 }
 function normBm(rows) {
   need(rows, ["vintage", "metric", "top", "median", "bottom"], "Benchmarks");
@@ -652,8 +707,64 @@ function trendsHtml(c, asOf) {
     <div><h4>Gross margin</h4><p class="tags">${gmLabel}</p>${spark(gmPts, { marks, t0, t1, label: "Gross margin over time", domain: [Math.min(0, ...gmPts.map(p => p.v)), 1] }) || ""}</div></div>
     ${marks.length ? `<p class="tags">Dashed lines mark each raise after entry.</p>` : ""}`;
 }
+// ---------- securities held ----------
+// Each card lists the securities its fund holds in the company, from the optional securities file, in two
+// tables because the shapes differ: priced shares (prices, preference, seniority, anti-dilution) and
+// convertibles (cap, discount, interest, maturity). Amounts convert into the display currency like the rest
+// of the page; prices per share convert too but are never scaled by the units setting.
+const SEC_PRICED = [["Security"], ["Fund", 1], ["Date"], ["Shares"], ["Purchase price / share"], ["Current price / share"], ["Multiple"], ["Cost"], ["Fair value"], ["Liquidation preference", 1], ["Seniority", 1], ["Anti-dilution", 1]];
+const SEC_CONV = [["Security"], ["Fund", 1], ["Date"], ["Cost"], ["Fair value"], ["Valuation cap"], ["Discount"], ["Interest"], ["Maturity"], ["Time to maturity", 1], ["Status", 1]];
+const nameKey = s => String(s ?? "").trim().toLowerCase();
+// The rows behind each shown card, kept for the Excel export (one merged sheet per table shape).
+let secShown = [];
+function secRowsFor(c) {
+  if (!state.sec) return null;
+  const f = state.cur.factor(state.cur.byFund[c.fund] ?? state.cur.home ?? "USD"), unit = f / state.inUnit;
+  return state.sec.filter(r => nameKey(r.company) === nameKey(c.company) && (!r.fund || nameKey(r.fund) === nameKey(c.fund)))
+    .map(r => ({ ...r, cost: r.cost * f, fair_value: r.fair_value * f, valuation_cap: r.valuation_cap * f, price: r.price * unit, current_price: r.current_price * unit }))
+    .sort((a, b) => (a.date || 0) - (b.date || 0));
+}
+const fpps = v => isFinite(v) ? (v < 0 ? "-" : "") + state.cur.sym + Math.abs(v).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: Math.abs(v) < 1 ? 4 : 2 }) : "–";
+const fshares = v => isFinite(v) ? Math.round(v).toLocaleString("en-US") : "–";
+const xTxt = v => `${fnum(v)}x`;
+function prefTxt(r) {
+  if (r.type === "Common") return "None (common)";
+  if (!isFinite(r.liq_pref)) return r.participating === "Yes" ? "Participating" : "–";
+  return `${xTxt(r.liq_pref)} ${r.participating === "Yes" ? `participating${isFinite(r.participation_cap) ? `, capped ${xTxt(r.participation_cap)}` : ""}` : r.participating === "No" ? "non-participating" : ""}`.trim();
+}
+const converted = r => /^converted/i.test(r.status);
+// Years from the as-of date to maturity, to one decimal; or why there is none.
+function ttmOf(r, asOf) {
+  if (converted(r)) return { t: r.status.charAt(0).toUpperCase() + r.status.slice(1) };
+  if (!r.maturity_date) return { t: r.type === "SAFE" ? "No maturity" : "–" };
+  const y = (r.maturity_date - (r.as_of || asOf)) / 31557600000;
+  return y <= 0 ? { t: "Matured" } : { t: `${y.toFixed(1)} yrs`, y: +y.toFixed(1) };
+}
+const secStatus = r => converted(r) ? "Converted" : r.status || "–";
+function secCells(r, kind, asOf) {
+  const d = r.date ? isoDate(r.date) : "–", fund = esc(fundShort(r.fund || "")) || "–";
+  if (kind === "priced") return [esc(r.security), fund, d, fshares(r.shares), fpps(r.price), fpps(r.current_price), r.price > 0 && isFinite(r.current_price) ? fx(r.current_price / r.price) : "–",
+    fm(r.cost), fm(r.fair_value), esc(prefTxt(r)), esc(r.seniority || "–"), esc(r.anti_dilution || "–")];
+  return [esc(r.security), fund, d, fm(r.cost), fm(r.fair_value), r.valuation_cap > 0 ? fm(r.valuation_cap) : "–", isFinite(r.discount) && r.discount > 0 ? fp(r.discount, 0) : "–",
+    r.type === "Note" ? (isFinite(r.interest_rate) ? fp(r.interest_rate) : "–") : "None", r.maturity_date ? isoDate(r.maturity_date) : "–", esc(ttmOf(r, asOf).t), esc(secStatus(r))];
+}
+function secTable(rows, cols, kind, asOf) {
+  return `<div class="tbl"><table class="sectbl"><thead><tr>${cols.map(([h, t]) => `<th scope="col"${t ? ' class="t"' : ""}>${h}</th>`).join("")}</tr></thead><tbody>
+    ${rows.map(r => `<tr>${secCells(r, kind, asOf).map((v, i) => `<td${cols[i][1] ? ' class="t"' : ""}>${v}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`;
+}
+function secHtml(c, asOf) {
+  const rows = secRowsFor(c); if (!rows) return "";
+  if (!rows.length) return `<div class="secs"><h4>Securities held</h4><p class="muted">None listed in the securities file.</p></div>`;
+  const priced = rows.filter(r => !isConvSec(r)), conv = rows.filter(isConvSec);
+  secShown.push({ c, priced, conv });
+  const cost = rows.reduce((t, r) => t + (isFinite(r.cost) ? r.cost : 0), 0), fv = rows.reduce((t, r) => t + (isFinite(r.fair_value) ? r.fair_value : 0), 0);
+  return `<div class="secs"><h4>Securities held</h4>
+    <p class="tags">${rows.length} securit${rows.length > 1 ? "ies" : "y"} · cost ${fm(cost)} · fair value ${fm(fv)}${c.status === "Realized" ? " · exited, so none is held now" : ""}</p>
+    ${priced.length ? `<h4 class="sub">Priced</h4>${secTable(priced, SEC_PRICED, "priced", asOf)}` : ""}
+    ${conv.length ? `<h4 class="sub">Convertible</h4>${secTable(conv, SEC_CONV, "conv", asOf)}` : ""}</div>`;
+}
 function renderCompanies(P, F, asOf) {
-  const out = document.getElementById("out");
+  const out = document.getElementById("out"); secShown = [];
   if (!state.inv) { out.innerHTML = `<div class="panel empty">Load investments &amp; operating data to see a profile of each portfolio company.</div>`; return }
   const attention = c => c.flag || c.lowRunway || c.noReports;
   const shown = P.filter(c => (state.coFund === "all" || c.fund === state.coFund) && (!state.coFlagOnly || attention(c))).sort((a, b) => (b.lowRunway - a.lowRunway) || (attention(b) - attention(a)) || ((a.entry || 0) - (b.entry || 0)));
@@ -684,7 +795,7 @@ function renderCompanies(P, F, asOf) {
   out.innerHTML = `<section class="panel"><div class="panel-head"><div><h2>Portfolio companies</h2><p class="note">${P.length} companies · ${nFlag ? `${nFlag} held with no milestones or raises after ${CHECK_IN_MONTHS}+ months` : "none without updates"}${state.hist ? ` · ${nLow} under ${LOW_RUNWAY} months of runway · ${nNoRep} without cash reports` : ""}</p></div>
     <div class="row"><label for="coFund" class="note">Fund</label><select id="coFund"><option value="all">All funds</option>${F.map(f => `<option value="${esc(f.name)}"${state.coFund === f.name ? " selected" : ""}>${esc(f.name)}</option>`).join("")}</select>
     <label class="row note" for="coFlag"><input type="checkbox" id="coFlag"${state.coFlagOnly ? " checked" : ""}> Needs attention only</label></div></div>
-    <p class="note">Descriptions and milestones come from the optional <code>pre_investment</code>, <code>founded</code> and <code>milestones</code> columns of the investments file. Exits come from the cash data. Raises, ownership and cash come from the company history file.</p></section>
+    <p class="note">Descriptions and milestones come from the optional <code>pre_investment</code>, <code>founded</code> and <code>milestones</code> columns of the investments file. Exits come from the cash data. Raises, ownership and cash come from the company history file.${state.sec ? " Securities held come from the securities file." : " Load a securities file to list the securities the fund holds in each company."}</p></section>
     ${state.hist ? runwayTable(P, asOf) : ""}
     <div class="cards">${shown.map(c => `<article class="co${c.lowRunway ? " flagged bad" : c.flag || c.noReports ? " flagged" : ""}">
       <div class="co-head"><div><h3>${esc(c.company)}</h3><div class="tags">${[c.fund, c.stage !== "Unspecified" && c.stage + " entry", c.sector, c.board !== "Unknown" && (c.board === "Yes" ? "Board seat" : "No board seat")].filter(Boolean).map(esc).join(" · ")}</div></div><span class="status-chip">${c.outcome === "Held" ? c.status : esc(c.outcome)}</span></div>
@@ -692,6 +803,7 @@ function renderCompanies(P, F, asOf) {
       <h4>Before the investment</h4>${preHtml(c)}
       <h4>Since the investment</h4>${sinceHtml(c)}
       ${trendsHtml(c, asOf)}
+      ${secHtml(c, asOf)}
     </article>`).join("") || `<div class="panel empty">No companies match these filters.</div>`}</div>`;
 }
 
@@ -1030,9 +1142,9 @@ document.querySelectorAll(".drop").forEach(el => {
 document.getElementById("sampleBtn").addEventListener("click", () => {
   state.raw = {}; state.prov = {};
   // Each sample CSV is read as an upload already in the app's own columns, so the Data view can show where every field came from.
-  Object.entries({ cf: "cash_flows.csv", inv: "investments.csv", hist: "company_history.csv", team: "team.csv" }).forEach(([k, file]) => {
+  Object.entries({ cf: "cash_flows.csv", inv: "investments.csv", hist: "company_history.csv", team: "team.csv", sec: "securities.csv" }).forEach(([k, file]) => {
     const aoa = parseCSVRows(SAMPLE[k]); state.raw[k] = toObjects(aoa); state[k] = NORM[k](state.raw[k]); state.prov[k] = dvFill(provSample(k, file, aoa), null, state[k]) });
-  state.bmSample = normBm(parseCSV(SAMPLE.bm)); setStatus("hist", `Sample · ${state.hist.length} rows`, "ok"); setStatus("team", `Sample · ${state.team.length} people`, "ok"); state.bmSrc = "sample"; document.getElementById("bmSrc").value = "sample"; state.bm = state.bmSample; renderBm();
+  state.bmSample = normBm(parseCSV(SAMPLE.bm)); setStatus("hist", `Sample · ${state.hist.length} rows`, "ok"); setStatus("team", `Sample · ${state.team.length} people`, "ok"); setStatus("sec", `Sample · ${state.sec.length} securities`, "ok"); state.bmSrc = "sample"; document.getElementById("bmSrc").value = "sample"; state.bm = state.bmSample; renderBm();
   setStatus("cf", `Sample · ${state.cf.length} rows`, "ok"); setStatus("inv", `Sample · ${state.inv.length} companies`, "ok"); 
   document.getElementById("gpTitle").textContent = "Lanternfish Ventures (sample)";
   state.isSample = true; state.inUnit = 1; document.getElementById("inUnit").value = "1";
@@ -1050,7 +1162,7 @@ document.getElementById("out").addEventListener("click", e => { const b = e.targ
 // hides it; Upload also closes it on the way to the drop zones; Clear brings it back.
 function syncWelcome() {
   const card = document.getElementById("welcome"), had = card.contains(document.activeElement);
-  card.hidden = !!(state.cf || state.inv || state.hist || state.team) || card.dataset.dismissed === "1";
+  card.hidden = !!(state.cf || state.inv || state.hist || state.team || state.sec) || card.dataset.dismissed === "1";
   // A choice that loaded data hid the button it was on: carry focus on to the views.
   document.getElementById("app").classList.toggle("arriving", !card.hidden);
   if (card.hidden && had) document.querySelector('.viewsw [aria-selected="true"]')?.focus();
@@ -1068,7 +1180,7 @@ document.getElementById("wWorkspace").addEventListener("click", () => document.g
 document.getElementById("wSample").addEventListener("click", () => document.getElementById("sampleBtn").click());
 document.getElementById("clearBtn").addEventListener("click", () => {
   delete document.getElementById("welcome").dataset.dismissed; wbook.close();
-  Object.assign(state, { cf: null, inv: null, team: null, hist: null, isSample: false, raw: {}, prov: {} }); dv.open = null; M = null; renderMapper(); ["cf", "inv", "team", "hist"].forEach(k => setStatus(k, "Not loaded"));
+  Object.assign(state, { cf: null, inv: null, team: null, hist: null, sec: null, isSample: false, raw: {}, prov: {} }); dv.open = null; M = null; renderMapper(); ["cf", "inv", "team", "hist", "sec"].forEach(k => setStatus(k, "Not loaded"));
   document.querySelectorAll(".drop input").forEach(i => i.value = ""); document.getElementById("gpTitle").textContent = "GP Diligence"; renderBm(); render();
 });
 function hasBm(b) { return b && Object.values(b).some(v => Object.values(v).some(q => [q.top, q.median, q.bottom].some(isFinite))) }
@@ -1196,6 +1308,34 @@ const FIELDS = {
     F("education", "Education", "Degrees", "education degrees school"),
     F("boards", "Notes", "Board seats or other notes", "boards boardseats notes"),
   ],
+  sec: [
+    F("company", "Company", "Portfolio company the security is in", "company companyname portfoliocompany issuer issuername name", 1),
+    F("fund", "Fund", "Fund that holds the security", "fund fundname vehicle holder investor investingentity entity"),
+    F("security", "Security", "Name of the security, e.g. Series A Preferred or 2023 SAFE", "security securityname instrument instrumentname shareclass class classofshares securitydescription holding"),
+    F("type", "Type", "Preferred, Common, SAFE, Convertible note or Warrant", "type securitytype instrumenttype kind assetclass form"),
+    F("round", "Round", "Financing round it was bought in (Seed, Series A...)", "round series financinground roundname"),
+    F("date", "Date purchased", "Date the fund bought it", "date datepurchased purchasedate investmentdate dateinvested dateofinvestment issuedate issuancedate closingdate dateacquired acquired"),
+    F("cost", "Cost", "Amount the fund paid (principal for a SAFE or note)", "cost costbasis amountinvested investedamount principal principalamount purchaseamount totalcost"),
+    F("shares", "Shares", "Shares held (priced securities)", "shares numberofshares sharesheld noofshares quantity units sharecount"),
+    F("fair_value", "Fair value", "Current value of the holding", "fairvalue currentvalue value marketvalue fmv carryingvalue unrealizedvalue mark reportedvalue"),
+    F("as_of", "As of", "Date of the fair value", "asof asofdate valuationdate markdate reportdate"),
+    F("price", "Purchase price per share", "Price paid per share (original issue price)", "price pricepershare purchaseprice purchasepricepershare pps originalissueprice oip issueprice costpershare entryprice shareprice"),
+    F("current_price", "Current price per share", "Price per share of the latest round or mark", "currentprice currentpricepershare currentpps currentshareprice markpershare fairvaluepershare valuepershare latestprice latestpps lastroundprice lastroundpps"),
+    F("liq_pref", "Liquidation preference", "Multiple of cost paid back first: 1x, 1.5x", "liquidationpreference liqpref liquidationpref liqprefmultiple prefmultiple preferencemultiple liquidationmultiple preference"),
+    F("participating", "Participating", "Whether the preferred also shares in what is left (Yes/No)", "participating participation participationrights participatingpreferred"),
+    F("participation_cap", "Participation cap", "Cap on participation, as a multiple of cost", "participationcap participatingcap caponparticipation cappedat"),
+    F("seniority", "Seniority", "Rank in the preference stack, or pari passu", "seniority rank ranking priority liquidationseniority stackposition"),
+    F("anti_dilution", "Anti-dilution", "None, broad-based or narrow-based weighted average, or full ratchet", "antidilution antidilutionprotection antidilutionprovision ratchet priceprotection"),
+    F("dividend_rate", "Dividend", "Dividend rate (8% or 0.08)", "dividend dividendrate dividends dividendpct"),
+    F("cumulative", "Cumulative dividend", "Whether dividends accrue (Yes/No)", "cumulative cumulativedividend cumulativedividends"),
+    F("conversion_ratio", "Conversion ratio", "Common shares per preferred share", "conversionratio conversionrate asconvertedratio"),
+    F("valuation_cap", "Valuation cap", "Cap on the conversion valuation (SAFE or note)", "valuationcap cap postmoneycap premoneycap capvaluation"),
+    F("discount", "Discount", "Discount to the next round's price (20% or 0.2)", "discount discountrate conversiondiscount discounttonextround discountpct"),
+    F("interest_rate", "Interest rate", "Interest on a convertible note", "interest interestrate coupon couponrate"),
+    F("maturity_date", "Maturity date", "When a note falls due", "maturity maturitydate matures duedate"),
+    F("mfn", "MFN", "Most-favoured-nation clause (Yes/No)", "mfn mostfavourednation mostfavorednation"),
+    F("status", "Status", "Outstanding, or converted into which round", "status conversionstatus state"),
+  ],
   bm: [
     F("vintage", "Vintage", "Vintage year", "vintage vintageyear year", 1),
     F("metric", "Metric", "TVPI, IRR or DPI", "metric measure", 1),
@@ -1204,7 +1344,7 @@ const FIELDS = {
     F("bottom", "Bottom quartile", "Lower-quartile breakpoint", "bottom bottomquartile lowerquartile q3 25th p25 thirdquartile", 1),
   ],
 };
-const KIND_LABEL = { cf: "fund cash flows", inv: "portfolio companies", hist: "company history", team: "firm staff", bm: "benchmark quartiles" };
+const KIND_LABEL = { cf: "fund cash flows", inv: "portfolio companies", hist: "company history", team: "firm staff", sec: "securities", bm: "benchmark quartiles" };
 // Transaction labels seen on capital account statements and administrator exports.
 const TYPE_SYN = {
   Contribution: "contribution contributions capitalcall capitalcalls call calls drawdown drawdownnotice capitalcontribution paidin managementfee managementfees fee fees fundexpenses expenses investment deemedcontribution",
@@ -1212,9 +1352,9 @@ const TYPE_SYN = {
   NAV: "nav netassetvalue valuation capitalaccount capitalaccountbalance endingbalance endingcapitalaccount endingcapitalbalance closingbalance closingcapitalaccount closingcapitalbalance endingnav fairvalue residualvalue reportedvalue",
 };
 const typeFromSyn = raw => { const n = normH(raw); for (const [t, s] of Object.entries(TYPE_SYN)) if (s.split(" ").includes(n)) return t; return null };
-const MONEY_OF = { cf: ["amount", "contributions", "distributions", "nav", "fund_size"], inv: MONEY_INV, hist: MONEY_HIST, team: [], bm: [] };
-const PCT_OF = { inv: ["ownership_entry", "ownership_current"], hist: ["ownership", "gross_margin", "profit_margin"] };
-const DATE_OF = { cf: ["date"], inv: ["entry_date", "exit_date"], hist: ["date"] };
+const MONEY_OF = { cf: ["amount", "contributions", "distributions", "nav", "fund_size"], inv: MONEY_INV, hist: MONEY_HIST, team: [], sec: ["cost", "fair_value", "valuation_cap"], bm: [] };
+const PCT_OF = { inv: ["ownership_entry", "ownership_current"], hist: ["ownership", "gross_margin", "profit_margin"], sec: SEC_PCT };
+const DATE_OF = { cf: ["date"], inv: ["entry_date", "exit_date"], hist: ["date"], sec: ["date", "as_of", "maturity_date"] };
 
 function parseCSVRows(text) {
   const rows = []; let row = [], f = "", q = false;
@@ -1316,6 +1456,7 @@ function missingRequired(m) {
   const miss = FIELDS[m.kind].filter(f => f.req && !have.has(f.key) && !(f.key === "fund" && m.constFund)).map(f => f.label);
   if (m.kind === "cf" && !have.has("amount") && !["contributions", "distributions", "nav"].some(k => have.has(k))) miss.push("Amount (or Contributions / Distributions / NAV columns)");
   if (m.kind === "cf" && !have.has("fund") && !m.constFund) miss.push("Fund (a column, or type the fund name)");
+  if (m.kind === "sec" && !have.has("security") && !have.has("type")) miss.push("Security (a name or a type column)");
   return miss;
 }
 
@@ -1471,7 +1612,7 @@ function finishMapping(m, how) {
   if (m.remember && how !== "saved column mapping") mapStore.put(sigOf(m.kind, m.cols.map(c => c.header)), { kind: m.kind, fields: m.cols.map(c => c.field), typeMap: m.typeMap, dateOrder: m.dateOrder, constFund: m.constFund, file: m.fileName });
   M = null; renderMapper();
 }
-const NORM = { cf: normCf, inv: normInv, hist: normHist, team: normTeam };
+const NORM = { cf: normCf, inv: normInv, hist: normHist, team: normTeam, sec: normSec };
 function commitRows(kind, rows, fileName, how, P) {
   if (kind === "cf") state.isSample = false;
   if (kind === "bm") { if (state.bmSrc === "sample") { state.bmSrc = "custom"; document.getElementById("bmSrc").value = "custom" } state.bm = normBm(rows); bmStore.save(state.bmSrc, state.bm); renderBm() }
@@ -1498,19 +1639,22 @@ function provSample(kind, file, aoa) {
 }
 function landOnData() { state.top = "data"; try { history.replaceState(null, "", "#data") } catch {} }
 const DV_KINDS = { cf: { label: "Fund cash flows", off: "Needed for every analysis." }, inv: { label: "Portfolio companies", off: "Loading it adds the gross charts, return concentration, deal outcomes and company profiles." },
-  hist: { label: "Company history", off: "Loading it adds runway and round tracking, gross margin and growth." }, team: { label: "Firm staff", off: "Loading it adds headcount and partner bios." } };
+  hist: { label: "Company history", off: "Loading it adds runway and round tracking, gross margin and growth." }, team: { label: "Firm staff", off: "Loading it adds headcount and partner bios." },
+  sec: { label: "Securities", off: "Loading it adds the securities the fund holds in each company (priced and convertible) to the company profiles." } };
 // Where a field lands in the normalised rows, where the name differs.
 const NORM_KEY = { cf: { fund_size: "size", contributions: "amount", distributions: "amount", nav: "amount" }, inv: { entry_date: "entry", exit_date: "exit" } };
 const TYPE_NAME = { contribution: "Contribution", distribution: "Distribution", nav: "NAV" }, LEVEL_NAME = { ...Object.fromEntries(LEVELS), other: "Unclassified" };
 const fnum = (v, d = 2) => v.toLocaleString("en-US", { maximumFractionDigits: d });
 const isMapped = P => P.via === "upload" || P.via === "workbook";
 // Percentages are read as such on mapped sheets, and gross and profit margin always (normHist).
-const isPct = (k, key, P) => (isMapped(P) && PCT_OF[k]?.includes(key)) || (k === "hist" && /margin$/.test(key));
+const isPct = (k, key, P) => (isMapped(P) && PCT_OF[k]?.includes(key)) || (k === "hist" && /margin$/.test(key)) || (k === "sec" && SEC_PCT.includes(key));
 // The value the app uses for one field of one source row: amounts in full units, as the analyses read them.
 function dvUsed(k, key, outs) {
   const [n] = outs.find(([, f]) => f === key) || outs.find(([, f]) => !f || f === "amount") || outs[0], o = state[k][n], v = o[NORM_KEY[k]?.[key] || key];
   if (k === "team" && key === "level") return LEVEL_NAME[o.level];
   if (k === "cf" && key === "type") return TYPE_NAME[v] || v;
+  if (k === "sec" && key === "type") return SEC_TYPE_LABEL[v] || "Other";
+  if (k === "sec" && ["liq_pref", "participation_cap"].includes(key) && isFinite(v)) return `${fnum(v)}x`;
   if (v instanceof Date) return isoDate(v);
   if (typeof v === "number") { if (!isFinite(v)) return "– (blank or not a number)";
     if (MONEY_OF[k]?.includes(key)) return fnum(v * state.inUnit) + (k === "cf" && o.currency ? " " + o.currency : "");
@@ -1542,6 +1686,16 @@ function dvTransforms(k, key, P) {
   }
   if (k === "inv" && (key === "realized" || key === "unrealized")) T.push("Blank read as 0.");
   if (k === "team" && key === "level") T.push("Read as partner, mid-level, junior or back office from the words used.");
+  if (k === "sec") {
+    if (key === "type") T.push("Read as Preferred, Common, SAFE, Convertible note or Warrant from the words used (“Series A Preferred”, “KISS”, “Ordinary”).");
+    if (key === "security" && !has("type")) T.push("Also used to work out each security's type.");
+    if (["liq_pref", "participation_cap", "conversion_ratio"].includes(key)) T.push(`Read as a multiple: “1.5x” read as 1.5.`);
+    if (key === "participating") T.push("Read as Yes or No: “Participating” or “Capped at 3x” count as Yes, “Non-participating” as No.");
+    if (key === "anti_dilution") T.push("Read as None, Broad-based weighted average, Narrow-based weighted average or Full ratchet from the words used.");
+    if (key === "cumulative" || key === "mfn") T.push("Read as Yes or No.");
+    if (key === "price" || key === "current_price") T.push("A price per share in the fund's currency: not scaled by the units setting.");
+    if (key === "maturity_date") T.push("Time to maturity is counted in years from each row's as-of date (or the data date).");
+  }
   if (k === "team" && key === "title" && !has("level")) T.push("Also used to work out each person's level.");
   return T;
 }
@@ -1554,6 +1708,13 @@ function dvDerived(k, P) {
     if (!has("vintage")) D.push({ label: "Vintage", text: "No vintage column: each fund's vintage is the year of its first cash flow." });
   }
   if (k === "team" && !has("level")) D.push({ label: "Level", text: "No level column: each person's level is read from their title." });
+  if (k === "sec") {
+    if (!has("type")) D.push({ label: "Type", text: "No type column: each security's type is read from its name, or from a maturity, interest, cap or discount." });
+    if (!has("security")) D.push({ label: "Security", text: "No security column: each one is named from its round and type." });
+    if (!has("current_price") && has("fair_value") && has("shares")) D.push({ label: "Current price per share", text: "Fair value ÷ shares." });
+    D.push({ label: "Multiple", text: "Current price per share ÷ purchase price per share, in the securities tables." });
+    if (has("maturity_date")) D.push({ label: "Time to maturity", text: "Years from the as-of date to the maturity date, for SAFEs and notes still outstanding." });
+  }
   return D;
 }
 // Row categories for the source grid, read off what each row became: cash flows after the type mapping (so a
@@ -1563,6 +1724,7 @@ function dvCats(k) {
     of: r => { const t = new Set(r.out.map(([n]) => state.cf[n].type)); return t.size > 1 ? "several" : [...t][0] } };
   if (k === "hist") return { list: [["round", "Funding round", "R"], ["report", "Quarterly report", "Q"]], of: r => state.hist[r.out[0][0]].round ? "round" : "report" };
   if (k === "team") return { list: [...LEVELS.map(([id, label]) => [id, label, label[0]]), ["other", LEVEL_NAME.other, "?"]], of: r => state.team[r.out[0][0]].level };
+  if (k === "sec") return { list: [["Preferred", "Preferred", "P"], ["Common", "Common", "C"], ["SAFE", "SAFE", "S"], ["Note", "Convertible note", "N"], ["Warrant", "Warrant", "W"], ["", "Other", "?"]], of: r => state.sec[r.out[0][0]].type };
   return null;
 }
 
@@ -1577,17 +1739,25 @@ function hasTypeColumn(aoa, h) {
     if (v.length && t.length >= v.length * 0.6 && new Set(t).size >= 2) return true }
   return false;
 }
+// A column of Preferred / SAFE / Convertible note / Common labels marks a securities list.
+function hasSecTypeColumn(aoa, h) {
+  const rows = aoa.slice(h + 1, h + 201), w = Math.max(0, ...rows.map(r => r.length));
+  for (let i = 0; i < w; i++) { const v = rows.map(r => String(r[i] ?? "").trim()).filter(Boolean); if (v.length && v.filter(x => secTypeOf(x, true)).length >= v.length * 0.6) return true }
+  return false;
+}
 // Workbook sheets go through the same column matching as single uploads, one after another. Each
 // zone's status is kept so a skipped or stopped sheet puts it back as it was.
 const wbPrev = {};
-initWorkbook({ box: document.getElementById("wbook"), kinds: { cf: "Fund cash flows", inv: "Portfolio companies", hist: "Company history", team: "Firm staff" },
+initWorkbook({ box: document.getElementById("wbook"), kinds: { cf: "Fund cash flows", inv: "Portfolio companies", hist: "Company history", team: "Firm staff", sec: "Securities" },
   // Cash flows need a fund, a date and some amount (a fund name typed into the matcher also works, but a sheet without one is a weaker guess).
-  fields: k => ({ need: k === "cf" ? [["fund"], ["date"], ["amount", "contributions", "distributions", "nav"]] : FIELDS[k].filter(f => f.req).map(f => [f.key]),
+  // Securities need a company, what the security is, and some figure for it.
+  fields: k => ({ need: k === "cf" ? [["fund"], ["date"], ["amount", "contributions", "distributions", "nav"]] : k === "sec" ? [["company"], ["security", "type"], ["cost", "shares", "price", "valuation_cap", "fair_value"]] : FIELDS[k].filter(f => f.req).map(f => [f.key]),
     all: FIELDS[k].map(f => f.key), label: key => FIELDS[k].find(f => f.key === key).label }),
   match: (k, headers) => localMatch(k, headers).map(x => x.field), headerRow: guessHeaderRow,
   names: { cf: /cash ?flow|capital ?call|contribution|distribution|transaction|ledger|capital account/i, inv: /portfolio|investments?\b|deals?\b|holdings|schedule/i,
-    hist: /histor|kpi|metric|financial|quarter|round|operating|reporting/i, team: /team|staff|people|partners|personnel|bios?\b/i },
-  extra: (k, aoa, h) => k === "cf" && hasTypeColumn(aoa, h),
+    hist: /histor|kpi|metric|financial|quarter|round|operating|reporting/i, team: /team|staff|people|partners|personnel|bios?\b/i,
+    sec: /securit|cap ?table|holdings?\b|instruments?|positions|safes?\b|convertible|preferred|share ?class/i },
+  extra: (k, aoa, h) => k === "cf" ? hasTypeColumn(aoa, h) : k === "sec" && hasSecTypeColumn(aoa, h),
   load(k, sheet, info) { const s = document.querySelector(`.drop[data-kind="${k}"] .status`); wbPrev[k] = [s.textContent, s.className.replace("status", "").trim()];
     setStatus(k, "Matching columns…");
     try { const done = mapSheet(k, info.fileName, info.sheets, sheet, true); if (!done) document.getElementById("mapper").scrollIntoView({ block: "nearest" }); return done }
@@ -1620,11 +1790,11 @@ document.getElementById("wsOpen").addEventListener("change", async e => {
     if (ws.brand) { showBrand(ws.brand); applyBrand(ws.brand) }
     Object.assign(state, { rates: ws.rates || {}, curMode: ws.curMode || "local", inUnit: ws.inUnit || 1, isSample: !!ws.isSample, raw: ws.raw });
     document.getElementById("inUnit").value = String(state.inUnit);
-    state.cf = normCf(ws.raw.cf); state.inv = ws.raw.inv ? normInv(ws.raw.inv) : null; state.hist = ws.raw.hist ? normHist(ws.raw.hist) : null; state.team = ws.raw.team ? normTeam(ws.raw.team) : null;
+    state.cf = normCf(ws.raw.cf); state.inv = ws.raw.inv ? normInv(ws.raw.inv) : null; state.hist = ws.raw.hist ? normHist(ws.raw.hist) : null; state.team = ws.raw.team ? normTeam(ws.raw.team) : null; state.sec = ws.raw.sec ? normSec(ws.raw.sec) : null;
     // Where each kind came from travels in the workspace; an older workspace without it still opens, and the Data view says so.
     const saved = String(ws.savedAt || "").slice(0, 10); state.prov = {}; dv.open = null;
-    ["cf", "inv", "hist", "team"].forEach(k => { if (state[k]) state.prov[k] = ws.prov?.[k] ? { ...ws.prov[k], ws: { file: f.name, savedAt: saved } } : dvFill(dvFromRows({ file: f.name, savedAt: saved, rows: ws.raw[k], keys: FIELDS[k].map(x => x.key) }), null, state[k]) });
-    ["cf", "inv", "hist", "team"].forEach(k => setStatus(k, state[k] ? `${f.name} · ${state[k].length} rows` : "Not loaded", state[k] ? "ok" : ""));
+    ["cf", "inv", "hist", "team", "sec"].forEach(k => { if (state[k]) state.prov[k] = ws.prov?.[k] ? { ...ws.prov[k], ws: { file: f.name, savedAt: saved } } : dvFill(dvFromRows({ file: f.name, savedAt: saved, rows: ws.raw[k], keys: FIELDS[k].map(x => x.key) }), null, state[k]) });
+    ["cf", "inv", "hist", "team", "sec"].forEach(k => setStatus(k, state[k] ? `${f.name} · ${state[k].length} rows` : "Not loaded", state[k] ? "ok" : ""));
     state.bmSrc = ws.bmSrc || "custom"; if (state.bmSrc === "sample") state.bmSample = normBm(parseCSV(SAMPLE.bm));
     document.getElementById("bmSrc").value = state.bmSrc;
     document.getElementById("gpTitle").textContent = ws.title || "GP Diligence";
@@ -1878,6 +2048,9 @@ const tableRows = t => [...t.rows].map(r => [...r.cells].flatMap(c => [cellText(
 const csvOf = rows => rows.map(r => r.map(v => /[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v).join(",")).join("\r\n");
 // Name a table or chart after the heading nearest above it: its own h3 if it has one, else its panel's h2.
 function titleFor(el) {
+  // A table inside a company card (its securities) is named after the company: "Mosaic HQ securities - Priced".
+  const card = el.closest("article.co"), coName = card?.querySelector("h3")?.textContent.trim();
+  if (coName && el.closest(".secs")) { let p = el.previousElementSibling; while (p && p.tagName !== "H4") p = p.previousElementSibling; return `${coName} securities${p ? ` - ${p.textContent.trim()}` : ""}` }
   const sec = el.closest("section, .panel"), h2 = sec?.querySelector("h2")?.textContent.trim() || "";
   let n = el; while (n && n !== sec) { let p = n.previousElementSibling; while (p) { if (/^H[34]$/.test(p.tagName)) return h2 && p.textContent.trim() !== h2 ? `${h2} - ${p.textContent.trim()}` : p.textContent.trim(); p = p.previousElementSibling } n = n.parentElement }
   return h2 || "table";
@@ -1962,16 +2135,40 @@ function chartRows(ch) {
   return [["Series", "Label", "X", "Y"], ...ds.flatMap(d => d.data.map(p => [d.label || "", p.q || p.d?.company || "", p.x, p.y]))];
 }
 const cardRows = cards => { const heads = new Set(); const rows = cards.map(c => { const o = { Name: c.querySelector("h3")?.textContent.trim(), Details: c.querySelector(".tags")?.textContent.replace(/\s+/g, " ").trim(), Figures: c.querySelector(".figs")?.innerText.replace(/\s+/g, " ").trim() };
-    let cur = null; [...c.children].forEach(el => { if (el.tagName === "H4") { cur = el.textContent.trim(); heads.add(cur); o[cur] = "" } else if (cur && !el.classList.contains("trends")) o[cur] += (o[cur] ? "\n" : "") + (el.tagName === "OL" ? [...el.children].map(li => li.innerText.replace(/\s+/g, " ").trim()).join("\n") : el.innerText.trim()) });
+    let cur = null; [...c.children].forEach(el => { if (el.tagName === "H4") { cur = el.textContent.trim(); heads.add(cur); o[cur] = "" } else if (cur && !el.classList.contains("trends") && !el.classList.contains("secs")) o[cur] += (o[cur] ? "\n" : "") + (el.tagName === "OL" ? [...el.children].map(li => li.innerText.replace(/\s+/g, " ").trim()).join("\n") : el.innerText.trim()) });
     c.querySelectorAll(".trends > div").forEach(d => { const k = d.querySelector("h4")?.textContent.trim(); if (k) { heads.add(k); o[k] = d.querySelector(".tags")?.textContent.trim() || "" } });
     return o }); const cols = ["Name", "Details", "Figures", ...heads]; return [cols, ...rows.map(o => cols.map(k => o[k] ?? ""))] };
+// Securities sheets are built from the rows behind the cards, typed: amounts in full units of the display
+// currency, prices per share to cents, dates as dates, multiples and percentages as numbers.
+function secSheets(wb) {
+  if (!secShown.length) return;
+  const sy = state.cur.sym.replace(/"/g, ""), money = v => isFinite(v) ? { t: "n", v: Math.round(v), z: `"${sy}"#,##0` } : null, pps = v => isFinite(v) ? { t: "n", v, z: `"${sy}"#,##0.00##` } : null;
+  const day = d => d ? { t: "n", v: Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) / 864e5 + 25569, z: "yyyy-mm-dd" } : null;
+  const pct = (v, z = "0%") => isFinite(v) ? { t: "n", v, z } : null, txt = v => v ? { t: "s", v: String(v) } : null;
+  const asOf = new Date(Math.max(...fundStats(cfView()).map(f => f.asOf)));
+  const sheet = (head, rows) => { const ws = {};
+    [head, ...rows].forEach((r, i) => r.forEach((c, j) => { const cell = i ? c : txt(c); if (cell) ws[XLSX.utils.encode_cell({ r: i, c: j })] = cell }));
+    ws["!ref"] = XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: rows.length, c: head.length - 1 } });
+    ws["!cols"] = head.map((h, j) => ({ wch: Math.min(48, Math.max(10, h.length + 2, ...rows.map(r => r[j]?.t === "s" ? r[j].v.length + 2 : 12))) }));
+    return ws };
+  const P = secShown.flatMap(({ c, priced }) => priced.map(r => [txt(c.company), txt(r.security), txt(r.fund || c.fund), day(r.date), isFinite(r.shares) ? { t: "n", v: r.shares, z: "#,##0" } : null,
+    pps(r.price), pps(r.current_price), r.price > 0 && isFinite(r.current_price) ? { t: "n", v: r.current_price / r.price, z: '0.00"x"' } : null, money(r.cost), money(r.fair_value),
+    txt(prefTxt(r)), txt(r.seniority), txt(r.anti_dilution)]));
+  const C = secShown.flatMap(({ c, conv }) => conv.map(r => { const m = ttmOf(r, asOf);
+    return [txt(c.company), txt(r.security), txt(r.fund || c.fund), day(r.date), money(r.cost), money(r.fair_value), r.valuation_cap > 0 ? money(r.valuation_cap) : null, pct(r.discount),
+      r.type === "Note" ? pct(r.interest_rate, "0.0%") : txt("None"), day(r.maturity_date), m.y != null ? { t: "n", v: m.y, z: '0.0" yrs"' } : txt(m.t), txt(secStatus(r))] }));
+  if (P.length) addSheet(wb, "Securities - priced", sheet(["Company", ...SEC_PRICED.map(c => c[0])], P));
+  if (C.length) addSheet(wb, "Securities - convertible", sheet(["Company", ...SEC_CONV.map(c => c[0])], C));
+}
 document.getElementById("dlXlsx").addEventListener("click", async () => {
   if (!state.cf) return dlMsg("Load data first.", true);
   if (typeof XLSX === "undefined") return dlMsg("The spreadsheet library did not load, so the workbook cannot be built.", true);
   dlMsg("Building workbook…");
   const wb = XLSX.utils.book_new(), kpis = [["View", "Section", "Figure", "Description"]];
   await eachView((v, label) => {
-    document.querySelectorAll("#out .tbl table").forEach(t => addSheet(wb, sheetName(titleFor(t.closest(".tbl"))), sheetFrom(tableRows(t))));
+    document.querySelectorAll("#out .tbl table:not(.sectbl)").forEach(t => addSheet(wb, sheetName(titleFor(t.closest(".tbl"))), sheetFrom(tableRows(t))));
+    // The per-company securities tables merge into one sheet per shape, a Company column first.
+    if (v === "companies") secSheets(wb);
     charts.forEach(ch => addSheet(wb, sheetName(titleFor(ch.canvas.closest(".chart")), "Chart · "), sheetFrom(chartRows(ch))));
     document.querySelectorAll("#out .kpis > div, #out .hc > div").forEach(k => kpis.push([label, k.closest("section")?.querySelector("h2")?.textContent.trim() || "", k.querySelector("b")?.textContent.trim() || "", [...k.querySelectorAll("span")].map(s => s.textContent.trim()).filter(Boolean).join(" ")]));
     const cards = [...document.querySelectorAll("#out article.co")];

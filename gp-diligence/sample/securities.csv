@@ -1,0 +1,115 @@
+company,fund,security,type,round,date,cost,shares,fair_value,as_of,price,current_price,liq_pref,participating,participation_cap,seniority,anti_dilution,dividend_rate,cumulative,conversion_ratio,valuation_cap,discount,interest_rate,maturity_date,mfn,status
+Gridwise Materials,Lanternfish Ventures I,Series A Preferred,Preferred,Series A,2014-03-31,4080574,1400290,0,2025-12-31,2.9141,,1,No,,Pari passu,Broad-based weighted average,0.08,No,1,,,,,,Sold (M&A) 2021-09
+Gridwise Materials,Lanternfish Ventures I,Series C Preferred,Preferred,Series C,2018-03-31,2914099,374486,0,2025-12-31,7.7816,,1,No,,Senior,Broad-based weighted average,0.08,No,1,,,,,,Sold (M&A) 2021-09
+Gridwise Materials,Lanternfish Ventures I,Series D Preferred,Preferred,Series D,2019-09-30,9340038,481750,0,2025-12-31,19.3877,,1.5,No,,Pari passu,Broad-based weighted average,0.08,No,1,,,,,,Sold (M&A) 2021-09
+Verdant Systems,Lanternfish Ventures I,Seed Preferred,Preferred,Seed,2014-09-30,1055943,1418721,0,2025-12-31,0.7443,,1,No,,Pari passu,Broad-based weighted average,0.06,No,1,,,,,,Sold (M&A) 2017-03
+Tinker & Co,Lanternfish Ventures I,Seed Preferred,Preferred,Seed,2014-09-30,1875446,1695271,0,2025-12-31,1.1063,,1,No,,Pari passu,Broad-based weighted average,0.06,No,1,,,,,,Written off 2016-06
+Lumen Clinics,Lanternfish Ventures I,Seed Preferred,Preferred,Seed,2014-12-31,715760,502513,0,2025-12-31,1.4244,,1,No,,Pari passu,Broad-based weighted average,0.06,No,1,,,,,,Sold (M&A) 2017-06
+Saffron,Lanternfish Ventures I,Series A Preferred,Preferred,Series A,2015-03-31,6135297,2370780,161978650,2025-12-31,2.5879,68.3229,1,No,,Pari passu,Broad-based weighted average,0.08,No,1,,,,,,Held
+Saffron,Lanternfish Ventures I,Series B Preferred,Preferred,Series B,2017-03-31,2669219,424470,29001037,2025-12-31,6.2884,68.3229,1,No,,Pari passu,Broad-based weighted average,0.08,No,1,,,,,,Held
+Saffron,Lanternfish Ventures I,Series D Preferred,Preferred,Series D,2020-12-31,2164091,549225,37524664,2025-12-31,3.9403,68.3229,1,No,,Pari passu,Broad-based weighted average,0.08,No,1,,,,,,Held
+Tally Pay,Lanternfish Ventures I,Series A Preferred,Preferred,Series A,2015-03-31,6817102,2846816,0,2025-12-31,2.3946,,1,No,,Pari passu,Broad-based weighted average,0.08,No,1,,,,,,Written off 2016-12
+Cobble,Lanternfish Ventures I,2015 SAFE,SAFE,Seed,2015-06-30,1201883,1182415,0,2025-12-31,,,1,,,,,,,,16170935,0.2,,,No,Converted into Series A Preferred
+Cobble,Lanternfish Ventures I,Series A Preferred,Preferred,Series A,2016-12-31,653628,305166,0,2025-12-31,2.1419,,1,No,,Pari passu,Broad-based weighted average,0.08,No,1,,,,,,Sold (M&A) 2018-06
+Pebble & Co,Lanternfish Ventures I,Series A Preferred,Preferred,Series A,2015-06-30,8094050,3462153,0,2025-12-31,2.3379,,1,No,,Pari passu,Broad-based weighted average,0.08,No,1,,,,,,Sold (M&A) 2022-06
+Pebble & Co,Lanternfish Ventures I,Series B Preferred,Preferred,Series B,2017-06-30,3595125,755747,0,2025-12-31,4.7571,,1,No,,Pari passu,Broad-based weighted average,0.08,No,1,,,,,,Sold (M&A) 2022-06
+Pebble & Co,Lanternfish Ventures I,Series D Preferred,Preferred,Series D,2021-03-31,10070488,948804,0,2025-12-31,10.6139,,1,Yes,3,Pari passu,Broad-based weighted average,0.08,Yes,1,,,,,,Sold (M&A) 2022-06
+Coinwise,Lanternfish Ventures I,Series A Preferred,Preferred,Series A,2015-12-31,8030395,3038384,51188924,2025-12-31,2.643,16.8474,1,No,,Pari passu,Broad-based weighted average,0.08,No,1,,,,,,Held
+Coinwise,Lanternfish Ventures I,Series B Preferred,Preferred,Series B,2018-06-30,4220195,933396,15725312,2025-12-31,4.5213,16.8474,1,No,,Pari passu,Broad-based weighted average,0.08,No,1,,,,,,Held
+Coinwise,Lanternfish Ventures I,Series D Preferred,Preferred,Series D,2022-03-31,6068235,956564,16115633,2025-12-31,6.3438,16.8474,1.5,No,,Senior,Broad-based weighted average,0.08,No,1,,,,,,Held
+Pylon Data,Lanternfish Ventures I,Seed Preferred,Preferred,Seed,2015-09-30,836219,1066965,0,2025-12-31,0.7837,,1,No,,Pari passu,Broad-based weighted average,0.06,No,1,,,,,,Written off 2019-03
+Cadence Pay,Lanternfish Ventures I,Series B Preferred,Preferred,Series B,2016-03-31,7330347,1430926,0,2025-12-31,5.1228,,1,No,,Pari passu,Broad-based weighted average,0.08,No,1,,,,,,Sold (M&A) 2021-06
+Cadence Pay,Lanternfish Ventures I,Series D Preferred,Preferred,Series D,2019-06-30,2825860,405524,0,2025-12-31,6.9684,,1,Yes,3,Pari passu,Broad-based weighted average,0.08,No,1,,,,,,Sold (M&A) 2021-06
+Tally Finance,Lanternfish Ventures I,Series B Preferred,Preferred,Series B,2016-06-30,10820691,2210548,0,2025-12-31,4.895,,1,No,,Pari passu,Broad-based weighted average,0.08,No,1,,,,,,Written off 2017-09
+Nimbus AI,Lanternfish Ventures I,Seed Preferred,Preferred,Seed,2016-09-30,1081081,1298851,0,2025-12-31,0.8323,,1,No,,Pari passu,Broad-based weighted average,0.06,No,1,,,,,,Sold (M&A) 2023-03
+Nimbus AI,Lanternfish Ventures I,Series A Preferred,Preferred,Series A,2018-12-31,581690,407480,0,2025-12-31,1.4275,,1,No,,Pari passu,Broad-based weighted average,0.08,No,1,,,,,,Sold (M&A) 2023-03
+Nimbus AI,Lanternfish Ventures I,Series B Preferred,Preferred,Series B,2020-09-30,1769439,512430,0,2025-12-31,3.453,,1,Yes,3,Pari passu,Broad-based weighted average,0.08,No,1,,,,,,Sold (M&A) 2023-03
+Sable Money,Lanternfish Ventures I,Series A Preferred,Preferred,Series A,2016-09-30,9589922,5413242,0,2025-12-31,1.7716,,1,No,,Pari passu,Broad-based weighted average,0.08,No,1,,,,,,Written off 2018-09
+Tidewell Health,Lanternfish Ventures I,2016 Convertible note,Convertible note,Seed,2016-09-30,1282106,1114430,0,2025-12-31,,,1,,,,,,,,20837000,0.2,0.06,2018-09-30,No,Converted into Series A Preferred
+Tidewell Health,Lanternfish Ventures I,Series A Preferred,Preferred,Series A,2018-03-31,621239,255366,0,2025-12-31,2.4327,,1,No,,Pari passu,Broad-based weighted average,0.08,No,1,,,,,,Sold (M&A) 2021-09
+Gridwise Energy,Lanternfish Ventures I,Seed Preferred,Preferred,Seed,2016-12-31,834777,1200381,0,2025-12-31,0.6954,,1,No,,Pari passu,Broad-based weighted average,0.06,No,1,,,,,,Written off 2018-09
+Gridwise Power,Lanternfish Ventures I,Seed Preferred,Preferred,Seed,2017-03-31,1448401,1644488,0,2025-12-31,0.8808,,1,No,,Pari passu,Broad-based weighted average,0.06,No,1,,,,,,Written off 2018-09
+Tinker Home,Lanternfish Ventures I,Seed Preferred,Preferred,Seed,2017-06-30,1265366,2150129,0,2025-12-31,0.5885,,1,No,,Pari passu,Broad-based weighted average,0.06,No,1,,,,,,Sold (M&A) 2019-09
+Northstar Software,Lanternfish Ventures I,Seed Preferred,Preferred,Seed,2017-09-30,1309814,1344009,0,2025-12-31,0.9746,,1,No,,Pari passu,Broad-based weighted average,0.06,No,1,,,,,,Written off 2020-03
+Solace Materials,Lanternfish Ventures I,Seed Preferred,Preferred,Seed,2017-09-30,1099159,1559495,0,2025-12-31,0.7048,,1,No,,Pari passu,Broad-based weighted average,0.06,No,1,,,,,,Sold (M&A) 2022-03
+Solace Materials,Lanternfish Ventures I,Series A Preferred,Preferred,Series A,2018-12-31,602321,331898,0,2025-12-31,1.8148,,1,No,,Pari passu,Broad-based weighted average,0.08,No,1,,,,,,Sold (M&A) 2022-03
+Pylon Labs,Lanternfish Ventures II,2017 SAFE,SAFE,Seed,2017-06-30,982766,1403038,0,2025-12-31,,,1,,,,,,,,14924609,0.2,,,No,Converted into Series A Preferred
+Pylon Labs,Lanternfish Ventures II,Series A Preferred,Preferred,Series A,2019-03-31,1078482,460529,0,2025-12-31,2.3418,,1,No,,Pari passu,Broad-based weighted average,0.08,No,1,,,,,,Sold (M&A) 2023-12
+Pylon Labs,Lanternfish Ventures II,Series B Preferred,Preferred,Series B,2020-06-30,3371452,400585,0,2025-12-31,8.4163,,1,No,,Pari passu,Broad-based weighted average,0.08,No,1,,,,,,Sold (M&A) 2023-12
+Juniper Bio,Lanternfish Ventures II,Series A Preferred,Preferred,Series A,2017-06-30,2785072,1093166,0,2025-12-31,2.5477,,1,No,,Pari passu,Broad-based weighted average,0.08,No,1,,,,,,Written off 2018-12
+Kinetic Clinics,Lanternfish Ventures II,Seed Preferred,Preferred,Seed,2017-06-30,1067941,1095058,0,2025-12-31,0.9752,,1,No,,Pari passu,Broad-based weighted average,0.06,No,1,,,,,,Sold (M&A) 2021-09
+Kinetic Clinics,Lanternfish Ventures II,Series A Preferred,Preferred,Series A,2019-06-30,2177431,280984,0,2025-12-31,7.7493,,1,No,,Pari passu,Broad-based weighted average,0.08,No,1,,,,,,Sold (M&A) 2021-09
+Brightdesk Software,Lanternfish Ventures II,Series A Preferred,Preferred,Series A,2017-09-30,4766475,2130750,0,2025-12-31,2.237,,1,No,,Pari passu,Broad-based weighted average,0.08,No,1,,,,,,Sold (M&A) 2023-09
+Brightdesk Software,Lanternfish Ventures II,Series B Preferred,Preferred,Series B,2019-06-30,5517224,524524,0,2025-12-31,10.5185,,1,No,,Pari passu,Broad-based weighted average,0.08,No,1,,,,,,Sold (M&A) 2023-09
+Carbonline Power,Lanternfish Ventures II,Series A Preferred,Preferred,Series A,2018-03-31,5149642,3447364,35112636,2025-12-31,1.4938,10.1854,1,No,,Pari passu,Broad-based weighted average,0.08,No,1,,,,,,Held
+Carbonline Power,Lanternfish Ventures II,Series B Preferred,Preferred,Series B,2019-06-30,2208566,796424,8111864,2025-12-31,2.7731,10.1854,1,No,,Pari passu,Broad-based weighted average,0.08,No,1,,,,,,Held
+Carbonline Power,Lanternfish Ventures II,Series D Preferred,Preferred,Series D,2023-09-30,12151135,1014050,10328462,2025-12-31,11.9828,10.1854,1.5,No,,Pari passu,Broad-based weighted average,0.08,No,1,,,,,,Held
+Pebble,Lanternfish Ventures II,Series A Preferred,Preferred,Series A,2018-03-31,3851041,2916108,0,2025-12-31,1.3206,,1,No,,Pari passu,Broad-based weighted average,0.08,No,1,,,,,,Sold (M&A) 2022-03
+Pebble,Lanternfish Ventures II,Series B Preferred,Preferred,Series B,2020-09-30,2294371,686750,0,2025-12-31,3.3409,,1,No,,Pari passu,Broad-based weighted average,0.08,No,1,,,,,,Sold (M&A) 2022-03
+Lumen Bio,Lanternfish Ventures II,Seed Preferred,Preferred,Seed,2018-03-31,620310,718553,0,2025-12-31,0.8633,,1,No,,Pari passu,Broad-based weighted average,0.06,No,1,,,,,,Written off 2021-12
+Tally Money,Lanternfish Ventures II,Series B Preferred,Preferred,Series B,2018-06-30,6816549,1593706,0,2025-12-31,4.2772,,1,No,,Pari passu,Broad-based weighted average,0.08,No,1,,,,,,Sold (M&A) 2022-12
+Beacon Software,Lanternfish Ventures II,Series A Preferred,Preferred,Series A,2018-06-30,5475888,3231458,45565317,2025-12-31,1.6946,14.1005,1,No,,Pari passu,Broad-based weighted average,0.08,No,1,,,,,,Held
+Beacon Software,Lanternfish Ventures II,Series B Preferred,Preferred,Series B,2020-03-31,3566731,574440,8099917,2025-12-31,6.2091,14.1005,1,No,,Pari passu,Broad-based weighted average,0.08,No,1,,,,,,Held
+Beacon Software,Lanternfish Ventures II,Series D Preferred,Preferred,Series D,2024-06-30,11927433,719002,10138320,2025-12-31,16.5889,14.1005,1.5,No,,Senior,Full ratchet,0.08,No,1,,,,,,Held
+Nimbus Data,Lanternfish Ventures II,Seed Preferred,Preferred,Seed,2018-09-30,1432611,1727178,4770925,2025-12-31,0.8295,2.7623,1,No,,Pari passu,Broad-based weighted average,0.06,No,1,,,,,,Held
+Nimbus Data,Lanternfish Ventures II,Series B Preferred,Preferred,Series B,2022-09-30,577378,565966,1563349,2025-12-31,1.0202,2.7623,1,No,,Senior,Broad-based weighted average,0.08,Yes,1,,,,,,Held
+Nimbus Data,Lanternfish Ventures II,Series C Preferred,Preferred,Series C,2024-09-30,1124391,407054,1124391,2025-12-31,2.7623,2.7623,1.5,No,,Pari passu,Broad-based weighted average,0.08,No,1,,,,,,Held
+Fable,Lanternfish Ventures II,Series B Preferred,Preferred,Series B,2018-09-30,6218438,1092720,0,2025-12-31,5.6908,,1,No,,Pari passu,Broad-based weighted average,0.08,No,1,,,,,,Sold (M&A) 2020-09
+Beacon HQ,Lanternfish Ventures II,Series B Preferred,Preferred,Series B,2018-12-31,6666800,1243075,0,2025-12-31,5.3632,,1,No,,Pari passu,Broad-based weighted average,0.08,No,1,,,,,,Sold (M&A) 2021-03
+Wren & Co,Lanternfish Ventures II,Series A Preferred,Preferred,Series A,2019-03-31,3817498,1501068,17957600,2025-12-31,2.5432,11.9632,1,No,,Pari passu,Broad-based weighted average,0.08,No,1,,,,,,Held
+Wren & Co,Lanternfish Ventures II,Series B Preferred,Preferred,Series B,2021-03-31,1187250,281738,3370493,2025-12-31,4.214,11.9632,1,No,,Pari passu,Broad-based weighted average,0.08,No,1,,,,,,Held
+Wren & Co,Lanternfish Ventures II,Series C Preferred,Preferred,Series C,2022-06-30,3427705,468463,5604324,2025-12-31,7.3169,11.9632,1,No,,Pari passu,Broad-based weighted average,0.08,No,1,,,,,,Held
+Terra Systems,Lanternfish Ventures II,Series A Preferred,Preferred,Series A,2019-03-31,2790954,1212269,0,2025-12-31,2.3023,,1,No,,Pari passu,Broad-based weighted average,0.08,No,1,,,,,,Sold (M&A) 2023-06
+Terra Systems,Lanternfish Ventures II,Series B Preferred,Preferred,Series B,2020-12-31,848578,219809,0,2025-12-31,3.8605,,1,No,,Pari passu,Broad-based weighted average,0.08,No,1,,,,,,Sold (M&A) 2023-06
+Terra Systems,Lanternfish Ventures II,Series C Preferred,Preferred,Series C,2022-03-31,3361992,353727,0,2025-12-31,9.5045,,1,No,,Pari passu,Broad-based weighted average,0.08,No,1,,,,,,Sold (M&A) 2023-06
+Saffron & Co,Lanternfish Ventures II,Seed Preferred,Preferred,Seed,2019-06-30,975858,949878,0,2025-12-31,1.0274,,1,No,,Pari passu,Broad-based weighted average,0.06,No,1,,,,,,Written off 2020-09
+Gridwise Systems,Lanternfish Ventures II,Seed Preferred,Preferred,Seed,2019-09-30,1303531,2406962,0,2025-12-31,0.5416,,1,No,,Pari passu,Broad-based weighted average,0.06,No,1,,,,,,Sold (M&A) 2024-09
+Gridwise Systems,Lanternfish Ventures II,Series B Preferred,Preferred,Series B,2023-06-30,393402,739015,0,2025-12-31,0.5323,,1,Yes,3,Pari passu,Broad-based weighted average,0.08,No,1,,,,,,Sold (M&A) 2024-09
+Keystone,Lanternfish Ventures II,Seed Preferred,Preferred,Seed,2019-09-30,1245557,1415725,0,2025-12-31,0.8798,,1,No,,Pari passu,Broad-based weighted average,0.06,No,1,,,,,,Written off 2023-06
+Nimbus Labs,Lanternfish Ventures II,Series A Preferred,Preferred,Series A,2019-12-31,7950810,3093879,0,2025-12-31,2.5699,,1,No,,Pari passu,Broad-based weighted average,0.08,No,1,,,,,,Sold (M&A) 2025-06
+Nimbus Labs,Lanternfish Ventures II,Series B Preferred,Preferred,Series B,2021-03-31,6993546,806750,0,2025-12-31,8.6688,,1,No,,Pari passu,Broad-based weighted average,0.08,No,1,,,,,,Sold (M&A) 2025-06
+Nimbus Labs,Lanternfish Ventures II,Series C Preferred,Preferred,Series C,2023-06-30,27656596,1059613,0,2025-12-31,26.1007,,1,No,,Pari passu,Broad-based weighted average,0.08,No,1,,,,,,Sold (M&A) 2025-06
+Kinetic Care,Lanternfish Ventures II,2019 Convertible note,Convertible note,Seed,2019-12-31,968338,1006136,0,2025-12-31,,,1,,,,,,,,17670000,0.2,0.06,2021-12-31,No,Converted into Series A Preferred
+Kinetic Care,Lanternfish Ventures II,Series A Preferred,Preferred,Series A,2021-03-31,767081,289699,0,2025-12-31,2.6479,,1,No,,Pari passu,Broad-based weighted average,0.08,No,1,,,,,,Sold (M&A) 2024-06
+Kinetic Care,Lanternfish Ventures II,Series B Preferred,Preferred,Series B,2022-12-31,2306011,427527,0,2025-12-31,5.3938,,1,Yes,3,Pari passu,Full ratchet,0.08,No,1,,,,,,Sold (M&A) 2024-06
+Parcel & Co,Lanternfish Ventures II,Series A Preferred,Preferred,Series A,2019-12-31,3268944,1123832,4642402,2025-12-31,2.9087,4.1309,1,No,,Pari passu,Broad-based weighted average,0.08,No,1,,,,,,Held
+Parcel & Co,Lanternfish Ventures II,Series B Preferred,Preferred,Series B,2021-12-31,1486140,337319,1393420,2025-12-31,4.4057,4.1309,1,No,,Pari passu,Broad-based weighted average,0.08,No,1,,,,,,Held
+Verdant Materials,Lanternfish Ventures II,Series B Preferred,Preferred,Series B,2020-03-31,11344119,1420665,0,2025-12-31,7.9851,,1,No,,Pari passu,Broad-based weighted average,0.08,No,1,,,,,,Written off 2023-09
+Plinth Money,Lanternfish Ventures II,Seed Preferred,Preferred,Seed,2020-06-30,508107,713558,2212656,2025-12-31,0.7121,3.1009,1,No,,Pari passu,Broad-based weighted average,0.06,No,1,,,,,,Held
+Plinth Money,Lanternfish Ventures II,Series A Preferred,Preferred,Series A,2021-12-31,342822,201387,624476,2025-12-31,1.7023,3.1009,1,No,,Pari passu,Broad-based weighted average,0.08,No,1,,,,,,Held
+Plinth Money,Lanternfish Ventures II,Series B Preferred,Preferred,Series B,2024-06-30,888504,243553,755228,2025-12-31,3.6481,3.1009,1,No,,Pari passu,Broad-based weighted average,0.08,Yes,1,,,,,,Held
+Pebble Home,Lanternfish Ventures II,Series A Preferred,Preferred,Series A,2020-06-30,5456261,4938023,0,2025-12-31,1.1049,,1,No,,Pari passu,Broad-based weighted average,0.08,No,1,,,,,,Written off 2024-06
+Pebble Home,Lanternfish Ventures II,Series B Preferred,Preferred,Series B,2022-09-30,1723750,1196846,0,2025-12-31,1.4402,,1,No,,Pari passu,Broad-based weighted average,0.08,No,1,,,,,,Written off 2024-06
+Parcel,Lanternfish Ventures II,2020 SAFE,SAFE,Seed,2020-09-30,902870,1699756,0,2025-12-31,,,1,,,,,,,,11302902,0.2,,,No,Converted into Series A Preferred
+Parcel,Lanternfish Ventures II,Series A Preferred,Preferred,Series A,2022-09-30,755648,537211,0,2025-12-31,1.4066,,1,No,,Pari passu,Broad-based weighted average,0.08,No,1,,,,,,Sold (M&A) 2024-09
+Saffron Home,Lanternfish Ventures III,Series A Preferred,Preferred,Series A,2021-06-30,8500312,4890750,0,2025-12-31,1.738,,1,No,,Pari passu,Broad-based weighted average,0.08,No,1,,,,,,Written off 2023-09
+Plinth Pay,Lanternfish Ventures III,Seed Preferred,Preferred,Seed,2021-09-30,2024234,1367484,12401641,2025-12-31,1.4803,9.0689,1,No,,Pari passu,Broad-based weighted average,0.06,No,1,,,,,,Held
+Plinth Pay,Lanternfish Ventures III,Series A Preferred,Preferred,Series A,2023-12-31,1608987,421022,3818226,2025-12-31,3.8216,9.0689,1,No,,Pari passu,Broad-based weighted average,0.08,No,1,,,,,,Held
+Plinth Pay,Lanternfish Ventures III,Series B Preferred,Preferred,Series B,2025-09-30,4811290,530524,4811294,2025-12-31,9.0689,9.0689,1,No,,Senior,Broad-based weighted average,0.08,No,1,,,,,,Held
+Carbonline Materials,Lanternfish Ventures III,Seed Preferred,Preferred,Seed,2021-06-30,1705369,1889477,0,2025-12-31,0.9026,,1,No,,Pari passu,Broad-based weighted average,0.06,No,1,,,,,,Sold (M&A) 2023-09
+Mosaic Cloud,Lanternfish Ventures III,Series A Preferred,Preferred,Series A,2021-09-30,10760998,9173498,12010443,2025-12-31,1.1731,1.3093,1,No,,Pari passu,Broad-based weighted average,0.08,No,1,,,,,,Held
+Mosaic Cloud,Lanternfish Ventures III,Series B Preferred,Preferred,Series B,2023-12-31,3107164,2017247,2641090,2025-12-31,1.5403,1.3093,1,No,,Pari passu,Broad-based weighted average,0.08,No,1,,,,,,Held
+Forge Dev,Lanternfish Ventures III,Seed Preferred,Preferred,Seed,2021-12-31,3737296,2630083,0,2025-12-31,1.421,,1,No,,Pari passu,Broad-based weighted average,0.06,No,1,,,,,,Written off 2023-06
+Orchid Health,Lanternfish Ventures III,Series A Preferred,Preferred,Series A,2022-03-31,12302166,5289923,5531954,2025-12-31,2.3256,1.0458,1,No,,Pari passu,Broad-based weighted average,0.08,No,1,,,,,,Held
+Terra Power,Lanternfish Ventures III,Series A Preferred,Preferred,Series A,2022-03-31,15832078,6697284,0,2025-12-31,2.364,,1,No,,Pari passu,Broad-based weighted average,0.08,No,1,,,,,,Written off 2024-09
+Stackwise Labs,Lanternfish Ventures III,Series A Preferred,Preferred,Series A,2022-06-30,10639003,4217211,58204871,2025-12-31,2.5228,13.8017,1,No,,Pari passu,Broad-based weighted average,0.08,No,1,,,,,,Held
+Stackwise Labs,Lanternfish Ventures III,Series B Preferred,Preferred,Series B,2023-12-31,4935922,1254822,17318734,2025-12-31,3.9336,13.8017,1,No,,Pari passu,Broad-based weighted average,0.08,No,1,,,,,,Held
+Stackwise Labs,Lanternfish Ventures III,Series C Preferred,Preferred,Series C,2025-06-30,23586322,1708938,23586327,2025-12-31,13.8017,13.8017,1,No,,Senior,Full ratchet,0.08,No,1,,,,,,Held
+Mosaic HQ,Lanternfish Ventures III,2022 Convertible note,Convertible note,Seed,2022-06-30,1634405,2343763,2788186,2025-12-31,,1.1896,1,,,,,,,,14453000,0.2,0.06,2025-06-30,No,Converted into Series A Preferred
+Mosaic HQ,Lanternfish Ventures III,Series A Preferred,Preferred,Series A,2024-09-30,676376,569351,677311,2025-12-31,1.188,1.1896,1,No,,Pari passu,Broad-based weighted average,0.08,No,1,,,,,,Held
+Saffron Kids,Lanternfish Ventures III,Series B Preferred,Preferred,Series B,2022-12-31,10901988,2446729,5666169,2025-12-31,4.4557,2.3158,1,No,,Pari passu,Broad-based weighted average,0.08,No,1,,,,,,Held
+Kinetic Health,Lanternfish Ventures III,Series A Preferred,Preferred,Series A,2022-12-31,11683491,4518812,0,2025-12-31,2.5855,,1,No,,Pari passu,Broad-based weighted average,0.08,No,1,,,,,,Written off 2024-12
+Lattice AI,Lanternfish Ventures III,Series A Preferred,Preferred,Series A,2022-12-31,8163306,3373258,0,2025-12-31,2.42,,1,No,,Pari passu,Broad-based weighted average,0.08,No,1,,,,,,Written off 2024-12
+Quorum Software,Lanternfish Ventures III,Series A Preferred,Preferred,Series A,2023-03-31,13633280,5112590,6727975,2025-12-31,2.6666,1.316,1,No,,Pari passu,Broad-based weighted average,0.08,No,1,,,,,,Held
+Windward Power,Lanternfish Ventures III,Series B Preferred,Preferred,Series B,2023-03-31,20392968,4277569,0,2025-12-31,4.7674,,1,No,,Pari passu,Broad-based weighted average,0.08,No,1,,,,,,Sold (M&A) 2025-09
+Orchid Care,Lanternfish Ventures III,Seed Preferred,Preferred,Seed,2023-09-30,2464586,2461892,4990849,2025-12-31,1.0011,2.0272,1,No,,Pari passu,Broad-based weighted average,0.06,No,1,,,,,,Held
+Orchid Care,Lanternfish Ventures III,Series A Preferred,Preferred,Series A,2025-03-31,1160072,572242,1160072,2025-12-31,2.0272,2.0272,1,No,,Pari passu,Broad-based weighted average,0.08,No,1,,,,,,Held
+Ferry,Lanternfish Ventures III,Series A Preferred,Preferred,Series A,2023-09-30,19085915,8844850,31338899,2025-12-31,2.1579,3.5432,1,No,,Pari passu,Broad-based weighted average,0.08,No,1,,,,,,Held
+Ferry,Lanternfish Ventures III,Series B Preferred,Preferred,Series B,2024-12-31,6122754,1728039,6122754,2025-12-31,3.5432,3.5432,1,No,,Pari passu,Broad-based weighted average,0.08,No,1,,,,,,Held
+Relay Software,Lanternfish Ventures III,Seed Preferred,Preferred,Seed,2023-09-30,1322383,1681115,1085409,2025-12-31,0.7866,0.6456,1,No,,Pari passu,Broad-based weighted average,0.06,No,1,,,,,,Held
+Forge Labs,Lanternfish Ventures III,2023 Convertible note,Convertible note,Seed,2023-12-31,2037543,,1731912,2025-12-31,,,,,,,,,,,11456760,0.2,0.08,2025-09-30,No,Outstanding
+Solace Power,Lanternfish Ventures III,Series A Preferred,Preferred,Series A,2024-03-31,11208856,5412508,9527528,2025-12-31,2.0709,1.7603,1,No,,Pari passu,Broad-based weighted average,0.08,No,1,,,,,,Held
+Brightdesk HQ,Lanternfish Ventures III,Series A Preferred,Preferred,Series A,2024-06-30,11866136,8361140,62241081,2025-12-31,1.4192,7.4441,1,No,,Pari passu,Broad-based weighted average,0.08,No,1,,,,,,Held
+Brightdesk HQ,Lanternfish Ventures III,Series B Preferred,Preferred,Series B,2025-12-31,15677096,2105979,15677098,2025-12-31,7.4441,7.4441,1,No,,Pari passu,Broad-based weighted average,0.08,No,1,,,,,,Held
+Sable,Lanternfish Ventures III,2024 SAFE,SAFE,Seed,2024-06-30,1995724,,1696365,2025-12-31,,,,,,,,,,,12779545,0.2,,,Yes,Outstanding
+Aurora Systems,Lanternfish Ventures III,2025 Convertible note,Convertible note,Seed,2025-06-30,2421980,,2421980,2025-12-31,,,,,,,,,,,13928595,0.2,0.06,2027-06-30,No,Outstanding
