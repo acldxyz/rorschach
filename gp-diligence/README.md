@@ -2,7 +2,7 @@
 
 Diligence on one venture GP. Load the GP's fund cash flows (required) and, optionally, portfolio company data, company history and firm staff to see:
 
-- **Track record:** a net performance summary per fund (vintage, size, % invested, years since first cash flow, how many companies make up 90% of value, net TVPI, DPI and IRR), with a Detailed view adding paid-in, distributed, NAV, RVPI and benchmark quartiles; relative performance against vintage benchmarks; the J-curve and annual cash flows.
+- **Track record:** a net performance summary per fund (vintage, size, % invested, years active since the first capital call, how many companies make up 90% of value, net TVPI, DPI and IRR), with a Detailed view adding paid-in, distributed, NAV, RVPI and benchmark quartiles; relative performance against vintage benchmarks; the J-curve and annual cash flows.
 - **Portfolio:** slices by stage, sector, outcome and more; return concentration; time to write-off and follow-on rounds before write-off; gross margin.
 - **Portfolio companies:** growth vs profitability, with one line per company (year-over-year revenue growth against profit margin, quarter by quarter), a diamond on the quarter each company closed a funding round, and filters for fund, industry and period; then a profile per company, with runway and round tracking from the history file.
 - **Team & partners:** headcount and partner track records.
