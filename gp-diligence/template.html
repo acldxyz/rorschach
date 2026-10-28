@@ -174,6 +174,10 @@ tr.total td { font-weight: 600; border-top: 2px solid var(--ink-3) }
 .hc-bar span { display: block; min-width: 4px }
 .hc-lists { display: flex; flex-wrap: wrap; gap: 8px 24px }
 .hc-lists ul { margin: 6px 0 0; padding-left: 18px }
+.gpctl { gap: 8px 16px } .gpctl select { max-width: 15em }
+.gpkey { display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: 12px; color: var(--ink-2) }
+.gpkey span { display: inline-flex; align-items: center; gap: 6px }
+.gpkey i { width: 14px; height: 3px; border-radius: 2px; display: inline-block }
 .co-head { display: flex; gap: 8px; justify-content: space-between; align-items: start }
 @media (prefers-reduced-motion: reduce) { * { transition-duration: .01s !important } }
 </style>
@@ -295,7 +299,7 @@ const BM_SOURCES = {
 };
 // Figures typed or uploaded per source stay in this browser only.
 const bmStore = { load(k) { try { return JSON.parse(localStorage.getItem("bm:" + k)) || {} } catch { return {} } }, save(k, v) { try { localStorage.setItem("bm:" + k, JSON.stringify(v)) } catch {} } };
-const state = { sumView: (() => { try { return localStorage.getItem("sumView") || "summary" } catch { return "summary" } })(), cur: { sym: "$", unit: { div: 1, suffix: "", word: "" } }, curMode: "local", inUnit: 1, rates: (() => { try { return JSON.parse(localStorage.getItem("fx-rates")) || {} } catch { return {} } })(), isSample: false, raw: {}, prov: {}, top: "data", samplingOff: false, view: "record", coFund: "all", coFlagOnly: false, cf: null, inv: null, bm: null, bmSrc: "sample", bmSample: null, gp: "", dim: "stage", scFund: "all", gpFund: "all", gpWin: "16", scope: "all" };
+const state = { sumView: (() => { try { return localStorage.getItem("sumView") || "summary" } catch { return "summary" } })(), cur: { sym: "$", unit: { div: 1, suffix: "", word: "" } }, curMode: "local", inUnit: 1, rates: (() => { try { return JSON.parse(localStorage.getItem("fx-rates")) || {} } catch { return {} } })(), isSample: false, raw: {}, prov: {}, top: "data", samplingOff: false, view: "record", coFund: "all", coFlagOnly: false, cf: null, inv: null, bm: null, bmSrc: "sample", bmSample: null, gp: "", dim: "stage", scFund: "all", gpFund: "all", gpSec: "all", gpWin: "16", gpCo: "", scope: "all" };
 let charts = [];
 
 // ---------- parsing ----------
@@ -524,11 +528,6 @@ function renderView() {
         <h3>By entry round</h3><div class="tbl" id="woTbl"></div></section>
       ${state.hist ? `<section class="panel"><div class="panel-head"><h2>Gross margin</h2><p class="note">From the company history file: gross profit ÷ revenue each quarter, for companies reporting revenue.</p></div>
         <div class="grid2"><div><h3>Median gross margin by sector</h3><div class="chart tall"><canvas id="cGm"></canvas></div></div><div><h3>Latest quarter, companies still held</h3><div class="tbl" id="gmTbl"></div><p class="note" id="gmNote"></p></div></div></section>` : ""}
-      ${state.hist ? `<section class="panel"><div class="panel-head"><h2>Growth vs profitability</h2><div class="row">
-          <label for="gpFund" class="note">Fund</label><select id="gpFund"><option value="all">All funds</option>${F.map(f => `<option value="${esc(f.name)}"${state.gpFund === f.name ? " selected" : ""}>${esc(f.name)}</option>`).join("")}</select>
-          <label for="gpWin" class="note">Period</label><select id="gpWin">${[["8", "Last 8 quarters"], ["16", "Last 16 quarters"], ["all", "All quarters"]].map(([v, l]) => `<option value="${v}"${state.gpWin === v ? " selected" : ""}>${l}</option>`).join("")}</select></div></div>
-        <p class="note">Each point is one quarter: the median year-over-year revenue growth and median profit margin (net income ÷ revenue) across the fund's companies reporting both. Quarters with fewer than ${GP_MIN_N} companies are left out.</p>
-        <div class="chart xtall"><canvas id="cGp"></canvas></div><p class="note" id="gpNote"></p></section>` : ""}
       ${state.hist ? `<section class="panel"><div class="panel-head"><h2>Round progression</h2><p class="note">From the company history file. A round counts once the company has raised again, exited, or had 24 months to do so.</p></div><div class="tbl" id="progTbl"></div></section>` : ""}
       <section class="panel"><h2>Deal outcomes</h2><p class="note">Gross multiple (log scale) against capital invested. Write-offs sit on the bottom line; hover a point for the company.</p><div class="chart tall"><canvas id="cDeals"></canvas></div></section>
       <section class="panel"><div class="panel-head"><h2>Performance by partner</h2><p class="note">Gross performance of the deals each person led, from the investments file's <code>deal_lead</code> and <code>board_seat</code> columns.</p></div>
@@ -634,8 +633,7 @@ function spark(pts, { step = false, marks = [], t0, t1, label, domain }) {
     <path d="${area}" style="fill:var(--accent-soft);stroke:none"/><path d="${line}" style="fill:none;stroke:var(--accent);stroke-width:1.5" vector-effect="non-scaling-stroke"/></svg>`;
 }
 const ptsTxt = d => `${d >= 0 ? "+" : "−"}${Math.abs(d * 100).toFixed(1)} pts`;
-const GM_SLIP = 0.05;
-const GP_MIN_N = 3;  // fewer companies than this and a quarterly "median" is one or two companies' numbers  // a five-point fall in gross margin inside a year is worth a question to the GP
+const GM_SLIP = 0.05;  // a five-point fall in gross margin inside a year is worth a question to the GP
 function trendsHtml(c, asOf) {
   const h = c.hist; if (!h.has) return "";
   const t0 = c.entry || h.own[0]?.date, t1 = c.exit || asOf, marks = h.rounds.filter(r => r.date > t0).map(r => r.date);
@@ -659,6 +657,7 @@ function renderCompanies(P, F, asOf) {
   const shown = P.filter(c => (state.coFund === "all" || c.fund === state.coFund) && (!state.coFlagOnly || attention(c))).sort((a, b) => (b.lowRunway - a.lowRunway) || (attention(b) - attention(a)) || ((a.entry || 0) - (b.entry || 0)));
   const nLow = P.filter(c => c.lowRunway).length, nNoRep = P.filter(c => c.noReports).length;
   const nFlag = P.filter(c => c.flag).length;
+  const G = state.hist ? growthData(P, F) : null;
   const preHtml = c => {
     const inc = c.nearInception ? `The firm invested close to inception: founded ${c.founded}, ${span(Math.max(0, monthsBetween(new Date(c.founded, 0, 1), c.entry)))} before the ${ym(c.entry)} investment.` : "";
     if (c.pre) return `<p>${esc(c.pre)}</p>${inc ? `<p class="muted">${inc}</p>` : ""}`;
@@ -686,6 +685,7 @@ function renderCompanies(P, F, asOf) {
     <label class="row note" for="coFlag"><input type="checkbox" id="coFlag"${state.coFlagOnly ? " checked" : ""}> Needs attention only</label></div></div>
     <p class="note">Descriptions and milestones come from the optional <code>pre_investment</code>, <code>founded</code> and <code>milestones</code> columns of the investments file. Exits come from the cash data. Raises, ownership and cash come from the company history file.</p></section>
     ${state.hist ? runwayTable(P, asOf) : ""}
+    ${growthHtml(G, F)}
     <div class="cards">${shown.map(c => `<article class="co${c.lowRunway ? " flagged bad" : c.flag || c.noReports ? " flagged" : ""}">
       <div class="co-head"><div><h3>${esc(c.company)}</h3><div class="tags">${[c.fund, c.stage !== "Unspecified" && c.stage + " entry", c.sector, c.board !== "Unknown" && (c.board === "Yes" ? "Board seat" : "No board seat")].filter(Boolean).map(esc).join(" · ")}</div></div><span class="status-chip">${c.outcome === "Held" ? c.status : esc(c.outcome)}</span></div>
       <div class="figs"><span>Invested <b>${c.entry ? ym(c.entry) : "–"}</b></span><span>Cost <b>${fm(c.invested)}</b></span><span>Value <b>${fm(c.tv)}</b></span><span>Gross <b>${fx(c.tvm)}</b></span><span>Held <b>${c.held != null ? span(c.held) : "–"}</b></span></div>
@@ -693,6 +693,7 @@ function renderCompanies(P, F, asOf) {
       <h4>Since the investment</h4>${sinceHtml(c)}
       ${trendsHtml(c, asOf)}
     </article>`).join("") || `<div class="panel empty">No companies match these filters.</div>`}</div>`;
+  if (G?.lines.length) drawGrowth(G);
 }
 
 function runwayTable(P, asOf) {
@@ -703,6 +704,119 @@ function runwayTable(P, asOf) {
     ${L.map(c => { const r = c.hist.rounds[c.hist.rounds.length - 1], rw = c.hist.runway, own = c.hist.own[c.hist.own.length - 1];
       return `<tr><td>${esc(c.company)}</td><td style="font-family:var(--body)">${esc(fundShort(c.fund))}</td><td style="font-family:var(--body)">${r ? esc(r.round) : "–"}</td><td>${r ? ym(r.date) : "–"}</td><td>${fm(c.hist.cashNow)}${c.hist.raisedSince > 0 ? "*" : ""}</td><td>${fm(c.hist.last.monthly_burn)}</td>
         <td><span class="pill ${rw < LOW_RUNWAY ? "rw-bad" : rw < WATCH_RUNWAY ? "rw-warn" : "rw-ok"}">${rw >= 36 ? "36+" : rw.toFixed(1)} mo</span></td><td>${ym(c.hist.last.date)}</td><td>${c.hist.gmLast ? fp(c.hist.gmLast.v, 0) : "–"}</td><td${c.hist.gmChange <= -GM_SLIP ? ' class="warn-text"' : ""}>${isFinite(c.hist.gmChange) ? ptsTxt(c.hist.gmChange) : "–"}</td><td>${own ? fp(own.ownership) : "–"}</td></tr>` }).join("")}</tbody></table></div></section>`;
+}
+
+// ---------- growth vs profitability ----------
+// One line per company: x = revenue growth against the same quarter a year before, y = profit margin
+// (net income ÷ revenue, or the profit_margin column), one point per quarter in time order; the same
+// definitions as dealView's perf rows. A funding round marks the point for its quarter, or the nearest
+// plotted quarter within GP_RAISE_MONTHS; a round further than that from any point is not drawn.
+const GP_RAISE_MONTHS = 6, GP_LABELS = 3;
+const secOf = c => String(c.sector || "").trim() || "Unspecified";
+function growthData(P, F) {
+  const ok = r => isFinite(r.growth) && isFinite(r.pm), sectors = [...new Set(P.map(secOf))].sort();
+  const inF = P.filter(c => (state.gpFund === "all" || c.fund === state.gpFund) && (state.gpSec === "all" || secOf(c) === state.gpSec));
+  // The period counts back from the latest quarter any company reports, so every filter shares one window.
+  const allQ = [...new Set(P.flatMap(c => c.hist.perf.filter(ok).map(r => r.q)))].sort();
+  const keepQ = new Set(state.gpWin === "all" ? allQ : allQ.slice(-Number(state.gpWin)));
+  const lines = []; let noRev = 0, few = 0, far = 0;
+  inF.forEach(c => {
+    if (!c.hist.perf.length) { noRev++; return }
+    const all = c.hist.perf.filter(ok).map(r => ({ x: r.growth, y: r.pm, q: r.q, d: r.d, rev: r.rev, raise: null })), miss = [];
+    c.hist.rounds.forEach(r => { const q = qKey(r.date);
+      let pt = all.find(p => p.q === q);
+      // No report that quarter: the nearest report in months, the later one on a tie (the first quarter after the
+      // close; counting days would let 90 against 91 days between quarter ends decide).
+      if (!pt) { const near = all.map(p => [p, Math.abs(monthsBetween(r.date, p.d))]).sort((a, b) => a[1] - b[1] || b[0].d - a[0].d)[0];
+        pt = near && near[1] <= GP_RAISE_MONTHS ? near[0] : null }
+      if (pt) (pt.raise ??= []).push({ round: r.round, amount: r.amount_raised, post: r.post_money, d: r.date }); else miss.push(q) });
+    const pts = all.filter(p => keepQ.has(p.q));
+    if (pts.length < 2) { few++; return }
+    far += miss.filter(q => q >= pts[0].q && q <= pts[pts.length - 1].q).length;
+    lines.push({ name: c.company, fund: c.fund, sector: secOf(c), pts });
+  });
+  lines.sort((a, b) => a.name.localeCompare(b.name));
+  // Up to eight companies each get a series colour and a label. Beyond that, one colour per line cannot be told
+  // apart, so lines take their industry's colour (or, with one industry showing, their fund's, in the fund order
+  // the rest of the page uses) and the hovered or highlighted company is drawn over the rest.
+  const many = lines.length > 8, by = !many ? "company" : new Set(lines.map(l => l.sector)).size > 1 || new Set(lines.map(l => l.fund)).size < 2 ? "sector" : "fund";
+  const groups = by === "fund" ? [...new Set([...F.map(f => f.name), ...lines.map(l => l.fund)])] : sectors;
+  lines.forEach((l, i) => { const k = groups.indexOf(by === "fund" ? l.fund : l.sector); l.group = by === "fund" ? l.fund : l.sector; l.col = !many ? series(i) : k < 8 ? series(k) : css("--ink-3") });
+  const big = [...lines].sort((a, b) => (b.pts[b.pts.length - 1].rev || 0) - (a.pts[a.pts.length - 1].rev || 0)).slice(0, GP_LABELS).map(l => l.name);
+  return { lines, many, by, groups, big, noRev, few, far, n: inF.length, raises: lines.reduce((t, l) => t + l.pts.filter(p => p.raise).length, 0) };
+}
+function growthHtml(G, F) {
+  const head = `<div class="panel-head"><h2>Growth vs profitability</h2>`;
+  if (!G) return `<section class="panel" id="gpPanel">${head}</div><p class="note" id="gpNote">Load the company history file (Data view, <b>Company history</b>: one row per funding round and per quarterly report, with <code>revenue</code> and <code>net_income</code> or <code>profit_margin</code>) to chart each company's revenue growth against its profit margin, quarter by quarter.</p></section>`;
+  const sel = (id, label, opts, cur) => `<span class="row"><label for="${id}" class="note">${label}</label><select id="${id}">${opts.map(([v, l]) => `<option value="${esc(v)}"${cur === v ? " selected" : ""}>${esc(l)}</option>`).join("")}</select></span>`;
+  const funds = [...new Set([...F.map(f => f.name), ...state.inv.map(d => d.fund)])];
+  const sectors = [...new Set(state.inv.map(secOf))].sort();
+  const coOn = G.lines.some(l => l.name === state.gpCo) ? state.gpCo : "";
+  const diamond = c => `<svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><path d="M7 1.2 12.8 7 7 12.8 1.2 7Z" style="fill:${c};stroke:var(--panel);stroke-width:1.6"/></svg>`;
+  const keys = G.many ? G.groups.filter(g => G.lines.some(l => l.group === g)).map(g => [g, G.lines.find(l => l.group === g).col]) : G.lines.map(l => [l.name, l.col]);
+  const notes = [G.noRev && `${G.noRev} compan${G.noRev === 1 ? "y has" : "ies have"} no revenue in the history file and ${G.noRev === 1 ? "is" : "are"} left out`,
+    G.few && `${G.few} report${G.few === 1 ? "s" : ""} revenue but ${G.few === 1 ? "has" : "have"} fewer than two quarters with both year-over-year growth and a margin in this period`,
+    G.far && `${G.far} round${G.far === 1 ? " falls" : "s fall"} more than ${GP_RAISE_MONTHS} months from any plotted quarter and ${G.far === 1 ? "is" : "are"} not marked`].filter(Boolean);
+  return `<section class="panel" id="gpPanel">${head}<div class="row gpctl">
+      ${sel("gpFund", "Fund", [["all", "All funds"], ...funds.map(f => [f, f])], state.gpFund)}
+      ${sel("gpSec", "Industry", [["all", "All industries"], ...sectors.map(s => [s, s])], state.gpSec)}
+      ${sel("gpWin", "Period", [["8", "Last 8 quarters"], ["16", "Last 16 quarters"], ["all", "All quarters"]], state.gpWin)}
+      ${G.lines.length ? sel("gpCo", "Highlight", [["", "None"], ...G.lines.map(l => [l.name, l.name])], coOn) : ""}</div></div>
+    <p class="note">Each line is one company, one point per quarter in time order: revenue growth against the same quarter a year before, and profit margin (net income ÷ revenue). ${G.many ? `Lines are coloured by ${G.by === "fund" ? "fund" : "industry"}; hover or click a line, or pick a company to highlight, to bring it forward.` : "Each company has its own colour."}</p>
+    ${G.lines.length ? `<div class="gpkey" id="gpKey">${keys.map(([k, c]) => `<span><i style="background:${c}"></i>${esc(k)}</span>`).join("")}<span>${diamond("var(--ink-2)")}Quarter the company closed a funding round</span></div>
+    <div class="chart xtall"><canvas id="cGp" role="img" aria-label="Revenue growth against profit margin by quarter, one line per company"></canvas></div>`
+    : `<div class="empty" id="gpEmpty">No company has two or more quarters of revenue growth and profit margin${state.gpFund !== "all" || state.gpSec !== "all" ? " under these filters" : ""} in this period.</div>`}
+    <p class="note" id="gpNote">${G.lines.length} of ${G.n} compan${G.n === 1 ? "y" : "ies"} plotted, ${G.raises} raise${G.raises === 1 ? "" : "s"} marked.${notes.length ? " " + notes.join("; ") + "." : ""}</p></section>`;
+}
+const alpha = (c, a) => { const m = /^#([0-9a-f]{6})$/i.exec(String(c).trim()); if (!m) return c; const n = parseInt(m[1], 16); return `rgba(${n >> 16},${(n >> 8) & 255},${n & 255},${a})` };
+function drawGrowth(G) {
+  setChartDefaults();
+  const L = G.lines, panel = css("--panel"); let hover = null;
+  // The company in front: the one under the pointer, else the one picked under Highlight.
+  const on = () => { const f = hover != null ? hover : L.findIndex(l => l.name === state.gpCo); return f >= 0 ? f : null };
+  const look = i => { const f = on(); return f == null ? (G.many ? { a: 0.55, w: 1.25 } : { a: 1, w: 2 }) : f === i ? { a: 1, w: 3 } : { a: 0.14, w: 1 } };
+  const labelled = () => { const f = on(); return f != null ? [L[f].name] : G.many ? G.big : L.map(l => l.name) };
+  const ds = L.map((l, i) => ({ label: l.name, data: l.pts, showLine: true, tension: 0, order: 1,
+    borderColor: () => alpha(l.col, look(i).a), borderWidth: () => look(i).w,
+    pointStyle: c => c.raw?.raise ? "rectRot" : "circle",
+    pointRadius: c => c.raw?.raise ? 7 : look(i).w > 2 ? 3 : 2,
+    pointHoverRadius: c => c.raw?.raise ? 9 : 5,
+    pointBackgroundColor: () => alpha(l.col, look(i).a),
+    pointBorderColor: c => c.raw?.raise ? alpha(panel, look(i).a) : alpha(l.col, look(i).a),
+    pointBorderWidth: c => c.raw?.raise ? 2 : 0 }));
+  // End-of-line labels for a few companies, nudged apart so they don't print over each other.
+  const endLabels = { id: "gpLabels", afterDatasetsDraw(ch) { const { ctx, chartArea: A } = ch;
+    const tags = labelled().map(n => { const i = L.findIndex(l => l.name === n), m = ch.getDatasetMeta(i).data, p = m[m.length - 1]; return p && { t: n, x: p.x, y: p.y, c: L[i].col } }).filter(Boolean).sort((a, b) => a.y - b.y);
+    for (let k = 1; k < tags.length; k++) if (tags[k].y - tags[k - 1].y < 14) tags[k].y = tags[k - 1].y + 14;
+    ctx.save(); ctx.font = `600 12px ${css("--body")}`; ctx.textBaseline = "middle"; ctx.lineJoin = "round";
+    tags.forEach(g => { const w = ctx.measureText(g.t).width, x = g.x + 10 + w > A.right ? g.x - 10 - w : g.x + 10;
+      ctx.strokeStyle = panel; ctx.lineWidth = 3; ctx.strokeText(g.t, x, g.y); ctx.fillStyle = g.c; ctx.fillText(g.t, x, g.y) });
+    // The company in front also shows where its line starts and ends, so the direction of travel reads.
+    const f = on(); if (f != null) { const m = ch.getDatasetMeta(f).data, pts = L[f].pts; ctx.font = `11px ${css("--body")}`; ctx.fillStyle = css("--ink-2");
+      [[0, "From "], [m.length - 1, "To "]].forEach(([k, w]) => { const t = w + qShort(pts[k].q), tw = ctx.measureText(t).width, x = Math.min(Math.max(m[k].x - tw / 2, A.left), A.right - tw);
+        ctx.strokeText(t, x, m[k].y + 14); ctx.fillText(t, x, m[k].y + 14) }) }
+    ctx.restore() } };
+  const front = c => { c.data.datasets.forEach((d, k) => d.order = k === on() ? 0 : 1); c.update("none") };
+  const setHover = (c, i) => { if (i === hover) return; hover = i; front(c) };
+  const axis = text => ({ title: { display: true, text }, ticks: { callback: fpa }, grid: { color: c => c.tick.value === 0 ? css("--ink-3") : css("--rule"), lineWidth: c => c.tick.value === 0 ? 1.5 : 1 } });
+  const ch = new Chart(document.getElementById("cGp"), { type: "scatter", data: { datasets: ds }, plugins: [endLabels],
+    options: { layout: { padding: { right: 8, top: 4 } }, interaction: { mode: "nearest", intersect: true },
+      onHover: (e, els, c) => setHover(c, els.length ? els[0].datasetIndex : null),
+      onClick: (e, els, c) => { const n = els.length ? L[els[0].datasetIndex].name : ""; state.gpCo = state.gpCo === n ? "" : n;
+        const s = document.getElementById("gpCo"); if (s) s.value = state.gpCo; front(c) },
+      scales: { x: axis("Revenue growth (YoY)"), y: axis("Profit margin") },
+      plugins: { legend: { display: false }, tooltip: { callbacks: {
+        title: c => `${c[0].dataset.label} · ${qShort(c[0].raw.q)}`,
+        label: c => [`Revenue growth (YoY): ${fp(c.raw.x, 0)}`, `Profit margin: ${fp(c.raw.y, 0)}`,
+          ...(c.raw.raise || []).map(r => `Raised ${r.round || "a round"}: ${fm(r.amount)} at ${fm(r.post, 0)} post-money${qKey(r.d) !== c.raw.q ? ` (closed ${ym(r.d)})` : ""}`)] } } } } });
+  ch.canvas.addEventListener("mouseleave", () => setHover(ch, null));
+  front(ch);
+  // Excel: one row per company quarter, numbers typed, with any raise marked on that quarter.
+  const u = state.cur.disp, money = v => isFinite(v) ? { t: "n", v, z: "#,##0" } : "", pct = v => ({ t: "n", v, z: "0.0%" });
+  ch.exportRows = () => [["Company", "Fund", "Industry", "Quarter", "Revenue growth (YoY)", "Profit margin", "Raise", "Round", `Amount raised (${u}, full units)`, `Post-money (${u}, full units)`],
+    ...L.flatMap(l => l.pts.map(p => { const R = p.raise || [], last = R[R.length - 1];
+      return [l.name, l.fund, l.sector, p.q, pct(p.x), pct(p.y), R.length ? "Yes" : "", R.map(r => r.round).join(", "), R.length ? money(R.reduce((t, r) => t + (isFinite(r.amount) ? r.amount : 0), 0)) : "", last ? money(last.post) : ""] }))];
+  charts.push(ch);
 }
 
 // ---------- investment team ----------
@@ -911,41 +1025,6 @@ function renderGross(F, fundColor, asOf) {
     document.getElementById("gmNote").innerHTML = slip.length ? `Down ${GM_SLIP * 100} points or more in 12 months: ${slip.map(d => `${esc(d.company)} (${ptsTxt(d.hist.gmChange)})`).join(", ")}.` : `No held company's margin fell ${GM_SLIP * 100} points or more over the last 12 months.`;
   }
 
-  // Growth vs profitability: one path per fund through (median growth, median margin) by quarter.
-  if (state.hist && document.getElementById("cGp")) {
-    const funds = F.filter(f => state.gpFund === "all" || f.name === state.gpFund);
-    const allQ = [...new Set(D.flatMap(d => d.hist.perf.filter(r => isFinite(r.growth) && isFinite(r.pm)).map(r => r.q)))].sort();
-    const keepQ = new Set(state.gpWin === "all" ? allQ : allQ.slice(-Number(state.gpWin)));
-    const paths = funds.map(f => {
-      const byQ = {}; D.filter(d => d.fund === f.name).forEach(d => d.hist.perf.forEach(r => { if (keepQ.has(r.q) && isFinite(r.growth) && isFinite(r.pm)) (byQ[r.q] ??= []).push(r) }));
-      return { f, pts: Object.keys(byQ).sort().filter(q => byQ[q].length >= GP_MIN_N).map(q => ({ x: median(byQ[q].map(r => r.growth)), y: median(byQ[q].map(r => r.pm)), q, n: byQ[q].length })) };
-    }).filter(p => p.pts.length);
-    // With one fund selected, mark companies that raised in the 12 months to the latest quarter, as a hollow square.
-    let raised = null;
-    if (funds.length === 1 && paths.length) {
-      const lastQ = paths[0].pts[paths[0].pts.length - 1].q;
-      const R = D.filter(d => d.fund === funds[0].name && d.hist.rounds.some(r => r.date > new Date(asOf.getFullYear() - 1, asOf.getMonth(), asOf.getDate())))
-        .map(d => d.hist.perf.find(r => r.q === lastQ)).filter(r => r && isFinite(r.growth) && isFinite(r.pm));
-      if (R.length >= 2) raised = { x: median(R.map(r => r.growth)), y: median(R.map(r => r.pm)), n: R.length, q: lastQ };
-    }
-    const endLabels = { id: "endLabels", afterDatasetsDraw(ch) { const { ctx } = ch; ctx.save(); ctx.font = `12px ${css("--body")}`;
-      ch.data.datasets.forEach((ds, i) => { if (!ds.pathOf || ch.getDatasetMeta(i).hidden) return; const m = ch.getDatasetMeta(i).data; if (!m.length) return;
-        [[0, ds.data[0]], [m.length - 1, ds.data[m.length - 1]]].forEach(([k, pt], j) => { if (j && m.length === 1) return; ctx.fillStyle = ds.borderColor; ctx.fillText(qShort(pt.q), m[k].x + 8, m[k].y - 6) }) });
-      ctx.restore() } };
-    const ds = paths.map(p => ({ label: p.f.name, pathOf: p.f.name, data: p.pts, showLine: true, borderColor: fundColor[p.f.name], backgroundColor: fundColor[p.f.name], borderDash: [4, 4], borderWidth: 1.5, pointRadius: 4, pointHoverRadius: 6, tension: 0.3 }));
-    if (raised) ds.push({ label: "Companies that raised in the last 12 months", data: [raised], pointStyle: "rect", pointRadius: 9, pointHoverRadius: 11, backgroundColor: "transparent", borderColor: fundColor[funds[0].name], borderWidth: 2 });
-    charts.push(new Chart(document.getElementById("cGp"), { type: "scatter", data: { datasets: ds }, plugins: [endLabels],
-      options: { layout: { padding: { right: 40, top: 10 } }, scales: {
-        x: { position: "top", title: { display: true, text: "Median revenue growth (YoY)" }, ticks: { callback: fpa }, grid: { color: css("--rule") } },
-        y: { title: { display: true, text: "Median profit margin" }, ticks: { callback: fpa }, grid: { color: c => c.tick.value === 0 ? css("--ink-3") : css("--rule") } } },
-        plugins: { legend: { position: "bottom", labels: { usePointStyle: true, boxWidth: 8, boxHeight: 8 } }, tooltip: { callbacks: { title: c => `${c[0].dataset.label} · ${qShort(c[0].raw.q)}`, label: c => [`Growth ${fp(c.raw.x, 0)} · margin ${fp(c.raw.y, 0)}`, `${c.raw.n} companies`] } } } } }));
-    const first = paths.map(p => { const a = p.pts[0], b = p.pts[p.pts.length - 1]; return `${esc(fundShort(p.f.name))}: ${qShort(a.q)} growth ${fp(a.x, 0)}, margin ${fp(a.y, 0)} → ${qShort(b.q)} growth ${fp(b.x, 0)}, margin ${fp(b.y, 0)}` });
-    const dropped = funds.filter(f => !paths.some(p => p.f === f)).map(f => esc(fundShort(f.name)));
-    document.getElementById("gpNote").innerHTML = (first.length ? first.join(" · ") + "." : "No quarter has enough companies reporting revenue and profit.") + (dropped.length ? ` ${dropped.join(", ")}: not enough companies reporting in this period.` : "")
-      + (raised ? ` Square: the ${raised.n} companies that raised in the last 12 months, ${qShort(raised.q)}: growth ${fp(raised.x, 0)}, margin ${fp(raised.y, 0)}.` : "")
-      + (funds.length === 1 && !raised && paths.length ? " Fewer than two companies raised in the last 12 months, so there is no recently-raised marker." : "");
-  }
-
   // Round progression from the history file: did companies raise the next round, and how fast?
   if (state.hist && document.getElementById("progTbl")) {
     const T = {};
@@ -1123,7 +1202,7 @@ document.getElementById("addFile").addEventListener("change", async e => {
     wbook.offer(file.name, sheets, "", true) }
   catch (x) { err.textContent = x.message }
 });
-document.addEventListener("change", e => { if (e.target.id === "coFund") { state.coFund = e.target.value; render() } if (e.target.id === "coFlag") { state.coFlagOnly = e.target.checked; render() } if (e.target.id === "dimSel") { state.dim = e.target.value; render() } if (e.target.id === "scopeSel") { state.scope = e.target.value; render() } if (e.target.id === "gpFund") { state.gpFund = e.target.value; render() } if (e.target.id === "gpWin") { state.gpWin = e.target.value; render() } });
+document.addEventListener("change", e => { if (e.target.id === "coFund") { state.coFund = e.target.value; render() } if (e.target.id === "coFlag") { state.coFlagOnly = e.target.checked; render() } if (e.target.id === "dimSel") { state.dim = e.target.value; render() } if (e.target.id === "scopeSel") { state.scope = e.target.value; render() } if (e.target.id === "gpFund") { state.gpFund = e.target.value; render() } if (e.target.id === "gpWin") { state.gpWin = e.target.value; render() } if (e.target.id === "gpSec") { state.gpSec = e.target.value; render() } if (e.target.id === "gpCo") { state.gpCo = e.target.value; render() } });
 matchMedia("(prefers-color-scheme: dark)").addEventListener("change", render);
 new MutationObserver(render).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
 // ---------- column mapping ----------
@@ -1939,7 +2018,8 @@ function typedCell(t) {
 }
 function sheetFrom(rows, widths) {
   const ws = {}; let maxC = 0;
-  rows.forEach((r, i) => r.forEach((v, j) => { const c = typeof v === "number" ? { t: "n", v } : i === 0 ? (v ? { t: "s", v } : null) : typedCell(String(v ?? "")); if (c) ws[XLSX.utils.encode_cell({ r: i, c: j })] = c; maxC = Math.max(maxC, j) }));
+  // A cell may arrive ready-made ({ t, v, z }), when the caller knows its type and format.
+  rows.forEach((r, i) => r.forEach((v, j) => { const c = v && typeof v === "object" && "t" in v ? v : typeof v === "number" ? { t: "n", v } : i === 0 ? (v ? { t: "s", v } : null) : typedCell(String(v ?? "")); if (c) ws[XLSX.utils.encode_cell({ r: i, c: j })] = c; maxC = Math.max(maxC, j) }));
   ws["!ref"] = XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: Math.max(0, rows.length - 1), c: maxC } });
   ws["!cols"] = widths || Array.from({ length: maxC + 1 }, (_, j) => ({ wch: Math.min(60, Math.max(8, ...rows.map(r => String(r[j] ?? "").length + 2))) }));
   return ws;
@@ -1957,6 +2037,7 @@ function addSheet(wb, name, ws) {
   XLSX.utils.book_append_sheet(wb, ws, n);
 }
 function chartRows(ch) {
+  if (ch.exportRows) return ch.exportRows();
   const ds = ch.data.datasets.filter(d => !d.hidden);
   if (ch.data.labels?.length) return [["", ...ds.map(d => d.label || "Value")], ...ch.data.labels.map((l, i) => [Array.isArray(l) ? l.join(" ") : l, ...ds.map(d => { const v = d.data[i]; return Array.isArray(v) ? `${v[0]} to ${v[1]}` : v ?? "" })])];
   return [["Series", "Label", "X", "Y"], ...ds.flatMap(d => d.data.map(p => [d.label || "", p.q || p.d?.company || "", p.x, p.y]))];
@@ -1965,6 +2046,41 @@ const cardRows = cards => { const heads = new Set(); const rows = cards.map(c =>
     let cur = null; [...c.children].forEach(el => { if (el.tagName === "H4") { cur = el.textContent.trim(); heads.add(cur); o[cur] = "" } else if (cur && !el.classList.contains("trends")) o[cur] += (o[cur] ? "\n" : "") + (el.tagName === "OL" ? [...el.children].map(li => li.innerText.replace(/\s+/g, " ").trim()).join("\n") : el.innerText.trim()) });
     c.querySelectorAll(".trends > div").forEach(d => { const k = d.querySelector("h4")?.textContent.trim(); if (k) { heads.add(k); o[k] = d.querySelector(".tags")?.textContent.trim() || "" } });
     return o }); const cols = ["Name", "Details", "Figures", ...heads]; return [cols, ...rows.map(o => cols.map(k => o[k] ?? ""))] };
+// One sheet per loaded kind with the cleaned rows in the app's own columns, so the workbook doubles as one
+// consolidated copy of everything uploaded. Amounts are in full units of the display currency, as the page
+// uses them; the last column names the source cell each row came from (file, sheet and cell, from provenance).
+const DATA_SHEETS = { cf: "Data · Fund cash flows", inv: "Data · Portfolio companies", hist: "Data · Company history", team: "Data · Firm staff" };
+const xDate = d => d instanceof Date && !isNaN(d) ? { t: "n", v: (Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) - Date.UTC(1899, 11, 30)) / 864e5, z: "yyyy-mm-dd" } : "";
+function dataSheetRows(k) {
+  const rows = state[k], c = state.cur, P = state.prov[k], conv = !!c?.disp;
+  const fundOf = Object.fromEntries((state.inv || []).map(d => [d.company, d.fund]));
+  // Same conversion as cfView / invView / histByCompany. Funds in several currencies without the rates to
+  // combine them stay in their own currencies.
+  const fac = r => conv ? c.factor(c.byFund[k === "hist" ? fundOf[r.company] : r.fund] ?? c.home ?? "USD") : state.inUnit;
+  const unit = conv ? `${c.disp}, full units` : "each fund's own currency, full units";
+  const money = MONEY_OF[k] || [], pct = PCT_OF[k] || [];
+  const keys = k === "cf" ? ["fund", "vintage", "fund_size", "date", "type", "amount", "currency"] : FIELDS[k].map(f => f.key);
+  const cell = (r, key) => { let v = r[NORM_KEY[k]?.[key] || key];
+    if (k === "cf" && key === "type") v = TYPE_NAME[v] || v;
+    if (k === "team" && key === "level") v = LEVEL_NAME[v] || v;
+    if (v instanceof Date) return xDate(v);
+    if (typeof v === "number") { if (!isFinite(v)) return "";
+      if (money.includes(key)) return { t: "n", v: v * fac(r), z: "#,##0" };
+      if (pct.includes(key) || /margin$/.test(key)) return { t: "n", v, z: /^ownership/.test(key) ? "0.00%" : "0.0%" };
+      return ["vintage", "founded", "joined"].includes(key) ? { t: "n", v, z: "0" } : { t: "n", v } }
+    const s = String(v ?? "").trim(); return s ? { t: "s", v: s } : "" };
+  const cols = keys.filter(key => rows.some(r => cell(r, key) !== ""));
+  const head = cols.map(key => { const l = FIELDS[k].find(f => f.key === key)?.label || key;
+    return k === "cf" && key === "currency" ? "Reported currency" : money.includes(key) ? `${l} (${unit})` : l });
+  // Source cell: the row's key column (for cash flows, the column the amount came from), as file › sheet!A1.
+  const src = []; P?.rows.forEach(pr => pr.out.forEach(([n, f]) => src[n] ??= { r: pr.r, f }));
+  const where = !P ? "" : P.noSource ? `Saved workspace ${P.ws?.file || ""}`.trim() : P.file + (P.sheet ? ` › ${P.sheet}` : "");
+  const colOf = f => P?.fields.find(x => x.key === f)?.col, key0 = { cf: "amount", inv: "company", hist: "company", team: "name" }[k];
+  const ref = n => { const s = src[n]; if (!s) return ""; if (P.noSource) return `${where}, row ${s.r}`; return `${where}!${colOf(s.f) || colOf(key0) || ""}${s.r}` };
+  const out = [[...head, "Source cell"], ...rows.map((r, n) => [...cols.map(key => cell(r, key)), ref(n)])];
+  const len = v => v && typeof v === "object" ? (v.t === "s" ? String(v.v).length : 12) : String(v ?? "").length;
+  return { rows: out, widths: out[0].map((_, j) => ({ wch: Math.min(50, Math.max(8, ...out.slice(0, 400).map(r => len(r[j]) + 2))) })) };
+}
 document.getElementById("dlXlsx").addEventListener("click", async () => {
   if (!state.cf) return dlMsg("Load data first.", true);
   if (typeof XLSX === "undefined") return dlMsg("The spreadsheet library did not load, so the workbook cannot be built.", true);
@@ -1982,6 +2098,8 @@ document.getElementById("dlXlsx").addEventListener("click", async () => {
   wb.SheetNames.unshift(wb.SheetNames.pop());
   // Where every field came from, one row per kind and field (the Data view's audit, in figures).
   addSheet(wb, "Sources", sheetFrom(dv.sources()));
+  // Then the cleaned data itself, one sheet per kind loaded, at the end of the book.
+  ["cf", "inv", "hist", "team"].forEach(k => { if (state[k]?.length) { const D = dataSheetRows(k); addSheet(wb, DATA_SHEETS[k], sheetFrom(D.rows, D.widths)) } });
   await saveFile(`${fileBase()}.xlsx`, new Uint8Array(XLSX.write(wb, { type: "array", bookType: "xlsx" })));
 });
 document.getElementById("dlHtml").addEventListener("click", async () => {
