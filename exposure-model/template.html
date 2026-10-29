@@ -633,6 +633,8 @@ function loadAoa(kind, aoa, src) {
   apply(kind, toObjects(kind, aoa), P);
 }
 function landOnData() { state.top = "data"; try { history.replaceState(null, "", "#data") } catch {} }
+// The sample has nothing of the user's to check, so it opens straight on the analyses; real data lands on Data for review.
+function landOnAnalysis() { state.top = "analysis"; try { history.replaceState(null, "", "#analysis") } catch {} }
 async function load(kind, file) {
   dismissWelcome(); wbook.close();
   const err = document.getElementById("errors"); err.textContent = "";
@@ -669,7 +671,9 @@ document.getElementById("sampleBtn").addEventListener("click", () => {
   state.inUnit = 1; document.getElementById("inUnit").value = "1";
   loadAoa("commit", parseCSVRows(SAMPLE.commit), { file: "lp_commitments.csv", via: "sample" }); loadAoa("hold", parseCSVRows(SAMPLE.hold), { file: "lp_holdings.csv", via: "sample" });
   setStatus("commit", `Sample · ${state.commit.length} funds`, "ok"); setStatus("hold", `Sample · ${state.hold.length} positions`, "ok");
-  state.isSample = true; document.getElementById("lpTitle").textContent = "Exposure Model (sample)"; landOnData(); render();
+  state.isSample = true; document.getElementById("lpTitle").textContent = "Exposure Model (sample)"; landOnAnalysis(); render();
+  // From the Data view the sample button disappears with it; keep keyboard users on the view they landed on.
+  if (document.activeElement === document.body || !document.activeElement?.offsetParent) document.getElementById("view-analysis")?.focus();
 });
 // ---------- welcome ----------
 // With nothing loaded, the welcome card asks how to start. Loading anything (sample, upload or workspace) hides it;
