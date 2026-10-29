@@ -619,15 +619,17 @@ function fundStats(cf) {
 function quartile(v, b) { if (!b || !isFinite(v)) return null; return v >= b.top ? 1 : v >= b.median ? 2 : v >= b.bottom ? 3 : 4 }
 
 // ---------- formatting ----------
-const fx = (v, d = 2) => isFinite(v) ? v.toFixed(d) + "x" : "–";
+// Tables round for reading (whole dollars, one-decimal multiples); the Excel export reads figures back from table
+// text, so while it builds (state.fullPrec) money keeps one decimal of its unit and multiples two.
+const fx = (v, d = 2) => isFinite(v) ? v.toFixed(state.fullPrec ? Math.max(d, 2) : d) + "x" : "–";
 const fp = (v, d = 1) => isFinite(v) ? (v * 100).toFixed(d) + "%" : "–";
 // Money is converted into the display currency before any maths (see cfView / invView); fm only
 // shortens and labels. The unit is chosen once per render so every figure on the page shares it.
-const fm = (v, d = 1) => { if (!isFinite(v)) return "–"; const u = state.cur.unit, dd = u.div === 1 ? 0 : d;
+const fm = (v, d = 1) => { if (!isFinite(v)) return "–"; const u = state.cur.unit, dd = u.div === 1 ? 0 : state.fullPrec ? Math.max(d, 1) : d;
   return (v < 0 ? "-" : "") + state.cur.sym + (Math.abs(v) / u.div).toLocaleString("en-US", { minimumFractionDigits: dd, maximumFractionDigits: dd }) + u.suffix };
-// Chart axes name the unit once in their title ("USD millions") and show bare numbers, negatives in parentheses.
+// Chart axes name the unit once in their title ("USD millions"); money ticks carry the currency symbol, negatives in parentheses.
 const paren = (v, t) => v < 0 ? `(${t})` : t;
-const fa = v => isFinite(v) ? paren(v, (Math.abs(v) / state.cur.unit.div).toLocaleString("en-US", { maximumFractionDigits: 2 })) : "";
+const fa = v => isFinite(v) ? paren(v, state.cur.sym + (Math.abs(v) / state.cur.unit.div).toLocaleString("en-US", { maximumFractionDigits: 2 })) : "";
 const fpa = v => isFinite(v) ? paren(v, fp(Math.abs(v), 0)) : "";
 const unitTitle = what => { const u = [state.cur.disp, state.cur.unit.word].filter(Boolean).join(" "); return { display: true, text: what ? `${what} (${u})` : u } };
 const symbolOf = c => { try { return new Intl.NumberFormat("en-US", { style: "currency", currency: c, currencyDisplay: "narrowSymbol" }).formatToParts(0).find(p => p.type === "currency").value } catch { return c + " " } };
@@ -800,7 +802,7 @@ function renderView() {
       <div class="grid3"><div><h3>Cumulative share of value, best deals first</h3><div class="chart"><canvas id="cConc"></canvas></div></div>
         <div><h3>Deals by gross multiple</h3><div class="chart"><canvas id="cBuckets"></canvas></div></div>
         <div><h3>Initial vs follow-on capital by outcome</h3><div class="chart"><canvas id="cFollow"></canvas></div></div></div></section>
-      <section class="panel"><div class="panel-head"><h2>Time to write-off</h2><p class="note">Write-off = exited below 0.25x gross. Time runs from the fund's entry to the exit date.</p></div>
+      <section class="panel"><div class="panel-head"><h2>Value impairment</h2><p class="note">Write-off = exited below 0.25x gross. Time runs from the fund's entry to the exit date.</p></div>
         <div class="kpis" id="woKpis"></div>
         <div class="grid2"><div><h3>Write-offs by years from entry</h3><div class="chart"><canvas id="cWo"></canvas></div></div>
           <div><h3>Follow-on rounds before write-off</h3><div class="chart"><canvas id="cWoFo"></canvas></div><p class="note" id="woFoNote"></p></div></div>
@@ -958,9 +960,9 @@ function ttmOf(r, asOf) {
 const secStatus = r => converted(r) ? "Converted" : r.status || "–";
 function secCells(r, kind, asOf) {
   const d = r.date ? isoDate(r.date) : "–", fund = esc(fundShort(r.fund || "")) || "–";
-  if (kind === "priced") return [esc(r.security), fund, d, fshares(r.shares), fpps(r.price), fpps(r.current_price), r.price > 0 && isFinite(r.current_price) ? fx(r.current_price / r.price) : "–",
-    fm(r.cost), fm(r.fair_value), esc(prefTxt(r)), esc(r.seniority || "–"), esc(r.anti_dilution || "–")];
-  return [esc(r.security), fund, d, fm(r.cost), fm(r.fair_value), r.valuation_cap > 0 ? fm(r.valuation_cap) : "–", isFinite(r.discount) && r.discount > 0 ? fp(r.discount, 0) : "–",
+  if (kind === "priced") return [esc(r.security), fund, d, fshares(r.shares), fpps(r.price), fpps(r.current_price), r.price > 0 && isFinite(r.current_price) ? fx(r.current_price / r.price, 1) : "–",
+    fm(r.cost, 0), fm(r.fair_value, 0), esc(prefTxt(r)), esc(r.seniority || "–"), esc(r.anti_dilution || "–")];
+  return [esc(r.security), fund, d, fm(r.cost, 0), fm(r.fair_value, 0), r.valuation_cap > 0 ? fm(r.valuation_cap, 0) : "–", isFinite(r.discount) && r.discount > 0 ? fp(r.discount, 0) : "–",
     r.type === "Note" ? (isFinite(r.interest_rate) ? fp(r.interest_rate) : "–") : "None", r.maturity_date ? isoDate(r.maturity_date) : "–", esc(ttmOf(r, asOf).t), esc(secStatus(r))];
 }
 function secTable(rows, cols, kind, asOf) {
@@ -1031,7 +1033,7 @@ function runwayTable(P, asOf) {
   return `<section class="panel"><div class="panel-head"><h2>Runway watchlist</h2><p class="note">Held companies, shortest runway first. Runway = latest cash ÷ monthly burn. * includes money raised after the last cash report.</p></div>
     <div class="tbl"><table><thead><tr><th>Company</th><th>Fund</th><th>Latest round</th><th>Last raise</th><th>Cash</th><th>Monthly burn</th><th>Runway</th><th>Reported</th><th>Gross margin</th><th>12-mo change</th><th>Fund ownership</th></tr></thead><tbody>
     ${L.map(c => { const r = c.hist.rounds[c.hist.rounds.length - 1], rw = c.hist.runway, own = c.hist.own[c.hist.own.length - 1];
-      return `<tr><td>${esc(c.company)}</td><td style="font-family:var(--body)">${esc(fundShort(c.fund))}</td><td style="font-family:var(--body)">${r ? esc(r.round) : "–"}</td><td>${r ? ym(r.date) : "–"}</td><td>${fm(c.hist.cashNow)}${c.hist.raisedSince > 0 ? "*" : ""}</td><td>${fm(c.hist.last.monthly_burn)}</td>
+      return `<tr><td>${esc(c.company)}</td><td style="font-family:var(--body)">${esc(fundShort(c.fund))}</td><td style="font-family:var(--body)">${r ? esc(r.round) : "–"}</td><td>${r ? ym(r.date) : "–"}</td><td>${fm(c.hist.cashNow, 0)}${c.hist.raisedSince > 0 ? "*" : ""}</td><td>${fm(c.hist.last.monthly_burn, 0)}</td>
         <td><span class="pill ${rw < LOW_RUNWAY ? "rw-bad" : rw < WATCH_RUNWAY ? "rw-warn" : "rw-ok"}">${rw >= 36 ? "36+" : rw.toFixed(1)} mo</span></td><td>${ym(c.hist.last.date)}</td><td>${c.hist.gmLast ? fp(c.hist.gmLast.v, 0) : "–"}</td><td${c.hist.gmChange <= -GM_SLIP ? ' class="warn-text"' : ""}>${isFinite(c.hist.gmChange) ? ptsTxt(c.hist.gmChange) : "–"}</td><td>${own ? fp(own.ownership) : "–"}</td></tr>` }).join("")}</tbody></table></div></section>`;
 }
 
@@ -1287,11 +1289,11 @@ function renderGross(F, fundColor, asOf) {
   const leads = [...new Set(D.map(d => d.deal_lead))].map(n => ({ n, a: agg(D.filter(d => d.deal_lead === n)), R: agg(D.filter(d => d.deal_lead === n && d.status === "Realized")),
     seats: D.filter(d => d.deal_lead === n && d.board === "Yes").length })).sort((a, b) => b.a.inv - a.a.inv);
   document.getElementById("leadTbl").innerHTML = `<table><thead><tr><th>Deal lead</th><th>Deals</th><th>Board seats</th><th>Invested</th><th>Realized</th><th>Unrealized</th><th>Total value</th><th>Gross TVM</th><th>Gross IRR</th><th>Realized TVM</th><th>3x+ deals</th><th>Write-offs</th><th>Loss ratio</th><th>% of invested</th></tr></thead><tbody>
-    ${leads.map(({ n, a, R, seats }) => `<tr><td>${esc(n)}${titleOf(n) ? ` <span class="tags">· ${esc(titleOf(n))}</span>` : ""}</td><td>${a.n}</td><td>${seats} of ${a.n}</td><td>${fm(a.inv)}</td><td>${fm(a.real)}</td><td>${fm(a.unr)}</td><td>${fm(a.tv)}</td><td>${fx(a.tvm)}</td><td>${fp(a.irr)}</td><td>${R.n ? fx(R.tvm) : "–"}</td><td>${D.filter(d => d.deal_lead === n && d.tvm >= 3).length}</td><td>${D.filter(d => d.deal_lead === n && d.tvm < 0.25).length}</td><td>${fp(a.loss / a.inv)}</td><td>${fp(a.inv / tot.inv)}</td></tr>`).join("")}
-    <tr class="total"><td>Total</td><td>${tot.n}</td><td>${D.filter(d => d.board === "Yes").length} of ${tot.n}</td><td>${fm(tot.inv)}</td><td>${fm(tot.real)}</td><td>${fm(tot.unr)}</td><td>${fm(tot.tv)}</td><td>${fx(tot.tvm)}</td><td>${fp(tot.irr)}</td><td>${fx(agg(D.filter(d => d.status === "Realized")).tvm)}</td><td>${D.filter(d => d.tvm >= 3).length}</td><td>${D.filter(d => d.tvm < 0.25).length}</td><td>${fp(tot.loss / tot.inv)}</td><td>100.0%</td></tr></tbody></table>`;
+    ${leads.map(({ n, a, R, seats }) => `<tr><td>${esc(n)}${titleOf(n) ? ` <span class="tags">· ${esc(titleOf(n))}</span>` : ""}</td><td>${a.n}</td><td>${seats} of ${a.n}</td><td>${fm(a.inv, 0)}</td><td>${fm(a.real, 0)}</td><td>${fm(a.unr, 0)}</td><td>${fm(a.tv, 0)}</td><td>${fx(a.tvm, 1)}</td><td>${fp(a.irr)}</td><td>${R.n ? fx(R.tvm, 1) : "–"}</td><td>${D.filter(d => d.deal_lead === n && d.tvm >= 3).length}</td><td>${D.filter(d => d.deal_lead === n && d.tvm < 0.25).length}</td><td>${fp(a.loss / a.inv, 0)}</td><td>${fp(a.inv / tot.inv)}</td></tr>`).join("")}
+    <tr class="total"><td>Total</td><td>${tot.n}</td><td>${D.filter(d => d.board === "Yes").length} of ${tot.n}</td><td>${fm(tot.inv, 0)}</td><td>${fm(tot.real, 0)}</td><td>${fm(tot.unr, 0)}</td><td>${fm(tot.tv, 0)}</td><td>${fx(tot.tvm, 1)}</td><td>${fp(tot.irr)}</td><td>${fx(agg(D.filter(d => d.status === "Realized")).tvm, 1)}</td><td>${D.filter(d => d.tvm >= 3).length}</td><td>${D.filter(d => d.tvm < 0.25).length}</td><td>${fp(tot.loss / tot.inv)}</td><td>100.0%</td></tr></tbody></table>`;
   const seatGroups = ["Yes", "No", "Unknown"].map(k => [k, D.filter(d => d.board === k)]).filter(([, g]) => g.length);
   document.getElementById("boardTbl").innerHTML = `<table><thead><tr><th>Board seat</th><th>Deals</th><th>Invested</th><th>Gross TVM</th><th>Gross IRR</th><th>Loss ratio</th></tr></thead><tbody>
-    ${seatGroups.map(([k, g]) => { const a = agg(g); return `<tr><td>${k}</td><td>${a.n}</td><td>${fm(a.inv)}</td><td>${fx(a.tvm)}</td><td>${fp(a.irr)}</td><td>${fp(a.loss / a.inv)}</td></tr>` }).join("")}</tbody></table>`;
+    ${seatGroups.map(([k, g]) => { const a = agg(g); return `<tr><td>${k}</td><td>${a.n}</td><td>${fm(a.inv, 0)}</td><td>${fx(a.tvm, 1)}</td><td>${fp(a.irr)}</td><td>${fp(a.loss / a.inv, 0)}</td></tr>` }).join("")}</tbody></table>`;
   document.getElementById("boardNote").textContent = seatGroups.some(([k]) => k === "Unknown") ? "Deals without a Yes/No in the board_seat column are counted as Unknown." : "";
   const boardSet = (k, col) => ({ label: k === "Yes" ? "Board seat" : "No board seat", backgroundColor: css(col), borderRadius: 4, borderSkipped: "start",
     data: leads.map(l => { const g = D.filter(d => d.deal_lead === l.n && d.board === k); return g.length ? agg(g).tvm : null }),
@@ -1300,7 +1302,7 @@ function renderGross(F, fundColor, asOf) {
     options: { scales: { x: { grid: { display: false }, ticks: { autoSkip: false, font: { size: 11 } } }, y: { beginAtZero: true, ticks: { callback: v => fx(v, 1) }, grid: { color: c => c.tick.value === 1 ? css("--ink-3") : css("--rule") } } },
       plugins: { legend: { position: "bottom", labels: { boxWidth: 10 } }, tooltip: { callbacks: { label: c => `${c.dataset.label}: ${fx(c.raw)} across ${c.dataset.counts[c.dataIndex]} deal${c.dataset.counts[c.dataIndex] > 1 ? "s" : ""}` } } } } }));
 
-  // Time to write-off, by entry round.
+  // Value impairment: write-offs and the time to them, by entry round.
   const W = D.filter(d => d.status === "Realized" && d.tvm < 0.25 && d.entry && d.exit).map(d => ({ ...d, mo: monthsBetween(d.entry, d.exit) }));
   const median = a => { if (!a.length) return NaN; const s = [...a].sort((x, y) => x - y), m = s.length >> 1; return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2 };
   const moTxt = m => isFinite(m) ? `${(m / 12).toFixed(1)} yrs` : "–";
@@ -1333,7 +1335,7 @@ function renderGross(F, fundColor, asOf) {
   document.getElementById("woFoNote").textContent = !W.length ? "" : `${foW.length} of ${W.length} write-offs had follow-on money, ${fm(foW.reduce((t, w) => t + w.followOn, 0))} in all.`
     + (W.some(w => w.fo === "Unknown") ? " Count unknown: follow-on capital in the portfolio file but no rounds for the company in the history file." : "");
   const stRows = [...new Set(D.map(d => d.stage))].sort((a, b) => STAGE_ORDER.indexOf(a) - STAGE_ORDER.indexOf(b)).map(st => { const g = D.filter(d => d.stage === st), w = W.filter(x => x.stage === st), done = g.filter(d => d.status === "Realized");
-    return `<tr><td>${esc(st)}</td><td>${g.length}</td><td>${w.length}</td><td>${fp(w.length / g.length, 0)}</td><td>${done.length ? fp(w.length / done.length, 0) : "–"}</td><td>${moTxt(median(w.map(x => x.mo)))}</td><td>${fm(w.reduce((t, x) => t + x.invested, 0))}</td></tr>` });
+    return `<tr><td>${esc(st)}</td><td>${g.length}</td><td>${w.length}</td><td>${fp(w.length / g.length, 0)}</td><td>${done.length ? fp(w.length / done.length, 0) : "–"}</td><td>${moTxt(median(w.map(x => x.mo)))}</td><td>${fm(w.reduce((t, x) => t + x.invested, 0), 0)}</td></tr>` });
   document.getElementById("woTbl").innerHTML = `<table><thead><tr><th>Entry round</th><th>Deals</th><th>Write-offs</th><th>Of all deals</th><th>Of exited deals</th><th>Median time</th><th>Capital written off</th></tr></thead><tbody>${stRows.join("")}</tbody></table>`;
 
   // Gross margin: median across companies reporting that quarter, per sector. A sector needs two
@@ -1411,7 +1413,7 @@ function renderGross(F, fundColor, asOf) {
   const pctOrDash = v => isFinite(v) && v > 0 ? fp(v) : "–";
   document.getElementById("invTbl").innerHTML = `<table><thead><tr><th>Company</th><th>Fund</th><th>Stage in</th><th>Sector</th><th>Lead</th><th>Board</th><th>Entry</th><th>Exit</th><th>Invested</th><th>Follow-on</th><th>Realized</th><th>Unrealized</th><th>Gross TVM</th><th>Gross IRR</th><th>Ownership in → now</th><th>Post-money in → latest</th><th>Latest round / outcome</th></tr></thead><tbody>
     ${[...D].sort((a, b) => (a.entry || 0) - (b.entry || 0)).map(d => `<tr><td>${esc(d.company)}</td><td style="font-family:var(--body)">${esc(fundShort(d.fund))}</td><td style="font-family:var(--body)">${esc(d.stage)}</td><td style="font-family:var(--body)">${esc(d.sector || "")}</td><td style="font-family:var(--body)">${esc(d.deal_lead)}</td><td style="font-family:var(--body)">${d.board}</td>
-      <td>${d.entry ? d.entry.toISOString().slice(0, 10) : "–"}</td><td>${d.exit ? d.exit.toISOString().slice(0, 10) : "–"}</td><td>${fm(d.invested)}</td><td>${d.followOn > 0 ? fm(d.followOn) : "–"}</td><td>${fm(d.realized)}</td><td>${fm(d.unrealized)}</td><td>${fx(d.tvm)}</td><td>${fp(d.irr)}</td>
+      <td>${d.entry ? d.entry.toISOString().slice(0, 10) : "–"}</td><td>${d.exit ? d.exit.toISOString().slice(0, 10) : "–"}</td><td>${fm(d.invested, 0)}</td><td>${d.followOn > 0 ? fm(d.followOn, 0) : "–"}</td><td>${fm(d.realized, 0)}</td><td>${fm(d.unrealized, 0)}</td><td>${fx(d.tvm, 1)}</td><td>${fp(d.irr)}</td>
       <td>${pctOrDash(d.ownership_entry)} → ${d.outcome === "Held" ? pctOrDash(d.ownership_current) : "exited"}</td><td>${d.entry_post_money > 0 ? fm(d.entry_post_money, 0) : "–"} → ${d.latest_post_money > 0 ? fm(d.latest_post_money, 0) + (isFinite(d.stepUp) ? ` (${fx(d.stepUp, 1)})` : "") : "–"}</td>
       <td style="font-family:var(--body)">${d.outcome === "Held" ? esc(d.latest_round || "–") : esc(d.outcome)}</td></tr>`).join("")}</tbody></table>`;
 }
@@ -2916,18 +2918,18 @@ function renderScen(F, fundColor, asOf) {
       <td>${inp(`sc-${id}-mult`, isFinite(o.mult) ? o.mult : "", String(g.secMult[d.sector] ?? 5), `Exit EV to revenue for ${d.company}`)}</td>
       <td>${inp(`sc-${id}-exitValue`, moneyIn(o.exitValue), "", `Exit value for ${d.company}`)}</td>
       <td>${inp(`sc-${id}-dilution`, pctInp(o.dilution), pctInp(g.dilution) + "%", `Yearly dilution for ${d.company}`)}</td>
-      <td>${m.outcome === "exit" ? fm(m.revExit) : "–"}</td><td>${m.outcome === "exit" ? fm(m.V, 0) : "–"}</td>
+      <td>${m.outcome === "exit" ? fm(m.revExit, 0) : "–"}</td><td>${m.outcome === "exit" ? fm(m.V, 0) : "–"}</td>
       <td${typed ? ' class="scimp"' : ""}>${m.outcome === "exit" ? fx(m.impliedExitMult, 1) : "–"}</td><td class="scimp">${m.outcome === "exit" ? fx(m.impliedNowMult, 1) : "–"}</td><td>${m.outcome === "exit" && isFinite(m.stepUp) ? fx(m.stepUp, 1) : "–"}</td>
       <td>${fp(m.b.own)} → ${m.outcome === "exit" ? fp(m.ownExit) : "–"}</td>
-      <td>${fm(m.proceeds)}${m.prefUsed && m.outcome === "exit" ? ` <span class="mchip" title="The liquidation preference sets these proceeds">pref</span>` : ""}</td><td>${fx(m.moic)}</td><td>${fp(m.irr)}</td>
+      <td>${fm(m.proceeds, 0)}${m.prefUsed && m.outcome === "exit" ? ` <span class="mchip" title="The liquidation preference sets these proceeds">pref</span>` : ""}</td><td>${fx(m.moic, 1)}</td><td>${fp(m.irr)}</td>
       <td>${Object.keys(o).length ? `<button type="button" class="dl" data-reset="${esc(d.company)}" aria-label="Reset ${esc(d.company)} to defaults">Reset</button>` : ""}</td></tr>` }).join("")}</tbody></table></div>
     <p class="note">Preference stack = money raised in the company's rounds (history file) × the preference multiple${models.some(m => m.b.prefEst) ? "; where there is no round history it is estimated at 30% of the last post-money" : ""}. Proceeds below the stack are shared pro rata to preferences; "pref" marks where the preference, not conversion, sets the fund's proceeds. The preference model treats all series as one class, pari passu.</p>
   </section>
   <div class="grid2"><section class="panel"><h2>LP cash flows, actual and projected</h2><p class="note">Net of fees and carry. Projected years use the ${esc(s.name)} scenario.</p><div class="chart tall"><canvas id="cScFlows"></canvas></div></section>
     <section class="panel"><h2>Cost and scenario proceeds</h2><p class="note">Largest ${Math.min(12, models.length)} held companies by scenario proceeds.</p><div class="chart tall"><canvas id="cScCo"></canvas></div></section></div>
   <section class="panel"><h2>Scenario comparison</h2><div class="tbl"><table><thead><tr><th>Scenario</th><th>Gross multiple</th><th>Net TVPI</th><th>Net IRR</th><th>Still to come to LPs</th><th>Carry from here</th><th>Fees from here</th></tr></thead><tbody>
-    ${all.map(({ s: x, r }) => `<tr${x.id === s.id ? ' class="total"' : ""}><td>${esc(x.name)}</td><td>${fx(r.grossProj)}</td><td>${fx(r.tvpi)}</td><td>${fp(r.irr)}</td><td>${fm(r.future)}</td><td>${fm(r.carry)}</td><td>${fm(r.fees)}</td></tr>`).join("")}
-    <tr><td>Today (reported)</td><td>${fx(R.grossNow)}</td><td>${fx(R.nowTvpi)}</td><td colspan="4" class="note">Current marks, before any scenario</td></tr></tbody></table></div>
+    ${all.map(({ s: x, r }) => `<tr${x.id === s.id ? ' class="total"' : ""}><td>${esc(x.name)}</td><td>${fx(r.grossProj, 1)}</td><td>${fx(r.tvpi, 1)}</td><td>${fp(r.irr)}</td><td>${fm(r.future, 0)}</td><td>${fm(r.carry, 0)}</td><td>${fm(r.fees, 0)}</td></tr>`).join("")}
+    <tr><td>Today (reported)</td><td>${fx(R.grossNow, 1)}</td><td>${fx(R.nowTvpi, 1)}</td><td colspan="4" class="note">Current marks, before any scenario</td></tr></tbody></table></div>
     <p class="note">Carry taken before ${ym(asOf)} is estimated from distributions above paid-in (${fm(R.proj.reduce((t, p) => t + p.carryPaidEst, 0))}). Held-at-mark companies are counted at their current value at the last exit date. Fees are charged on commitments each year until the last exit.</p></section>`;
   setChartDefaults();
   const yearsSpan = [...new Set(R.proj.flatMap(p => p.all.map(x => x.d.getFullYear())))].sort((a, b) => a - b);
@@ -3163,7 +3165,8 @@ document.getElementById("dlXlsx").addEventListener("click", async () => {
   if (typeof XLSX === "undefined") return dlMsg("The spreadsheet library did not load, so the workbook cannot be built.", true);
   dlMsg("Building workbook…");
   const wb = XLSX.utils.book_new(), kpis = [["View", "Section", "Figure", "Description"]];
-  await eachView((v, label) => {
+  state.fullPrec = true;
+  try { await eachView((v, label) => {
     document.querySelectorAll("#out .tbl table:not(.sectbl)").forEach(t => addSheet(wb, sheetName(titleFor(t.closest(".tbl"))), sheetFrom(tableRows(t))));
     // The per-company securities tables merge into one sheet per shape, a Company column first.
     if (v === "companies") secSheets(wb);
@@ -3171,7 +3174,7 @@ document.getElementById("dlXlsx").addEventListener("click", async () => {
     document.querySelectorAll("#out .kpis > div, #out .hc > div").forEach(k => kpis.push([label, k.closest("section")?.querySelector("h2")?.textContent.trim() || "", k.querySelector("b")?.textContent.trim() || "", [...k.querySelectorAll("span")].map(s => s.textContent.trim()).filter(Boolean).join(" ")]));
     const cards = [...document.querySelectorAll("#out article.co")];
     if (cards.length) addSheet(wb, v === "team" ? "Partner bios" : "Company profiles", sheetFrom(cardRows(cards)));
-  });
+  }) } finally { state.fullPrec = false; render() }  // back to reading precision on screen
   if (kpis.length > 1) addSheet(wb, "Key figures", sheetFrom(kpis));
   // Key figures first: it is the summary a reader opens to.
   wb.SheetNames.unshift(wb.SheetNames.pop());

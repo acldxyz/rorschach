@@ -530,13 +530,13 @@ const symbolOf = c => { try { return new Intl.NumberFormat("en-US", { style: "cu
 // Money spans LP cheques in thousands to company values in billions, so each figure picks its own unit.
 const fm = v => { if (!isFinite(v)) return "–"; const a = Math.abs(v), [d, s] = a >= 1e9 ? [1e9, "B"] : a >= 1e6 ? [1e6, "M"] : a >= 1e3 ? [1e3, "K"] : [1, ""];
   return (v < 0 ? "-" : "") + SYM + (a / d).toLocaleString("en-US", { minimumFractionDigits: d === 1 ? 0 : 1, maximumFractionDigits: d === 1 ? 0 : 1 }) + s };
-// Chart axes name the unit once in their title ("USD millions") and show bare numbers, negatives in parentheses.
+// Chart axes name the unit once in their title ("USD millions") money ticks carry the currency symbol, negatives in parentheses.
 // The unit follows each axis's own range, since this page spans LP cheques to company values.
 const AX_UNITS = [[1e9, "billions"], [1e6, "millions"], [1e3, "thousands"], [1, ""]];
 const moneyAxis = what => ({ title: { display: true, text: what || CCY },
   afterBuildTicks: sc => { const top = Math.max(...sc.ticks.map(t => Math.abs(t.value))); sc._u = AX_UNITS.find(([d]) => top >= d * 1.5) || AX_UNITS[3];
     const u = [CCY, sc._u[1]].filter(Boolean).join(" "); sc.options.title.text = what ? `${what} (${u})` : u },
-  ticks: { callback(v) { const d = this._u?.[0] || 1, t = (Math.abs(v) / d).toLocaleString("en-US", { maximumFractionDigits: 2 }); return v < 0 ? `(${t})` : t } } });
+  ticks: { callback(v) { const d = this._u?.[0] || 1, t = SYM + (Math.abs(v) / d).toLocaleString("en-US", { maximumFractionDigits: 2 }); return v < 0 ? `(${t})` : t } } });
 const fps = v => isFinite(v) ? SYM + v.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: v < 1 ? 4 : 2 }) : "–";
 const fx = (v, d = 2) => isFinite(v) ? v.toFixed(d) + "x" : "–";
 const fp = (v, d) => isFinite(v) ? (v * 100).toFixed(d ?? (Math.abs(v) < 0.01 ? 3 : Math.abs(v) < 0.1 ? 2 : 1)) + "%" : "–";
