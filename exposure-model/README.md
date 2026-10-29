@@ -18,4 +18,4 @@ See the [root README](../README.md) for the features both products share and how
 ## Files
 
 - `template.html`: the product's page, built into `index.html` by `python3 build.py` at the repo root.
-- `sample/`: the fictional ten-fund LP portfolio. `cd exposure-model/sample && python3 generate_exposure.py` regenerates it.
+- `sample/`: the fictional ten-fund LP portfolio, marked as of 30 Jun 2026 in the files; the app moves its dates forward when it loads (see the root README). `cd exposure-model/sample && python3 generate_exposure.py` regenerates it.

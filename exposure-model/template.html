@@ -671,7 +671,10 @@ document.querySelectorAll(".drop").forEach(el => {
 });
 document.getElementById("sampleBtn").addEventListener("click", () => {
   state.inUnit = 1; document.getElementById("inUnit").value = "1";
-  loadAoa("commit", parseCSVRows(SAMPLE.commit), { file: "lp_commitments.csv", via: "sample" }); loadAoa("hold", parseCSVRows(SAMPLE.hold), { file: "lp_holdings.csv", via: "sample" });
+  // Dated to run to the last quarter end: the latest mark sets the shift, and every date and vintage moves with it.
+  const dates = SAMPLE.hold.match(/\d{4}-\d{2}-\d{2}/g).sort(), D = sampleDating(dates.at(-1), dates[0]);
+  loadAoa("commit", D.yearCols(parseCSVRows(SAMPLE.commit), ["vintage"]), { file: "lp_commitments.csv", via: "sample", shifted: D.note });
+  loadAoa("hold", parseCSVRows(D.text(SAMPLE.hold)), { file: "lp_holdings.csv", via: "sample", shifted: D.note });
   setStatus("commit", `Sample · ${state.commit.length} funds`, "ok"); setStatus("hold", `Sample · ${state.hold.length} positions`, "ok");
   state.isSample = true; document.getElementById("lpTitle").textContent = "Exposure Model (sample)"; landOnAnalysis(); render();
   // From the Data view the sample button disappears with it; keep keyboard users on the view they landed on.

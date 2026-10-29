@@ -105,7 +105,8 @@ tr.total td { font-weight: 600; border-top: 2px solid var(--ink-3) }
 .bm-title { font-family: var(--display); font-weight: 600; font-size: 15px }
 .drop-inline { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: center; padding: 6px 12px; position: relative }
 .bm a { color: var(--accent) }
-.bm td input { width: 5.5em; font: 13px var(--mono); text-align: right; color: var(--ink); background: var(--bg); border: 1px solid var(--rule); border-radius: 3px; padding: 3px 5px }
+.bm td, .bm th { padding-left: 4px; padding-right: 4px }
+.bm td input { width: 4.4em; font: 13px var(--mono); text-align: right; color: var(--ink); background: var(--bg); border: 1px solid var(--rule); border-radius: 3px; padding: 3px 5px }
 .bm td input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px }
 /*BRAND_CSS*/
 /*THEME_CSS*/
@@ -345,7 +346,7 @@ const BM_SOURCES = {
   sample: { note: "Illustrative venture quartiles made up for the sample funds. Not market data." },
   carta: { note: "Enter quartiles from Carta's published fund performance data, which is drawn mainly from venture funds on its platform.", link: "https://carta.com/data/", linkText: "Carta data" },
   cambridge: { note: "Enter quartiles from Cambridge Associates' US Venture Capital benchmark. Detailed quartile tables usually need a subscription or a request to CA.", link: "https://www.cambridgeassociates.com/private-investment-benchmarks/", linkText: "Cambridge Associates benchmarks" },
-  custom: { note: "Upload a file (vintage, metric, top, median, bottom) or type figures into the grid." },
+  custom: { note: "Upload a file (vintage, metric, top, median, bottom, and max and min if you have them) or type figures into the grid." },
 };
 // Figures typed or uploaded per source stay in this browser only.
 const bmStore = { load(k) { try { return JSON.parse(localStorage.getItem("bm:" + k)) || {} } catch { return {} } }, save(k, v) { try { localStorage.setItem("bm:" + k, JSON.stringify(v)) } catch {} } };
@@ -449,7 +450,8 @@ function normSec(rows) {
 }
 function normBm(rows) {
   need(rows, ["vintage", "metric", "top", "median", "bottom"], "Benchmarks");
-  const m = {}; rows.forEach(r => { (m[num(r.vintage)] ??= {})[String(r.metric).trim().toUpperCase()] = { top: num(r.top), median: num(r.median), bottom: num(r.bottom) } }); return m;
+  // max and min (the vintage's best and worst funds) are optional: most published tables carry them, some don't.
+  const m = {}; rows.forEach(r => { (m[num(r.vintage)] ??= {})[String(r.metric).trim().toUpperCase()] = { max: num(r.max), top: num(r.top), median: num(r.median), bottom: num(r.bottom), min: num(r.min) } }); return m;
 }
 
 // ---------- math ----------
@@ -661,7 +663,7 @@ function renderView() {
   <ol class="footnotes">${fnKeys.map(k => `<li>${notes[k]}</li>`).join("")}</ol>
   <p class="note qkey">${bmOn ? `Net TVPI, DPI and IRR are shaded by quartile against the ${bmName} benchmark for each fund's vintage: ${[1, 2, 3, 4].map(r => `<span class="qcell q${r} qsw">${["Top", "2nd", "3rd", "Bottom"][r - 1]}</span>`).join(" ")}` : "Pick a benchmark in the Data view to shade net TVPI, DPI and IRR by quartile."}</p></section>`;
 
-  html += `<section class="panel"><div class="panel-head"><h2>Net relative performance</h2><p class="note">${bmOn ? `Bands show ${esc(document.querySelector("#bmSrc option:checked").textContent)} quartiles for each fund's vintage; the marker is the fund.` : "Pick a benchmark source and fill its quartiles to draw the bands."}</p></div>
+  html += `<section class="panel"><div class="panel-head"><h2>Net relative performance</h2><p class="note">${bmOn ? `Bands show ${esc(document.querySelector("#bmSrc option:checked").textContent)} quartiles for each fund's vintage, from its worst fund to its best; the marker is the fund.${F.some(x => ["TVPI", "IRR", "DPI"].some(m => { const b = bm[x.vintage]?.[m]; return b && !isFinite(b.max) })) ? " Where the benchmark gives no maximum, the top band stops one quartile step above the top-quartile breakpoint." : ""}` : "Pick a benchmark source and fill its quartiles to draw the bands."}</p></div>
     <div class="grid3"><div><h3>Net TVPI</h3><div class="chart"><canvas id="cTvpi"></canvas></div></div><div><h3>Net IRR</h3><div class="chart"><canvas id="cIrr"></canvas></div></div><div><h3>DPI</h3><div class="chart"><canvas id="cDpi"></canvas></div></div></div></section>`;
 
   html += `<div class="grid2"><section class="panel"><h2>J-curve</h2><p class="note">Cumulative net cash flow to LPs, by quarter since each fund's first call.</p><div class="chart tall"><canvas id="cJ"></canvas></div></section>
@@ -694,19 +696,25 @@ function renderView() {
 
   setChartDefaults();
 
-  // Relative performance: quartile bands as overlaid floating bars, fund as a marker.
+  // Relative performance: quartile bands as overlaid floating bars, fund as a marker. The outer bands run to the vintage's
+  // maximum and minimum fund. Without them the top band (and an IRR's bottom one) stops one quartile step past the
+  // breakpoint, per vintage, rather than at the chart's edge, which would make every vintage look the same height.
   [["cTvpi", "TVPI", "tvpi", fx], ["cIrr", "IRR", "irr", fp], ["cDpi", "DPI", "dpi", fx]].forEach(([id, m, k, f]) => {
     const labels = F.map(x => [fundShort(x.name), `(${x.vintage})`]);
     const B = F.map(x => bm[x.vintage]?.[m]);
-    const lo = Math.min(0, ...F.map(x => x[k]).filter(isFinite), ...B.filter(Boolean).map(b => b.bottom)) ;
-    const hiV = Math.max(...F.map(x => x[k]).filter(isFinite), ...B.filter(Boolean).map(b => b.top));
-    const floor = m === "IRR" ? Math.min(lo, -0.05) : 0, ceil = hiV * (m === "IRR" ? 1.35 : 1.25);
-    const band = (name, col, fn) => ({ type: "bar", label: name, data: B.map(b => b ? fn(b) : null), backgroundColor: css(col), borderColor: css("--panel"), borderWidth: 1, barPercentage: .7, categoryPercentage: .8, order: 2 });
-    const ds = bmOn ? [band("1st quartile", "--q1", b => [b.top, ceil]), band("2nd quartile", "--q2", b => [b.median, b.top]), band("3rd quartile", "--q3", b => [b.bottom, b.median]), band("4th quartile", "--q4", b => [floor, b.bottom])] : [];
+    const step = b => Math.max(b.top - b.median, b.median - b.bottom, Math.abs(b.top) * .1, m === "IRR" ? .02 : .05);
+    const hiEnd = b => isFinite(b.max) ? b.max : b.top + step(b), loEnd = b => isFinite(b.min) ? b.min : m === "IRR" ? b.bottom - step(b) : 0;
+    const vals = F.map(x => x[k]).filter(isFinite), Bs = B.filter(Boolean);
+    const lo = Math.min(0, ...vals, ...Bs.map(loEnd)), hiV = Math.max(...vals, ...Bs.map(hiEnd));
+    const floor = m === "IRR" ? Math.min(lo * 1.1, -0.05) : 0, ceil = hiV * 1.05;
+    const band = (name, col, fn, open) => ({ type: "bar", label: name, open: open && B.map(b => b && !isFinite(b[open === "above" ? "max" : "min"])), data: B.map(b => b ? fn(b) : null), backgroundColor: css(col), borderColor: css("--panel"), borderWidth: 1, barPercentage: .7, categoryPercentage: .8, order: 2 });
+    const ds = bmOn ? [band("1st quartile", "--q1", b => [b.top, hiEnd(b)], "above"), band("2nd quartile", "--q2", b => [b.median, b.top]), band("3rd quartile", "--q3", b => [b.bottom, b.median]), band("4th quartile", "--q4", b => [loEnd(b), b.bottom], "below")] : [];
     ds.push({ type: "line", label: "Fund", data: F.map(x => x[k]), showLine: false, pointStyle: "rectRot", pointRadius: 8, pointHoverRadius: 10, backgroundColor: css("--accent"), borderColor: css("--panel"), borderWidth: 2, order: 1 });
     charts.push(new Chart(document.getElementById(id), { data: { labels, datasets: ds }, options: {
-      scales: { x: { stacked: true, grid: { display: false } }, y: { stacked: false, min: floor, max: ceil, ticks: { callback: v => m === "IRR" ? fpa(v) : f(v, 1) }, grid: { color: css("--rule") } } },
-      plugins: { legend: { position: "bottom", labels: { boxWidth: 10, font: { size: 11 } } }, tooltip: { callbacks: { label: c => Array.isArray(c.raw) ? `${c.dataset.label}: ${f(c.raw[0])} – ${f(c.raw[1])}` : `Fund ${m}: ${f(c.raw)}` } } } } }));
+      scales: { x: { stacked: true, grid: { display: false } }, y: { stacked: false, min: m === "IRR" ? undefined : 0, suggestedMin: floor, suggestedMax: ceil, ticks: { callback: v => m === "IRR" ? fpa(v) : f(v, 1) }, grid: { color: css("--rule") } } },
+      plugins: { legend: { position: "bottom", labels: { boxWidth: 10, font: { size: 11 } } }, tooltip: { callbacks: { label: c => !Array.isArray(c.raw) ? `Fund ${m}: ${f(c.raw)}` : c.dataset.label === "1st quartile" && c.dataset.open?.[c.dataIndex] ? `${c.dataset.label}: above ${f(c.raw[0])}`
+        : c.dataset.label === "4th quartile" && c.dataset.open?.[c.dataIndex] && m === "IRR" ? `${c.dataset.label}: below ${f(c.raw[1])}`
+        : `${c.dataset.label}: ${f(c.raw[0])} – ${f(c.raw[1])}${c.dataset.open && !c.dataset.open[c.dataIndex] ? c.dataset.label === "1st quartile" ? " (max)" : " (min)" : ""}` } } } } }));
   });
 
   // J-curve by quarter index so funds of different vintages overlay.
@@ -1481,10 +1489,13 @@ document.querySelectorAll(".drop").forEach(el => {
 });
 document.getElementById("sampleBtn").addEventListener("click", () => {
   state.raw = {}; state.prov = {};
+  // Dated to run to the last quarter end: the fund cash flows set the shift, and every file's dates move with them.
+  const cfDates = SAMPLE.cf.match(/\d{4}-\d{2}-\d{2}/g).sort(), D = sampleDating(cfDates.at(-1), cfDates[0]);
+  const YEARS = { cf: ["vintage"], inv: ["founded"], team: ["joined"], bm: ["vintage"] }, sheet = k => D.yearCols(parseCSVRows(D.text(SAMPLE[k])), YEARS[k] || []);
   // Each sample CSV is read as an upload already in the app's own columns, so the Data view can show where every field came from.
   Object.entries({ cf: "cash_flows.csv", inv: "investments.csv", hist: "company_history.csv", team: "team.csv", sec: "securities.csv" }).forEach(([k, file]) => {
-    const aoa = parseCSVRows(SAMPLE[k]); state.raw[k] = toObjects(aoa); state[k] = NORM[k](state.raw[k]); state.prov[k] = dvFill(provSample(k, file, aoa), null, state[k]) });
-  state.bmSample = normBm(parseCSV(SAMPLE.bm)); setStatus("hist", `Sample · ${state.hist.length} rows`, "ok"); setStatus("team", `Sample · ${state.team.length} people`, "ok"); setStatus("sec", `Sample · ${state.sec.length} securities`, "ok"); state.bmSrc = "sample"; document.getElementById("bmSrc").value = "sample"; state.bm = state.bmSample; renderBm();
+    const aoa = sheet(k); state.raw[k] = toObjects(aoa); state[k] = NORM[k](state.raw[k]); state.prov[k] = dvFill(provSample(k, file, aoa, D.note), null, state[k]) });
+  state.bmSample = normBm(toObjects(sheet("bm"))); setStatus("hist", `Sample · ${state.hist.length} rows`, "ok"); setStatus("team", `Sample · ${state.team.length} people`, "ok"); setStatus("sec", `Sample · ${state.sec.length} securities`, "ok"); state.bmSrc = "sample"; document.getElementById("bmSrc").value = "sample"; state.bm = state.bmSample; renderBm();
   setStatus("cf", `Sample · ${state.cf.length} rows`, "ok"); setStatus("inv", `Sample · ${state.inv.length} companies`, "ok"); 
   document.getElementById("gpTitle").textContent = "Lanternfish Ventures (sample)";
   state.isSample = true; state.inUnit = 1; document.getElementById("inUnit").value = "1";
@@ -1537,11 +1548,11 @@ function renderBm() {
   document.getElementById("bmNote").innerHTML = esc(S.note) + (S.link ? ` <a href="${S.link}" target="_blank" rel="noopener">${esc(S.linkText)} ↗</a>` : "");
   document.getElementById("bmUpload").hidden = src === "sample";
   const vint = [...new Set([...(state.cf ? fundStats(state.cf).map(f => f.vintage) : []), ...Object.keys(state.bm || {}).map(Number)])].filter(isFinite).sort();
-  const M = [["TVPI", "x"], ["IRR", "%"], ["DPI", "x"]], P = ["top", "median", "bottom"];
+  const M = [["TVPI", "x"], ["IRR", "%"], ["DPI", "x"]], P = ["max", "top", "median", "bottom", "min"], PN = { max: "Max", top: "Top Q", median: "Median", bottom: "Bottom Q", min: "Min" };
   const val = (v, m, k) => { const x = state.bm?.[v]?.[m]?.[k]; return isFinite(x) ? (m === "IRR" ? +(x * 100).toFixed(2) : x) : "" };
   document.getElementById("bmGrid").innerHTML = !vint.length ? `<p class="note">Load fund cash flows to list their vintages here.</p>` :
-    `<table><thead><tr><th rowspan="2">Vintage</th>${M.map(([m, u]) => `<th class="grp" colspan="3">${m} (${u})</th>`).join("")}</tr>
-    <tr>${M.map(() => P.map(k => `<th>${k === "top" ? "Top Q" : k === "median" ? "Median" : "Bottom Q"}</th>`).join("")).join("")}</tr></thead>
+    `<table><thead><tr><th rowspan="2">Vintage</th>${M.map(([m, u]) => `<th class="grp" colspan="${P.length}">${m} (${u})</th>`).join("")}</tr>
+    <tr>${M.map(() => P.map(k => `<th>${PN[k]}</th>`).join("")).join("")}</tr></thead>
     <tbody>${vint.map(v => `<tr><td>${v}</td>${M.map(([m]) => P.map(k => `<td><input id="bm-${v}-${m}-${k}" data-v="${v}" data-m="${m}" data-k="${k}" inputmode="decimal" aria-label="${v} ${m} ${k}" value="${val(v, m, k)}"${src === "sample" ? " readonly" : ""}></td>`).join("")).join("")}</tr>`).join("")}</tbody></table>`;
 }
 document.getElementById("bmGrid").addEventListener("change", e => {
@@ -1689,6 +1700,8 @@ const FIELDS = {
     F("top", "Top quartile", "Upper-quartile breakpoint", "top topquartile upperquartile q1 75th p75 firstquartile", 1),
     F("median", "Median", "Median", "median p50 50th", 1),
     F("bottom", "Bottom quartile", "Lower-quartile breakpoint", "bottom bottomquartile lowerquartile q3 25th p25 thirdquartile", 1),
+    F("max", "Maximum", "The vintage's best fund", "max maximum best highest p100"),
+    F("min", "Minimum", "The vintage's worst fund", "min minimum worst lowest p0"),
   ],
 };
 const KIND_LABEL = { cf: "fund cash flows", inv: "portfolio companies", hist: "company history", team: "firm staff", sec: "securities", bm: "benchmark quartiles" };
@@ -1793,7 +1806,7 @@ function applyMapping(m) {
       if (out.length === n0) out.skips.push([j, why || "No amount"]);
       continue;
     }
-    if (kind === "bm") { o.metric = metricOf(o.metric); if (o.metric === "IRR") ["top", "median", "bottom"].forEach(k => o[k] = pctIn(o[k])) }
+    if (kind === "bm") { o.metric = metricOf(o.metric); if (o.metric === "IRR") ["max", "top", "median", "bottom", "min"].forEach(k => o[k] = pctIn(o[k])) }
     put(o, j, null);
   }
   return out;
@@ -1980,9 +1993,9 @@ function provOfMap(m) {
   return P;
 }
 // The sample CSVs are already in the app's own columns: every header is its field's own name.
-function provSample(kind, file, aoa) {
+function provSample(kind, file, aoa, shifted) {
   const keys = new Set(FIELDS[kind].map(f => f.key));
-  return dvCapture({ file, via: "sample", aoa, h: 0, cols: aoa[0].map(h => { const k = String(h).trim().toLowerCase(); return keys.has(k) ? { field: k, how: "exact" } : {} }) });
+  return dvCapture({ file, via: "sample", shifted, aoa, h: 0, cols: aoa[0].map(h => { const k = String(h).trim().toLowerCase(); return keys.has(k) ? { field: k, how: "exact" } : {} }) });
 }
 function landOnData() { state.top = "data"; try { history.replaceState(null, "", "#data") } catch {} }
 // The sample has nothing of the user's to check, so it opens straight on the analyses; real data lands on Data for review.
@@ -2145,7 +2158,9 @@ document.getElementById("wsOpen").addEventListener("change", async e => {
     const saved = String(ws.savedAt || "").slice(0, 10); state.prov = {}; dv.open = null;
     ["cf", "inv", "hist", "team", "sec"].forEach(k => { if (state[k]) state.prov[k] = ws.prov?.[k] ? { ...ws.prov[k], ws: { file: f.name, savedAt: saved } } : dvFill(dvFromRows({ file: f.name, savedAt: saved, rows: ws.raw[k], keys: FIELDS[k].map(x => x.key) }), null, state[k]) });
     ["cf", "inv", "hist", "team", "sec"].forEach(k => setStatus(k, state[k] ? `${f.name} · ${state[k].length} rows` : "Not loaded", state[k] ? "ok" : ""));
-    state.bmSrc = ws.bmSrc || "custom"; if (state.bmSrc === "sample") state.bmSample = normBm(parseCSV(SAMPLE.bm));
+    state.bmSrc = ws.bmSrc || "custom"; if (state.bmSrc === "sample") { // The sample's vintages moved with its dates; move its benchmark's by as much.
+      const yrs = Math.min(...state.cf.map(x => x.vintage).filter(isFinite)) - Math.min(...parseCSV(SAMPLE.cf).map(r => num(r.vintage)).filter(isFinite));
+      state.bmSample = Object.fromEntries(Object.entries(normBm(parseCSV(SAMPLE.bm))).map(([v, q]) => [+v + (isFinite(yrs) ? yrs : 0), q])) }
     document.getElementById("bmSrc").value = state.bmSrc;
     document.getElementById("gpTitle").textContent = ws.title || "GP Diligence";
     state.scen = null; if (ws.scenarios?.list?.length) { state.scen = { ...ws.scenarios, key: scenKey() }; saveScen() }

@@ -956,7 +956,10 @@ document.querySelectorAll(".drop").forEach(el => {
 });
 document.getElementById("sampleBtn").addEventListener("click", () => {
   state.inUnit = 1; document.getElementById("inUnit").value = "1";
-  loadAoa("commit", parseCSVRows(SAMPLE.commit), { file: "lp_commitments.csv", via: "sample" }); loadAoa("hold", parseCSVRows(SAMPLE.hold), { file: "lp_holdings.csv", via: "sample" });
+  // Dated to run to the last quarter end: the latest mark sets the shift, and every date and vintage moves with it.
+  const dates = SAMPLE.hold.match(/\d{4}-\d{2}-\d{2}/g).sort(), D = sampleDating(dates.at(-1), dates[0]);
+  loadAoa("commit", D.yearCols(parseCSVRows(SAMPLE.commit), ["vintage"]), { file: "lp_commitments.csv", via: "sample", shifted: D.note });
+  loadAoa("hold", parseCSVRows(D.text(SAMPLE.hold)), { file: "lp_holdings.csv", via: "sample", shifted: D.note });
   setStatus("commit", `Sample · ${state.commit.length} funds`, "ok"); setStatus("hold", `Sample · ${state.hold.length} positions`, "ok");
   state.isSample = true; document.getElementById("lpTitle").textContent = "Exposure Model (sample)"; landOnAnalysis(); render();
   // From the Data view the sample button disappears with it; keep keyboard users on the view they landed on.
@@ -1090,14 +1093,36 @@ function dvKeep(rows, pred, why) {
   out.idx = idx; out.drop = drop; return out;
 }
 // Provenance of one sheet as matched: cols[i] = { field, how, conf } for each column of the header row.
-function dvCapture({ file, sheet, via, aoa, h, cols }) {
+function dvCapture({ file, sheet, via, aoa, h, cols, shifted }) {
   const rn = j => aoa.rowNo?.[j] ?? j + 1, c0 = aoa.col0 || 0, head = aoa[h] || [], data = aoa.slice(h + 1);
   const width = data.reduce((w, r) => Math.max(w, r.length), Math.max(head.length, cols.length)), fields = [], ignored = [];
   for (let i = 0; i < width; i++) { const c = cols[i] || {}, hdr = String(head[i] ?? "").trim();
     if (c.field) fields.push({ key: c.field, i, col: dvCol(c0 + i), header: hdr, how: c.how || "", conf: c.conf || "", dates: data.some(r => r[i] instanceof Date) });
     else if (hdr || data.some(r => String(r[i] ?? "").trim())) ignored.push({ col: dvCol(c0 + i), header: hdr }) }
   const rows = data.map((r, j) => ({ r: rn(h + 1 + j), v: Object.fromEntries(fields.map(f => [f.key, dvRaw(r[f.i])])), out: [], skip: null }));
-  return { file, sheet: sheet || null, via, headerRow: rn(h), fields, ignored, rows, grid: dvGrid(aoa, fields.reduce((m, f) => Math.max(m, f.i + 1), 0)) };
+  return { file, sheet: sheet || null, via, headerRow: rn(h), fields, ignored, rows, grid: dvGrid(aoa, fields.reduce((m, f) => Math.max(m, f.i + 1), 0)), ...(shifted ? { shifted } : {}) };
+}
+// The sample is fictional, so it is dated to look current: every date moves forward by whole months so the latest
+// (latest, an ISO date) lands on the last quarter end on or before today. Month ends stay month ends, so quarter ends
+// stay quarter ends; other days keep their day. Year-only fields (vintages, years founded or joined) move by whole
+// years only, by as much as the year of the earliest date (first) moved, so a vintage stays its first capital call's year.
+function sampleDating(latest, first, today = new Date()) {
+  const q = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1), qm = Math.floor(q.getMonth() / 3) * 3;
+  const endY = q.getFullYear() - (qm ? 0 : 1), endM = qm ? qm : 12; // the quarter end, as year and month (1-12)
+  const [ly, lm] = latest.split("-").map(Number), months = (endY - ly) * 12 + endM - lm;
+  const days = (y, m) => new Date(Date.UTC(y, m, 0)).getUTCDate();
+  const move = (y, m, d) => { const k = y * 12 + m - 1 + months, ny = Math.floor(k / 12), nm = k % 12 + 1;
+    return [ny, nm, d == null ? null : d === days(y, m) ? days(ny, nm) : Math.min(d, days(ny, nm))] };
+  const [fy, fm, fd] = first.split("-").map(Number), years = move(fy, fm, fd)[0] - fy;
+  const pad = n => String(n).padStart(2, "0"), to = `${endY}-${pad(endM)}-${pad(days(endY, endM))}`;
+  return { months, years, to,
+    // Every YYYY-MM-DD or YYYY-MM in a CSV's text, milestones like "2021-09: Acquired…" included.
+    text: t => months ? t.replace(/\b(\d{4})-(0[1-9]|1[0-2])(?:-(\d{2}))?\b/g, (_, y, m, d) => {
+      const [ny, nm, nd] = move(+y, +m, d == null ? null : +d); return `${ny}-${pad(nm)}${nd == null ? "" : `-${pad(nd)}`}` }) : t,
+    // Shifts the named year-only columns of a parsed sheet (header in row 0) in place.
+    yearCols: (aoa, cols) => { if (!years) return aoa; const at = cols.map(c => aoa[0].findIndex(h => String(h).trim().toLowerCase() === c)).filter(i => i >= 0);
+      aoa.slice(1).forEach(r => at.forEach(i => { if (/^\d{4}$/.test(String(r[i] ?? "").trim())) r[i] = String(+r[i] + years) })); return aoa },
+    note: months ? `dates moved forward ${months} month${months === 1 ? "" : "s"} so the sample runs to ${days(endY, endM)} ${"Mar Jun Sep Dec".split(" ")[endM / 3 - 1]} ${endY}` : "" };
 }
 // Rows that arrive already in the app's own columns, with no sheet behind them (an old workspace).
 function dvFromRows({ file, savedAt, rows, keys }) {
@@ -1145,7 +1170,7 @@ const dvWhy = why => Object.entries(why).map(([w, n]) => `${n} ${w.charAt(0).toL
 function dvSrcText(P) {
   if (!P) return "";
   if (P.noSource) return `Saved workspace (${P.ws.file}, saved ${P.ws.savedAt || "date unknown"})`;
-  if (P.via === "sample") return `Sample data (${P.file})`;
+  if (P.via === "sample") return `Sample data (${P.file})${P.shifted ? `, ${P.shifted}` : ""}`;
   return `${P.file}${P.sheet ? ` › ${P.sheet}` : ""}, header row ${P.headerRow}`;
 }
 // One card per kind. live: buttons that open the audit pane; otherwise plain text for the report.

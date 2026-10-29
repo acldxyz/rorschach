@@ -280,12 +280,13 @@ def write(name, rs):
 
 write("cash_flows.csv", cf_rows)
 write("investments.csv", rows)
-# Illustrative venture quartiles by vintage (made up; not any data provider's figures).
+# Illustrative venture quartiles by vintage (made up; not any data provider's figures), with each vintage's
+# best and worst fund as published tables give them: (top, median, bottom, max, min).
 bm = []
-for v, q in {2014: dict(TVPI=(3.0, 2.0, 1.3), IRR=(0.25, 0.15, 0.07), DPI=(2.0, 1.0, 0.4)),
-             2017: dict(TVPI=(2.6, 1.8, 1.3), IRR=(0.28, 0.18, 0.09), DPI=(0.9, 0.35, 0.1)),
-             2021: dict(TVPI=(1.3, 1.0, 0.85), IRR=(0.08, 0.0, -0.06), DPI=(0.05, 0.0, 0.0))}.items():
-    for m, (top, med, bot) in q.items(): bm.append(dict(vintage=v, metric=m, top=top, median=med, bottom=bot))
+for v, q in {2014: dict(TVPI=(3.0, 2.0, 1.3, 5.6, 0.6), IRR=(0.25, 0.15, 0.07, 0.41, -0.09), DPI=(2.0, 1.0, 0.4, 4.8, 0.1)),
+             2017: dict(TVPI=(2.6, 1.8, 1.3, 4.7, 0.7), IRR=(0.28, 0.18, 0.09, 0.47, -0.07), DPI=(0.9, 0.35, 0.1, 2.3, 0.0)),
+             2021: dict(TVPI=(1.3, 1.0, 0.85, 2.2, 0.55), IRR=(0.08, 0.0, -0.06, 0.31, -0.24), DPI=(0.05, 0.0, 0.0, 0.45, 0.0))}.items():
+    for m, (top, med, bot, hi, lo) in q.items(): bm.append(dict(vintage=v, metric=m, top=top, median=med, bottom=bot, max=hi, min=lo))
 write("benchmarks.csv", bm)
 write("team.csv", TEAM)
 write("company_history.csv", hist)
