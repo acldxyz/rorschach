@@ -239,7 +239,7 @@ tr.total td { font-weight: 600; border-top: 2px solid var(--ink-3) }
 /* Sortable headers: the header text is a button; the active column is marked and carries an arrow. */
 .sortbtn { all: unset; cursor: pointer; font: inherit; color: inherit; letter-spacing: inherit; text-transform: inherit; border-radius: 3px }
 .sortbtn:hover, .sortbtn.on { color: var(--accent) } .sortbtn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px }
-/* Checklist dropdown (Annual cash flows' fund picker). */
+/* Checklist dropdown: the vehicle pickers (Annual cash flows, Portfolio slices, Return concentration). */
 .ms { position: relative } .ms summary { list-style: none; cursor: pointer; font: 500 13px var(--body); border: 1px solid var(--rule); border-radius: 4px; padding: 6px 30px 6px 12px; background: var(--panel); position: relative }
 .ms summary::-webkit-details-marker { display: none } .ms summary::after { content: "▾"; position: absolute; right: 10px; color: var(--ink-3) }
 .ms summary:hover, .ms[open] summary { border-color: var(--accent) } .ms summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px }
@@ -316,7 +316,11 @@ sup.fn { font-size: .75em; margin-left: 1px; color: var(--ink-3) }
 .gpctl { gap: 8px 16px } .gpctl select { max-width: 15em }
 .gpkey { display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: 12px; color: var(--ink-2) }
 .gpkey span { display: inline-flex; align-items: center; gap: 6px }
-.gpkey i { width: 14px; height: 3px; border-radius: 2px; display: inline-block }
+.gpkey i { width: 14px; height: 3px; border-radius: 2px; display: inline-block } .gpkey.area i { width: 12px; height: 12px }
+/* Bodies redrawn by a vehicle picker keep the panel's own spacing. */
+#sliceBody, #concBody { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; min-width: 0 } .layers { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; margin-top: 8px }
+.layers h3, .layers .note { margin: 0 }
+.gpkey .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--ink-2); box-shadow: 0 0 0 2px var(--panel) }
 .co-head { display: flex; gap: 8px; justify-content: space-between; align-items: start }
 /* Securities held, in each company card: a Priced and a Convertible table, each scrolling inside its own box.
    The security name stays put while the rest scrolls; text columns read left, figures right. */
@@ -488,7 +492,7 @@ const BM_SOURCES = {
 };
 // Figures typed or uploaded per source stay in this browser only.
 const bmStore = { load(k) { try { return JSON.parse(localStorage.getItem("bm:" + k)) || {} } catch { return {} } }, save(k, v) { try { localStorage.setItem("bm:" + k, JSON.stringify(v)) } catch {} } };
-const state = { sumView: (() => { try { return localStorage.getItem("sumView") || "summary" } catch { return "summary" } })(), cur: { sym: "$", unit: { div: 1, suffix: "", word: "" } }, curMode: "local", inUnit: 1, rates: (() => { try { return JSON.parse(localStorage.getItem("fx-rates")) || {} } catch { return {} } })(), isSample: false, raw: {}, prov: {}, top: "data", samplingOff: false, view: "record", coFund: "all", coFlagOnly: false, cf: null, inv: null, bm: null, bmSrc: "sample", bmSample: null, gp: "", dim: "stage", scFund: "all", gpFund: "all", gpSec: "all", gpWin: "16", gpCo: "", scope: "all" };
+const state = { sumView: (() => { try { return localStorage.getItem("sumView") || "summary" } catch { return "summary" } })(), cur: { sym: "$", unit: { div: 1, suffix: "", word: "" } }, curMode: "local", inUnit: 1, rates: (() => { try { return JSON.parse(localStorage.getItem("fx-rates")) || {} } catch { return {} } })(), isSample: false, raw: {}, prov: {}, top: "data", samplingOff: false, view: "record", coFund: "all", coFlagOnly: false, cf: null, inv: null, bm: null, bmSrc: "sample", bmSample: null, gp: "", dim: "stage", scFund: "all", gpFund: "all", gpSec: "all", gpWin: "16", gpCo: "", annFunds: null, sliceFunds: null, concFunds: null };
 let charts = [];
 
 // ---------- parsing ----------
@@ -685,20 +689,38 @@ function setChartDefaults() {
   // know how to tween each property, and without them tooltips stall while fading in. 0 = no animation.
   Chart.defaults.animation.duration = state.capturing || matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 350;
 }
-// Annual cash flows: the funds shown are picked in a checklist dropdown (one, several or all). state.annFunds is
-// null for all funds, else the chosen names; ticking redraws only this chart so the list stays open while picking.
+// Vehicle pickers: checklist dropdowns that choose one, several or all funds. Each one has a short key: its
+// choice lives in state[stateKey] (null = all funds, else the chosen names), its boxes carry data-<key>, and
+// ticking one calls the redraw registered with onPick, not a full render, so the list stays open while picking.
 // A choice that names none of the loaded funds (new data was loaded) falls back to all of them.
-const annShown = F => { const S = state.annFunds ? F.filter(f => state.annFunds.includes(f.name)) : F; return state.annFunds && state.annFunds.length && !S.length ? F : S };
-function fundPicker(F) {
-  const on = n => !state.annFunds || state.annFunds.includes(n), k = annShown(F).length;
-  const label = k === F.length ? "All funds" : k === 0 ? "No funds" : k <= 2 ? annShown(F).map(f => fundShort(f.name)).join(", ") : `${k} of ${F.length} funds`;
-  return `<details class="ms" id="annPick"><summary aria-label="Funds shown: ${esc(label)}"><span class="note">Funds</span> <b id="annLbl">${esc(label)}</b></summary>
-    <div class="ms-list" role="group" aria-label="Funds shown">
-      <label class="ms-all"><input type="checkbox" data-ann="*"${k === F.length ? " checked" : ""}> All funds</label>
-      ${F.map(f => `<label><input type="checkbox" data-ann="${esc(f.name)}"${on(f.name) ? " checked" : ""}> ${esc(f.name)}</label>`).join("")}</div></details>`;
+const pickers = {};
+const onPick = (key, stateKey, redraw) => pickers[key] = { stateKey, redraw };
+const pickShown = (F, stateKey) => { const sel = state[stateKey], S = sel ? F.filter(f => sel.includes(f.name)) : F; return sel && sel.length && !S.length ? F : S };
+const pickNames = (F, S) => S.length === F.length ? "all funds" : S.map(f => f.name).join(S.length === 2 ? " and " : ", ");
+function vehiclePicker(key, F, stateKey, what = "Funds shown") {
+  const S = pickShown(F, stateKey), sel = state[stateKey], on = n => !sel || sel.includes(n), k = S.length;
+  const label = k === F.length ? "All funds" : k === 0 ? "No funds" : k <= 2 ? S.map(f => fundShort(f.name)).join(", ") : `${k} of ${F.length} funds`;
+  return `<details class="ms" id="${key}Pick"><summary aria-label="${esc(what)}: ${esc(label)}"><span class="note">Funds</span> <b id="${key}Lbl">${esc(label)}</b></summary>
+    <div class="ms-list" role="group" aria-label="${esc(what)}">
+      <label class="ms-all"><input type="checkbox" data-${key}="*"${k === F.length ? " checked" : ""}> All funds</label>
+      ${F.map(f => `<label><input type="checkbox" data-${key}="${esc(f.name)}"${on(f.name) ? " checked" : ""}> ${esc(f.name)}</label>`).join("")}</div></details>`;
 }
+document.addEventListener("change", e => {
+  const key = Object.keys(pickers).find(k => e.target.matches?.(`[data-${k}]`)); if (!key) return;
+  const { stateKey, redraw } = pickers[key], v = e.target.getAttribute(`data-${key}`), pick = document.getElementById(key + "Pick");
+  const F = fundStats(cfView()), all = F.map(f => f.name), cur = state[stateKey] || all.slice();
+  const next = v === "*" ? (e.target.checked ? all : []) : e.target.checked ? [...cur, v] : cur.filter(n => n !== v);
+  state[stateKey] = next.length === all.length ? null : all.filter(n => next.includes(n));
+  pick.querySelectorAll(`[data-${key}]`).forEach(i => { const n = i.getAttribute(`data-${key}`); i.checked = n === "*" ? !state[stateKey] : !state[stateKey] || state[stateKey].includes(n) });
+  const tmp = document.createElement("div"); tmp.innerHTML = vehiclePicker(key, F, stateKey, pick.querySelector(".ms-list").getAttribute("aria-label")); pick.querySelector("summary").replaceWith(tmp.querySelector("summary"));
+  redraw(F); decorateDownloads();
+});
+// Annual cash flows: one bar pair per fund picked.
+const annShown = F => pickShown(F, "annFunds");
+const fundPicker = F => vehiclePicker("ann", F, "annFunds");
+const dropChart = id => { const old = Chart.getChart(id); if (old) { charts = charts.filter(c => c !== old); old.destroy() } };
 function drawAnnual(F, fundColor) {
-  const old = Chart.getChart("cAnnual"); if (old) { charts = charts.filter(c => c !== old); old.destroy() }
+  dropChart("cAnnual");
   const S = annShown(F), note = document.getElementById("annNote");
   note.textContent = S.length ? `Capital called (below zero) and distributed (above): ${S.length === F.length ? "all funds" : S.map(f => f.name).join(", ")}.` : "Pick at least one fund to chart.";
   const years = [...new Set(S.flatMap(f => f.rows.map(r => r.date.getFullYear())))].sort();
@@ -710,18 +732,12 @@ function drawAnnual(F, fundColor) {
     plugins: { legend: { position: "bottom", labels: { boxWidth: 10, filter: i => i.text.endsWith("Called"), generateLabels: ch => Chart.defaults.plugins.legend.labels.generateLabels(ch).filter(l => l.text.endsWith("Called")).map(l => ({ ...l, text: l.text.replace(" · Called", "") })) } },
       tooltip: { callbacks: { label: c => `${c.dataset.label}: ${fm(c.raw)}` } } } } }));
 }
-document.addEventListener("change", e => {
-  const box = e.target.closest?.("[data-ann]"); if (!box) return;
-  const F = fundStats(cfView()), all = F.map(f => f.name), cur = state.annFunds || all.slice();
-  let next = box.dataset.ann === "*" ? (box.checked ? all : []) : box.checked ? [...cur, box.dataset.ann] : cur.filter(n => n !== box.dataset.ann);
-  state.annFunds = next.length === all.length ? null : all.filter(n => next.includes(n));
-  const fundColor = Object.fromEntries(F.map((f, i) => [f.name, series(i)])), pick = document.getElementById("annPick");
-  pick.querySelectorAll("[data-ann]").forEach(i => i.checked = i.dataset.ann === "*" ? !state.annFunds : !state.annFunds || state.annFunds.includes(i.dataset.ann));
-  const lbl = pick.querySelector("summary"), tmp = document.createElement("div"); tmp.innerHTML = fundPicker(F); lbl.replaceWith(tmp.querySelector("summary"));
-  drawAnnual(F, fundColor); decorateDownloads();
-});
+onPick("ann", "annFunds", F => drawAnnual(F, Object.fromEntries(F.map((f, i) => [f.name, series(i)]))));
 // The checklist closes on Escape (focus back on its button) or a click anywhere outside it.
 document.addEventListener("click", e => document.querySelectorAll("details.ms[open]").forEach(d => { if (!d.contains(e.target)) d.open = false }));
+// The list opens leftward from the button's right edge; a button near the left of a narrow screen opens it rightward instead.
+document.addEventListener("toggle", e => { const d = e.target; if (!d.matches?.("details.ms") || !d.open) return; const l = d.querySelector(".ms-list"); l.style.left = l.style.right = "";
+  if (l.getBoundingClientRect().left < 8) { l.style.left = "0"; l.style.right = "auto" } }, true);
 document.addEventListener("keydown", e => { if (e.key !== "Escape") return; const d = e.target.closest?.("details.ms[open]"); if (d) { d.open = false; d.querySelector("summary").focus() } });
 function renderView() {
   charts.forEach(c => c.destroy()); charts = [];
@@ -795,17 +811,13 @@ function renderView() {
     <section class="panel"><div class="panel-head"><h2>Annual cash flows</h2>${fundPicker(F)}</div><p class="note" id="annNote"></p><div class="chart tall"><canvas id="cAnnual"></canvas></div></section></div>`;
 
   if (state.inv) {
-    html += `<section class="panel"><div class="panel-head"><h2>Portfolio slices</h2><div class="row"><label for="dimSel" class="note">Slice by</label><select id="dimSel">
-      ${[["stage", "Stage at entry"], ["sector", "Sector"], ["outcome", "Outcome"], ["bucket", "Gross multiple"], ["entry_year", "Entry year"], ["deal_lead", "Deal lead"], ["board", "Board seat"]].map(([k, l]) => `<option value="${k}"${state.dim === k ? " selected" : ""}>${l}</option>`).join("")}</select></div></div>
-      <div class="grid3"><div><h3>Invested capital mix by fund</h3><div class="chart"><canvas id="cMix"></canvas></div></div><div><h3>Gross TVM</h3><div class="chart"><canvas id="cSliceTvm"></canvas></div></div><div><h3>Number of investments</h3><div class="chart"><canvas id="cCount"></canvas></div></div></div>
-      <div class="tbl" id="sliceTbl"></div></section>`;
-    html += `<section class="panel"><div class="panel-head"><h2>Return concentration</h2><select id="scopeSel" aria-label="Funds included">
-      <option value="all">All funds</option>${F.map(f => `<option value="${esc(f.name)}">${esc(f.name)}</option>`).join("")}</select></div>
-      <p class="note">Venture returns come from a few companies. These charts show how much of the value the top deals carry, how capital is spread across outcomes, and whether follow-on money went to the winners.</p>
-      <div class="kpis" id="concKpis"></div>
-      <div class="grid3"><div><h3>Cumulative share of value, best deals first</h3><div class="chart"><canvas id="cConc"></canvas></div></div>
-        <div><h3>Deals by gross multiple</h3><div class="chart"><canvas id="cBuckets"></canvas></div></div>
-        <div><h3>Initial vs follow-on capital by outcome</h3><div class="chart"><canvas id="cFollow"></canvas></div></div></div></section>
+    html += `<section class="panel" id="slicePanel"><div class="panel-head"><h2>Portfolio slices</h2><div class="row"><label for="dimSel" class="note">Slice by</label><select id="dimSel">
+      ${[["stage", "Stage at entry"], ["sector", "Sector"], ["outcome", "Outcome"], ["bucket", "Gross multiple"], ["entry_year", "Entry year"], ["deal_lead", "Deal lead"], ["board", "Board seat"]].map(([k, l]) => `<option value="${k}"${state.dim === k ? " selected" : ""}>${l}</option>`).join("")}</select>
+      ${vehiclePicker("slice", F, "sliceFunds", "Funds in these slices")}</div></div>
+      <p class="note" id="sliceNote"></p><div id="sliceBody"></div></section>`;
+    html += `<section class="panel" id="concPanel"><div class="panel-head"><h2>Return concentration</h2>${vehiclePicker("conc", F, "concFunds", "Funds in these charts")}</div>
+      <p class="note">Venture returns come from a few companies. These charts show how much of the value the top deals carry, how capital is spread across outcomes, whether follow-on money went to the winners, and how the portfolio's value built up deal by deal.</p>
+      <p class="note" id="concNote"></p><div id="concBody"></div></section>
       <section class="panel"><div class="panel-head"><h2>Value impairment</h2><p class="note">Write-off = exited below 0.25x gross. Time runs from the fund's entry to the exit date.</p></div>
         <div class="kpis" id="woKpis"></div>
         <div class="grid2"><div><h3>Write-offs by years from entry</h3><div class="chart"><canvas id="cWo"></canvas></div></div>
@@ -822,7 +834,6 @@ function renderView() {
       <section class="panel"><h2>Investments</h2><div class="tbl" id="invTbl"></div></section>`;
   } else html += `<div class="panel empty">Load the portfolio company file to add portfolio slices, return concentration and deal outcomes.</div>`;
   out.innerHTML = html;
-  document.getElementById("scopeSel") && (document.getElementById("scopeSel").value = state.scope);
 
   setChartDefaults();
 
@@ -1307,30 +1318,189 @@ function dealView(asOf) {
   });
 }
 
-function renderGross(F, fundColor, asOf) {
-  const D = dealView(asOf), dim = state.dim;
-  const order = dim === "bucket" ? BUCKETS : dim === "stage" ? [...STAGE_ORDER, ...new Set(D.map(d => d.stage).filter(x => !STAGE_ORDER.includes(x)))] : null;
-  const cats = order ? order.filter(c => D.some(d => d[dim] === c)) :
-    [...new Set(D.map(d => d[dim] || "Unspecified"))].sort((a, b) => dim === "entry_year" ? a.localeCompare(b) : D.filter(d => d[dim] === b).reduce((s, d) => s + d.invested, 0) - D.filter(d => d[dim] === a).reduce((s, d) => s + d.invested, 0));
+// Gross figures for a group of deals; IRR from each deal's cost at entry and value at exit (or the as-of date).
+function aggDeals(rows, asOf) {
+  const inv = rows.reduce((s, d) => s + d.invested, 0), tv = rows.reduce((s, d) => s + d.tv, 0);
+  const fl = rows.filter(d => d.entry).flatMap(d => [{ d: d.entry, a: -d.invested }, { d: d.exit || asOf, a: d.tv }]).sort((a, b) => a.d - b.d);
+  return { n: rows.length, inv, real: rows.reduce((s, d) => s + d.realized, 0), unr: rows.reduce((s, d) => s + d.unrealized, 0), tv, loss: rows.reduce((s, d) => s + d.loss, 0), tvm: tv / inv, irr: xirr(fl) };
+}
+// Portfolio slices for the funds picked. Categories and their colours come from every deal, so a category keeps
+// its colour (and its place) whichever funds are picked; the charts show the ones present in the picked funds.
+function drawSlices(F, Dall, asOf) {
+  ["cMix", "cSliceTvm", "cCount"].forEach(dropChart);
+  const dim = state.dim, S = pickShown(F, "sliceFunds"), names = S.map(f => f.name), D = Dall.filter(d => names.includes(d.fund));
+  const body = document.getElementById("sliceBody");
+  document.getElementById("sliceNote").textContent = S.length ? `Deals in ${pickNames(F, S)}: ${D.length} investment${D.length === 1 ? "" : "s"}.` : "";
+  if (!S.length || !D.length) { body.innerHTML = `<div class="empty" id="sliceEmpty">${S.length ? "No investments in the picked funds." : "No funds picked. Tick at least one fund under Funds to slice the portfolio."}</div>`; return }
+  const order = dim === "bucket" ? BUCKETS : dim === "stage" ? [...STAGE_ORDER, ...new Set(Dall.map(d => d.stage).filter(x => !STAGE_ORDER.includes(x)))] : null;
+  const catKey = d => d[dim] || "Unspecified", invIn = c => Dall.filter(d => catKey(d) === c).reduce((s, d) => s + d.invested, 0);
+  const cats = order ? order.filter(c => Dall.some(d => d[dim] === c)) :
+    [...new Set(Dall.map(catKey))].sort((a, b) => dim === "entry_year" ? a.localeCompare(b) : invIn(b) - invIn(a));
   // Categories keep one colour for the whole slice view; beyond eight they fold into Other.
-  const shown = cats.slice(0, cats.length > 8 ? 7 : 8), catOf = d => shown.includes(d[dim] || "Unspecified") ? (d[dim] || "Unspecified") : "Other";
-  const C = cats.length > 8 ? [...shown, "Other"] : shown;
-  const agg = rows => { const inv = rows.reduce((s, d) => s + d.invested, 0), tv = rows.reduce((s, d) => s + d.tv, 0);
-    const fl = rows.filter(d => d.entry).flatMap(d => [{ d: d.entry, a: -d.invested }, { d: d.exit || asOf, a: d.tv }]).sort((a, b) => a.d - b.d);
-    return { n: rows.length, inv, real: rows.reduce((s, d) => s + d.realized, 0), unr: rows.reduce((s, d) => s + d.unrealized, 0), tv, loss: rows.reduce((s, d) => s + d.loss, 0), tvm: tv / inv, irr: xirr(fl) } };
-
-  charts.push(new Chart(document.getElementById("cMix"), { type: "bar", data: { labels: F.map(f => fundShort(f.name)),
-    datasets: C.map((c, i) => ({ label: c, backgroundColor: series(i), borderColor: css("--panel"), borderWidth: 1,
-      data: F.map(f => { const all = D.filter(d => d.fund === f.name), s = all.reduce((t, d) => t + d.invested, 0); return s ? all.filter(d => catOf(d) === c).reduce((t, d) => t + d.invested, 0) / s : 0 }) })) },
+  const top = cats.slice(0, cats.length > 8 ? 7 : 8), catOf = d => top.includes(catKey(d)) ? catKey(d) : "Other";
+  const Call = cats.length > 8 ? [...top, "Other"] : top, colorOf = Object.fromEntries(Call.map((c, i) => [c, series(i)]));
+  const C = Call.filter(c => D.some(d => catOf(d) === c));
+  body.innerHTML = `<div><h3>Invested capital mix by fund</h3><div class="chart" id="mixBox" style="height:${Math.max(170, 96 + 42 * S.length)}px"><canvas id="cMix"></canvas></div></div>
+    <div class="grid2"><div><h3>Gross TVM</h3><div class="chart"><canvas id="cSliceTvm"></canvas></div></div><div><h3>Number of investments</h3><div class="chart"><canvas id="cCount"></canvas></div></div></div>
+    <div class="tbl" id="sliceTbl"></div>`;
+  setChartDefaults();
+  charts.push(new Chart(document.getElementById("cMix"), { type: "bar", data: { labels: S.map(f => fundShort(f.name)),
+    datasets: C.map(c => ({ label: c, backgroundColor: colorOf[c], borderColor: css("--panel"), borderWidth: 1, maxBarThickness: 34,
+      data: S.map(f => { const all = D.filter(d => d.fund === f.name), s = all.reduce((t, d) => t + d.invested, 0); return s ? all.filter(d => catOf(d) === c).reduce((t, d) => t + d.invested, 0) / s : 0 }) })) },
     options: { indexAxis: "y", scales: { x: { stacked: true, max: 1, ticks: { callback: fpa } }, y: { stacked: true, grid: { display: false } } },
-      plugins: { legend: { position: "bottom", labels: { boxWidth: 10, font: { size: 11 } } }, tooltip: { callbacks: { label: c => `${c.dataset.label}: ${fp(c.raw)}` } } } } }));
-  const byCat = C.map(c => agg(D.filter(d => catOf(d) === c)));
-  const catBar = (id, key, f) => charts.push(new Chart(document.getElementById(id), { type: "bar", data: { labels: C, datasets: [{ data: byCat.map(a => a[key]), backgroundColor: C.map((_, i) => series(i)), borderRadius: 4, borderSkipped: "start" }] },
+      plugins: { legend: { position: "bottom", labels: { boxWidth: 10, font: { size: 11 } } }, tooltip: { callbacks: { label: c => `${c.dataset.label}: ${fp(c.raw, 0)}` } } } } }));
+  const byCat = C.map(c => aggDeals(D.filter(d => catOf(d) === c), asOf));
+  const catBar = (id, key, f) => charts.push(new Chart(document.getElementById(id), { type: "bar", data: { labels: C, datasets: [{ data: byCat.map(a => a[key]), backgroundColor: C.map(c => colorOf[c]), borderRadius: 4, borderSkipped: "start", maxBarThickness: 64 }] },
     options: { scales: { x: { grid: { display: false }, ticks: { autoSkip: false, maxRotation: 45, font: { size: 11 } } }, y: { beginAtZero: true, ticks: { callback: v => f(v), precision: 0 } } }, plugins: { legend: { display: false }, tooltip: { callbacks: { label: c => f(c.raw) } } } } }));
   catBar("cSliceTvm", "tvm", v => fx(v, 1)); catBar("cCount", "n", v => String(v));
-  const tot = agg(D);
+  // Whole dollars, one-decimal multiples and rates, whole-number shares of the total.
+  const tot = aggDeals(D, asOf);
   document.getElementById("sliceTbl").innerHTML = `<table><thead><tr><th>${esc(document.querySelector(`#dimSel option[value="${dim}"]`).textContent)}</th><th>Deals</th><th>Invested</th><th>Realized</th><th>Unrealized</th><th>Total value</th><th>Losses</th><th>Gross TVM</th><th>Gross IRR</th><th>Loss ratio</th><th>% of invested</th></tr></thead><tbody>
-    ${C.map((c, i) => [c, byCat[i]]).concat([["Total", tot]]).map(([c, a]) => `<tr${c === "Total" ? ' class="total"' : ""}><td>${esc(c)}</td><td>${a.n}</td><td>${fm(a.inv)}</td><td>${fm(a.real)}</td><td>${fm(a.unr)}</td><td>${fm(a.tv)}</td><td>${fm(a.loss)}</td><td>${fx(a.tvm)}</td><td>${fp(a.irr)}</td><td>${fp(a.loss / a.inv)}</td><td>${fp(a.inv / tot.inv)}</td></tr>`).join("")}</tbody></table>`;
+    ${C.map((c, i) => [c, byCat[i]]).concat([["Total", tot]]).map(([c, a]) => `<tr${c === "Total" ? ' class="total"' : ""}><td>${esc(c)}</td><td>${a.n}</td><td>${fm(a.inv, 0)}</td><td>${fm(a.real, 0)}</td><td>${fm(a.unr, 0)}</td><td>${fm(a.tv, 0)}</td><td>${fm(a.loss, 0)}</td><td>${fx(a.tvm, 1)}</td><td>${fp(a.irr, 1)}</td><td>${fp(a.loss / a.inv, 0)}</td><td>${fp(a.inv / tot.inv, 0)}</td></tr>`).join("")}</tbody></table>`;
+}
+// Return concentration for the funds picked. Fund returner = a deal whose gross value is at least its own fund's committed size.
+function drawConc(F, Dall, asOf) {
+  ["cConc", "cBuckets", "cFollow", "cLayers"].forEach(dropChart);
+  const P = pickShown(F, "concFunds"), names = P.map(f => f.name), S = Dall.filter(d => names.includes(d.fund)), box = document.getElementById("concBody");
+  document.getElementById("concNote").textContent = P.length ? `Deals in ${pickNames(F, P)}: ${S.length} investment${S.length === 1 ? "" : "s"}.` : "";
+  if (!S.length) { box.innerHTML = `<div class="empty" id="concEmpty">${P.length ? "No investments in the picked funds." : "No funds picked. Tick at least one fund under Funds to see how value is concentrated."}</div>`; return }
+  box.innerHTML = `<div class="kpis" id="concKpis"></div>
+      <div class="grid3"><div><h3>Cumulative share of value, best deals first</h3><div class="chart"><canvas id="cConc"></canvas></div></div>
+        <div><h3>Deals by gross multiple</h3><div class="chart"><canvas id="cBuckets"></canvas></div></div>
+        <div><h3>Initial vs follow-on capital by outcome</h3><div class="chart"><canvas id="cFollow"></canvas></div></div></div>
+      <div class="layers"><h3>Portfolio value by investment, as added</h3>
+        <p class="note">Each layer is one investment, stacked in the order the fund made them so new deals land on top; its height is the fund's stake in that company each quarter, and it ends when the company is sold or shut down.</p>
+        <div class="gpkey area" id="layerKey"></div><div class="chart xtall"><canvas id="cLayers" role="img" aria-label="Stacked area chart of the value the funds held in each investment, by quarter, in the order the investments were made"></canvas></div>
+        <p class="note" id="layerNote"></p></div>`;
+  setChartDefaults();
+  const sizeOf = Object.fromEntries(F.map(f => [f.name, f.size])), sAgg = aggDeals(S, asOf);
+  const ranked = [...S].sort((a, b) => b.tv - a.tv), sumTop = k => ranked.slice(0, k).reduce((t, d) => t + d.tv, 0) / sAgg.tv;
+  const returners = S.filter(d => sizeOf[d.fund] > 0 && d.tv >= sizeOf[d.fund]);
+  const hits = S.filter(d => d.tvm >= 3), wo = S.filter(d => d.tvm < 0.25);
+  const topN = Math.max(1, Math.round(ranked.length * 0.1));
+  document.getElementById("concKpis").innerHTML = [
+    [fp(sumTop(1), 0), `of value from the best deal (${esc(ranked[0]?.company || "–")})`],
+    [fp(sumTop(topN), 0), `from the top ${topN} deal${topN > 1 ? "s" : ""} (top 10%)`],
+    [String(returners.length), `fund returner${returners.length === 1 ? "" : "s"}${returners.length ? ": " + returners.map(d => esc(d.company)).join(", ") : " (value ≥ fund size)"}`],
+    [fp(hits.length / S.length, 0), `of deals at 3x or better (${hits.length} of ${S.length})`],
+    [fp(wo.reduce((t, d) => t + d.invested, 0) / sAgg.inv, 0), `of capital in write-offs (${wo.length} deals)`],
+    [fp(S.reduce((t, d) => t + d.followOn, 0) / sAgg.inv, 0), "of capital went to follow-on rounds"]
+  ].map(([v, l]) => `<div><b>${v}</b><span>${l}</span></div>`).join("");
+  let cum = 0; const concPts = ranked.map((d, i) => { cum += d.tv; return { x: i + 1, y: cum / sAgg.tv, d } });
+  charts.push(new Chart(document.getElementById("cConc"), { type: "line", data: { datasets: [
+    { label: "Cumulative share of value", data: concPts, borderColor: css("--accent"), backgroundColor: css("--accent-soft"), fill: "origin", borderWidth: 2, pointRadius: 0, pointHoverRadius: 4, order: 2 },
+    { label: "If every deal contributed equally", data: [{ x: 0, y: 0 }, { x: ranked.length, y: 1 }], borderColor: css("--ink-2"), borderDash: [5, 4], borderWidth: 1.5, pointRadius: 0, fill: false, order: 1 }] },
+    options: { interaction: { mode: "nearest", intersect: false }, scales: { x: { type: "linear", min: 0, max: ranked.length, title: { display: true, text: "Deals, best first" }, grid: { display: false } }, y: { min: 0, max: 1, ticks: { callback: fpa } } },
+      plugins: { legend: { position: "bottom", labels: { boxWidth: 10 } }, tooltip: { filter: c => c.datasetIndex === 0, callbacks: { title: c => `Top ${c[0].raw.x}: ${c[0].raw.d.company}`, label: c => `${fp(c.raw.y, 0)} of total value` } } } } }));
+  const bAgg = BUCKETS.map(b => S.filter(d => d.bucket === b));
+  charts.push(new Chart(document.getElementById("cBuckets"), { type: "bar", data: { labels: BUCKETS.map(b => b.replace(" (<0.25x)", "")), datasets: [
+    { label: "Share of deals", data: bAgg.map(g => g.length / S.length), backgroundColor: css("--q2"), borderRadius: 4, borderSkipped: "start", n: bAgg.map(g => g.length) },
+    { label: "Share of value", data: bAgg.map(g => g.reduce((t, d) => t + d.tv, 0) / sAgg.tv), backgroundColor: css("--q1"), borderRadius: 4, borderSkipped: "start" }] },
+    options: { scales: { x: { grid: { display: false }, ticks: { autoSkip: false, font: { size: 11 } } }, y: { beginAtZero: true, ticks: { callback: fpa } } },
+      plugins: { legend: { position: "bottom", labels: { boxWidth: 10 } }, tooltip: { callbacks: { label: c => `${c.dataset.label}: ${fp(c.raw, 0)}${c.dataset.n ? ` (${c.dataset.n[c.dataIndex]} deals)` : ""}` } } } } }));
+  charts.push(new Chart(document.getElementById("cFollow"), { type: "bar", data: { labels: BUCKETS.map(b => b.replace(" (<0.25x)", "")), datasets: [
+    { label: "Initial cheques", data: bAgg.map(g => g.reduce((t, d) => t + d.initial, 0)), backgroundColor: css("--s1"), borderColor: css("--panel"), borderWidth: 1 },
+    { label: "Follow-on", data: bAgg.map(g => g.reduce((t, d) => t + d.followOn, 0)), backgroundColor: css("--s2"), borderColor: css("--panel"), borderWidth: 1 }] },
+    options: { scales: { x: { stacked: true, grid: { display: false }, ticks: { autoSkip: false, font: { size: 11 } } }, y: { stacked: true, ticks: { callback: fa }, title: unitTitle() } },
+      plugins: { legend: { position: "bottom", labels: { boxWidth: 10 } }, tooltip: { callbacks: { label: c => `${c.dataset.label}: ${fm(c.raw)}` } } } } }));
+
+  drawLayers(S, asOf);
+}
+// Portfolio value by investment, as added. One layer per company in entry order, each quarter-end worth:
+//  - from the history file, ownership × the latest post-money known by then (round rows carry post-money, report
+//    rows carry ownership), the last mark held between rounds, and cost (fund invested to date) until a first mark;
+//  - in the latest quarter, the reported unrealized value, so the stack ends on the portfolio file's marks;
+//  - without history rows, a straight line from cost at entry to today's unrealized value (or the exit proceeds).
+// A layer ends in the quarter the company is exited: proceeds are cash returned, not value still held.
+const qIdx = d => d.getFullYear() * 4 + Math.floor(d.getMonth() / 3), qName = i => `${Math.floor(i / 4)} Q${(i % 4) + 1}`;
+function layerSeries(S, asOf) {
+  const H = histByCompany(), endQ = qIdx(asOf);
+  const deals = S.filter(d => d.entry && qIdx(d.entry) <= endQ).sort((a, b) => a.entry - b.entry || a.company.localeCompare(b.company));
+  if (!deals.length) return null;
+  const startQ = Math.min(...deals.map(d => qIdx(d.entry))), Q = Array.from({ length: endQ - startQ + 1 }, (_, i) => startQ + i);
+  const anchored = []; let fallback = 0;
+  const layers = deals.map(d => {
+    const h = (H[d.company] || []).filter(r => r.date), e = qIdx(d.entry), held = d.status !== "Realized";
+    // The first quarter not held: the exit quarter; a realized deal with no exit date ends after its last history row.
+    const x = d.exit ? qIdx(d.exit) : held ? endQ + 1 : h.length ? qIdx(h[h.length - 1].date) + 1 : e + 1;
+    const vals = Q.map(() => 0), basis = Q.map(() => "");
+    if (h.length) {
+      let k = 0, post = NaN, own = NaN, cost = 0;
+      Q.forEach((q, i) => {
+        while (k < h.length && qIdx(h[k].date) <= q) { const r = h[k++]; if (r.post_money > 0) post = r.post_money; if (isFinite(r.ownership)) own = r.ownership; if (r.fund_invested > 0) cost += r.fund_invested }
+        if (q < e || q >= x) return;
+        if (isFinite(post) && isFinite(own)) { vals[i] = own * post; basis[i] = "Ownership × latest post-money" } else { vals[i] = cost > 0 ? cost : d.initial; basis[i] = "Cost" } });
+      const li = Q.length - 1;
+      if (held && basis[li] && isFinite(d.unrealized)) { if (Math.abs(vals[li] - d.unrealized) > 0.005 * Math.max(1, d.unrealized)) anchored.push({ company: d.company, hist: vals[li], mark: d.unrealized }); vals[li] = d.unrealized; basis[li] = "Reported unrealized value" }
+    } else {
+      fallback++;
+      const end = held ? endQ : x, target = held ? d.unrealized : d.realized, n = end - e;
+      Q.forEach((q, i) => { if (q < e || q >= x) return; vals[i] = n > 0 ? d.invested + (target - d.invested) * (q - e) / n : target; basis[i] = "Straight line, cost to current value" });
+    }
+    return { company: d.company, fund: d.fund, e, x, vals, basis, peak: Math.max(...vals) };
+  });
+  return { Q, layers, anchored, fallback, total: Q.map((_, i) => layers.reduce((t, l) => t + l.vals[i], 0)) };
+}
+function drawLayers(S, asOf) {
+  const L = layerSeries(S, asOf), keyEl = document.getElementById("layerKey"), note = document.getElementById("layerNote");
+  if (!L) { keyEl.innerHTML = ""; note.textContent = "No investment has an entry date to place it in time."; return }
+  // The eight largest by peak value get series colours, so the winners read whether still held or already sold;
+  // the rest are faint grey layers with thin panel-coloured separators, still one layer each in entry order.
+  const named = [...L.layers].sort((a, b) => b.peak - a.peak).slice(0, 8).filter(l => l.peak > 0);
+  L.layers.forEach(l => l.col = null); named.forEach((l, i) => l.col = series(i));
+  const grey = css("--ink-3"), panel = css("--panel"), last = L.Q.length - 1; let hover = null;
+  const fillOf = (l, k) => { const on = hover == null || hover === k; return l.col ? alpha(l.col, hover == null ? 0.8 : on ? 0.95 : 0.28) : alpha(grey, hover == null ? 0.26 : on ? 0.7 : 0.1) };
+  const ds = L.layers.map((l, k) => ({ label: l.company, data: l.vals, fill: k ? "-1" : "origin", tension: 0, pointRadius: 0, pointHoverRadius: 0, pointHitRadius: 0,
+    backgroundColor: () => fillOf(l, k), borderColor: () => hover === k ? css("--ink") : panel, borderWidth: () => hover === k ? 1.5 : 0.75,
+    segment: { borderColor: c => c.p0.parsed.y === 0 && c.p1.parsed.y === 0 ? "transparent" : undefined } }));
+  // The layer under the pointer: interpolate each layer between the two nearest quarters and walk up the stack.
+  const layerAt = (c, e) => { const A = c.chartArea; if (e.x < A.left || e.x > A.right || e.y < A.top || e.y > A.bottom) return null;
+    const xs = c.scales.x, step = L.Q.length > 1 ? xs.getPixelForValue(1) - xs.getPixelForValue(0) : 1, t = Math.min(last, Math.max(0, (e.x - xs.getPixelForValue(0)) / step));
+    const i0 = Math.floor(t), i1 = Math.min(last, i0 + 1), f = t - i0, y = c.scales.y.getValueForPixel(e.y); let cum = 0;
+    for (let k = 0; k < L.layers.length; k++) { const v = L.layers[k].vals[i0] * (1 - f) + L.layers[k].vals[i1] * f; if (v > 0 && y >= cum && y < cum + v) return k; cum += v }
+    return null };
+  // Chart.js replays the last pointer event after each update, so events from before the pointer left are ignored.
+  let leftAt = -1;
+  const setHover = (c, k) => { if (k === hover) return; hover = k; c.update("none") };
+  const entryDots = { id: "entryDots", afterDatasetsDraw(c) { const { ctx } = c, xs = c.scales.x, ys = c.scales.y; ctx.save();
+    L.layers.forEach((l, k) => { const i = l.e - L.Q[0]; if (!(l.vals[i] > 0)) return; let base = 0; for (let j = 0; j < k; j++) base += L.layers[j].vals[i];
+      ctx.beginPath(); ctx.arc(xs.getPixelForValue(i), ys.getPixelForValue(base), hover === k ? 4.5 : c.width < 560 ? 2 : 3, 0, 2 * Math.PI);
+      ctx.fillStyle = l.col || css("--ink-2"); ctx.strokeStyle = panel; ctx.lineWidth = 1.5; ctx.fill(); ctx.stroke() });
+    ctx.restore() } };
+  const ch = new Chart(document.getElementById("cLayers"), { type: "line", data: { labels: L.Q.map(qName), datasets: ds }, plugins: [entryDots],
+    options: { interaction: { mode: "index", intersect: false }, onHover: (e, els, c) => setHover(c, e.type === "mouseout" || (e.native?.timeStamp ?? 0) <= leftAt ? null : layerAt(c, e)),
+      scales: { x: { grid: { display: false }, ticks: { autoSkip: false, maxRotation: 0, callback: function (v, i) { const q = L.Q[i]; if (q % 4) return null; const y = Math.floor(q / 4); return this.chart.width < 560 && y % 2 ? null : String(y) } } },
+        y: { stacked: true, beginAtZero: true, ticks: { callback: fa }, title: unitTitle("Value held") } },
+      plugins: { legend: { display: false }, tooltip: { displayColors: false, filter: (c, i) => i === 0, callbacks: {
+        title: c => `${qName(L.Q[c[0].dataIndex])}${c[0].dataIndex === last ? " (latest)" : ""}`,
+        label: c => `Total: ${fm(L.total[c.dataIndex], 0)}`,
+        afterBody: c => { const i = c[0].dataIndex, tot = L.total[i], live = L.layers.map((l, k) => ({ l, k, v: l.vals[i] })).filter(o => o.v > 0).sort((a, b) => b.v - a.v);
+          const top = live.slice(0, 5), out = top.length ? ["Top contributors:", ...top.map(o => `${o.l.company} (${fundShort(o.l.fund)}): ${fm(o.v, 0)} · ${fp(o.v / tot, 0)}`)] : [];
+          if (live.length > 5) out.push(`${live.length - 5} more: ${fm(live.slice(5).reduce((t, o) => t + o.v, 0), 0)}`);
+          if (hover != null && !top.some(o => o.k === hover) && L.layers[hover].vals[i] > 0) out.push(`Under pointer: ${L.layers[hover].company}: ${fm(L.layers[hover].vals[i], 0)}`);
+          const added = L.layers.filter(l => l.e === L.Q[i] && l.vals[i] > 0).map(l => l.company);
+          if (added.length) out.push(`Added this quarter: ${added.slice(0, 3).join(", ")}${added.length > 3 ? ` and ${added.length - 3} more` : ""}`);
+          return out } } } } } });
+  ch.canvas.addEventListener("mouseleave", e => { leftAt = e.timeStamp; setHover(ch, null) });
+  ch.$layers = L; ch.$hover = () => hover;
+  // Excel: one row per company-quarter held, value in full units of the display currency.
+  const u = state.cur.disp, money = v => ({ t: "n", v: Math.round(v), z: "#,##0" });
+  ch.exportRows = () => [["Company", "Fund", "Quarter", `Value held (${u}, full units)`, "Entry quarter", "Basis"],
+    ...L.layers.flatMap(l => L.Q.map((q, i) => [q, i]).filter(([, i]) => l.basis[i]).map(([q, i]) => [l.company, l.fund, qName(q), money(l.vals[i]), q === l.e ? "Yes" : "", l.basis[i]]))];
+  charts.push(ch);
+  const others = L.layers.length - named.length;
+  keyEl.innerHTML = named.map(l => `<span><i style="background:${alpha(l.col, 0.8)}"></i>${esc(l.company)}</span>`).join("")
+    + (others ? `<span><i style="background:${alpha(grey, 0.35)}"></i>Other investments (${others})</span>` : "") + `<span><i class="dot"></i>Entry: where a new layer starts</span>`;
+  const gap = L.anchored.reduce((t, a) => t + a.hist - a.mark, 0), byLast = L.total[last];
+  note.textContent = [!state.hist ? "No company history loaded: each layer runs in a straight line from cost at entry to today's unrealized value, or to the proceeds for an exit. Load the history file for quarter-by-quarter marks."
+      : L.fallback ? `${L.fallback} compan${L.fallback === 1 ? "y has" : "ies have"} no rows in the history file and ${L.fallback === 1 ? "is" : "are"} drawn as a straight line from cost to current value.` : "",
+    `Coloured: the ${named.length} largest by peak value${others ? `; the other ${others} in grey` : ""}. The latest quarter uses each held company's reported unrealized value.`,
+    L.anchored.length ? `For ${L.anchored.length} of them that is ${fm(Math.abs(gap), 0)} ${gap > 0 ? "below" : "above"} ownership × the last post-money (${fp(Math.abs(gap) / (byLast + gap), 1)} of the total), typically a write-down of a mark no recent round has refreshed.` : ""].filter(Boolean).join(" ");
+}
+function renderGross(F, fundColor, asOf) {
+  const D = dealView(asOf), agg = rows => aggDeals(rows, asOf), tot = agg(D);
+  drawSlices(F, D, asOf); onPick("slice", "sliceFunds", F2 => drawSlices(F2, dealView(asOf), asOf));
+  drawConc(F, D, asOf); onPick("conc", "concFunds", F2 => drawConc(F2, dealView(asOf), asOf));
 
   // Performance by partner. Everyone who led a deal is listed; titles come from the staff file when loaded.
   const titleOf = n => (state.team || []).find(t => t.name === n)?.title || "";
@@ -1416,39 +1586,6 @@ function renderGross(F, fundColor, asOf) {
     document.getElementById("progTbl").innerHTML = `<table><thead><tr><th>From round</th><th>Companies</th><th>Raised again</th><th>Graduation rate</th><th>Median months to next raise</th><th>Next round was down</th><th>Written off before next raise</th></tr></thead><tbody>
       ${ks.map(k => { const t = T[k]; return `<tr><td>${esc(k)}</td><td>${t.n}</td><td>${t.next}</td><td>${fp(t.next / t.n, 0)}</td><td>${isFinite(median(t.mos)) ? median(t.mos).toFixed(0) : "–"}</td><td>${t.next ? fp(t.down / t.next, 0) : "–"}</td><td>${t.died}</td></tr>` }).join("")}</tbody></table>`;
   }
-
-  // Return concentration. Fund returner = a deal whose gross value is at least its own fund's committed size.
-  const sizeOf = Object.fromEntries(F.map(f => [f.name, f.size]));
-  const S = D.filter(d => state.scope === "all" || d.fund === state.scope), sAgg = agg(S);
-  const ranked = [...S].sort((a, b) => b.tv - a.tv), sumTop = k => ranked.slice(0, k).reduce((t, d) => t + d.tv, 0) / sAgg.tv;
-  const returners = S.filter(d => sizeOf[d.fund] > 0 && d.tv >= sizeOf[d.fund]);
-  const hits = S.filter(d => d.tvm >= 3), wo = S.filter(d => d.tvm < 0.25);
-  const topN = Math.max(1, Math.round(ranked.length * 0.1));
-  document.getElementById("concKpis").innerHTML = [
-    [fp(sumTop(1), 0), `of value from the best deal (${esc(ranked[0]?.company || "–")})`],
-    [fp(sumTop(topN), 0), `from the top ${topN} deal${topN > 1 ? "s" : ""} (top 10%)`],
-    [String(returners.length), `fund returner${returners.length === 1 ? "" : "s"}${returners.length ? ": " + returners.map(d => esc(d.company)).join(", ") : " (value ≥ fund size)"}`],
-    [fp(hits.length / S.length, 0), `of deals at 3x or better (${hits.length} of ${S.length})`],
-    [fp(wo.reduce((t, d) => t + d.invested, 0) / sAgg.inv, 0), `of capital in write-offs (${wo.length} deals)`],
-    [fp(S.reduce((t, d) => t + d.followOn, 0) / sAgg.inv, 0), "of capital went to follow-on rounds"]
-  ].map(([v, l]) => `<div><b>${v}</b><span>${l}</span></div>`).join("");
-  let cum = 0; const concPts = ranked.map((d, i) => { cum += d.tv; return { x: i + 1, y: cum / sAgg.tv, d } });
-  charts.push(new Chart(document.getElementById("cConc"), { type: "line", data: { datasets: [
-    { label: "Cumulative share of value", data: concPts, borderColor: css("--accent"), backgroundColor: css("--accent-soft"), fill: "origin", borderWidth: 2, pointRadius: 0, pointHoverRadius: 4, order: 2 },
-    { label: "If every deal contributed equally", data: [{ x: 0, y: 0 }, { x: ranked.length, y: 1 }], borderColor: css("--ink-2"), borderDash: [5, 4], borderWidth: 1.5, pointRadius: 0, fill: false, order: 1 }] },
-    options: { interaction: { mode: "nearest", intersect: false }, scales: { x: { type: "linear", min: 0, max: ranked.length, title: { display: true, text: "Deals, best first" }, grid: { display: false } }, y: { min: 0, max: 1, ticks: { callback: fpa } } },
-      plugins: { legend: { position: "bottom", labels: { boxWidth: 10 } }, tooltip: { filter: c => c.datasetIndex === 0, callbacks: { title: c => `Top ${c[0].raw.x}: ${c[0].raw.d.company}`, label: c => `${fp(c.raw.y, 0)} of total value` } } } } }));
-  const bAgg = BUCKETS.map(b => S.filter(d => d.bucket === b));
-  charts.push(new Chart(document.getElementById("cBuckets"), { type: "bar", data: { labels: BUCKETS.map(b => b.replace(" (<0.25x)", "")), datasets: [
-    { label: "Share of deals", data: bAgg.map(g => g.length / S.length), backgroundColor: css("--q2"), borderRadius: 4, borderSkipped: "start", n: bAgg.map(g => g.length) },
-    { label: "Share of value", data: bAgg.map(g => g.reduce((t, d) => t + d.tv, 0) / sAgg.tv), backgroundColor: css("--q1"), borderRadius: 4, borderSkipped: "start" }] },
-    options: { scales: { x: { grid: { display: false }, ticks: { autoSkip: false, font: { size: 11 } } }, y: { beginAtZero: true, ticks: { callback: fpa } } },
-      plugins: { legend: { position: "bottom", labels: { boxWidth: 10 } }, tooltip: { callbacks: { label: c => `${c.dataset.label}: ${fp(c.raw, 0)}${c.dataset.n ? ` (${c.dataset.n[c.dataIndex]} deals)` : ""}` } } } } }));
-  charts.push(new Chart(document.getElementById("cFollow"), { type: "bar", data: { labels: BUCKETS.map(b => b.replace(" (<0.25x)", "")), datasets: [
-    { label: "Initial cheques", data: bAgg.map(g => g.reduce((t, d) => t + d.initial, 0)), backgroundColor: css("--s1"), borderColor: css("--panel"), borderWidth: 1 },
-    { label: "Follow-on", data: bAgg.map(g => g.reduce((t, d) => t + d.followOn, 0)), backgroundColor: css("--s2"), borderColor: css("--panel"), borderWidth: 1 }] },
-    options: { scales: { x: { stacked: true, grid: { display: false }, ticks: { autoSkip: false, font: { size: 11 } } }, y: { stacked: true, ticks: { callback: fa }, title: unitTitle() } },
-      plugins: { legend: { position: "bottom", labels: { boxWidth: 10 } }, tooltip: { callbacks: { label: c => `${c.dataset.label}: ${fm(c.raw)}` } } } } }));
 
   charts.push(new Chart(document.getElementById("cDeals"), { type: "scatter", data: { datasets: F.map(f => ({ label: f.name, backgroundColor: fundColor[f.name], borderColor: css("--panel"), borderWidth: 2, pointRadius: 6, pointHoverRadius: 8,
     // Log scale cannot show zero, so write-offs are drawn on a 0.05x floor; tooltips show the real multiple.
@@ -1588,7 +1725,7 @@ document.getElementById("addFile").addEventListener("change", async e => {
     wbook.offer(file.name, sheets, "", true) }
   catch (x) { err.textContent = x.message }
 });
-document.addEventListener("change", e => { if (e.target.id === "coFund") { state.coFund = e.target.value; render() } if (e.target.id === "coFlag") { state.coFlagOnly = e.target.checked; render() } if (e.target.id === "dimSel") { state.dim = e.target.value; render() } if (e.target.id === "scopeSel") { state.scope = e.target.value; render() } if (e.target.id === "gpFund") { state.gpFund = e.target.value; render() } if (e.target.id === "gpWin") { state.gpWin = e.target.value; render() } if (e.target.id === "gpSec") { state.gpSec = e.target.value; render() } if (e.target.id === "gpCo") { state.gpCo = e.target.value; render() } if (e.target.id === "gpMargin") { state.gpMargin = e.target.value; render() } });
+document.addEventListener("change", e => { if (e.target.id === "coFund") { state.coFund = e.target.value; render() } if (e.target.id === "coFlag") { state.coFlagOnly = e.target.checked; render() } if (e.target.id === "dimSel") { state.dim = e.target.value; render() } if (e.target.id === "gpFund") { state.gpFund = e.target.value; render() } if (e.target.id === "gpWin") { state.gpWin = e.target.value; render() } if (e.target.id === "gpSec") { state.gpSec = e.target.value; render() } if (e.target.id === "gpCo") { state.gpCo = e.target.value; render() } if (e.target.id === "gpMargin") { state.gpMargin = e.target.value; render() } });
 matchMedia("(prefers-color-scheme: dark)").addEventListener("change", render);
 new MutationObserver(render).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
 // ---------- column mapping ----------
@@ -3092,7 +3229,7 @@ function decorateDownloads() {
     box.before(row);
   });
   document.querySelectorAll("#out .chart").forEach(box => {
-    const cv = box.querySelector("canvas"); if (!cv) return;
+    const cv = box.querySelector("canvas"); if (!cv || box.previousElementSibling?.classList.contains("dl-row")) return;
     const row = document.createElement("div"); row.className = "dl-row";
     row.innerHTML = `<button type="button" class="dl" aria-label="Download ${esc(titleFor(box))} chart as PNG">PNG</button>`;
     // Forcing light re-renders #out, replacing this canvas and button: find both again by position.
