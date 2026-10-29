@@ -715,15 +715,16 @@ function renderView() {
     c90: "90% of value counts the fewest companies that make up 90% of the fund's gross value (realized plus unrealized), out of all its investments.",
     qb: `Quartile badges rank TVPI, IRR and DPI, in that order, against the ${bmOn ? esc(document.querySelector("#bmSrc option:checked").textContent) : "chosen"} benchmark for each fund's vintage.` };
   const pctOf = (a, b) => b > 0 ? fp(a / b, 0) : "–";
+  // Whole dollars and one-decimal multiples: the summary is read at a glance.
   const cols = [["Fund", f => esc(f.name), "Total / pooled"], ["Vintage", f => f.vintage, ""], ["Size", f => f.size > 0 ? fm(f.size, 0) : "–", fm(T.size, 0)],
-    ["Total value", f => fm(f.dist + f.nav), fm(T.dist + T.nav), null, "tv"],
-    ...(det ? [["Paid-in", f => fm(f.paid), fm(T.paid)]] : []), ["% invested", f => pctIn(f.paid, f.size), pctIn(T.paid, T.size), null, "inv"],
-    ...(det ? [["Distributed", f => fm(f.dist), fm(T.dist)], ["NAV", f => fm(f.nav), fm(T.nav)]] : []),
+    ["Total value", f => fm(f.dist + f.nav, 0), fm(T.dist + T.nav, 0), null, "tv"],
+    ...(det ? [["Paid-in", f => fm(f.paid, 0), fm(T.paid, 0)]] : []), ["% invested", f => pctIn(f.paid, f.size), pctIn(T.paid, T.size), null, "inv"],
+    ...(det ? [["Distributed", f => fm(f.dist, 0), fm(T.dist, 0)], ["NAV", f => fm(f.nav, 0), fm(T.nav, 0)]] : []),
     ["% realized", f => pctOf(f.dist, f.dist + f.nav), pctOf(T.dist, T.dist + T.nav), null, "rlz"],
     ["Years active", f => yrs(firstFlow([f])), yrs(firstFlow(F)), null, "yrs"],
     ...(det ? [["90% of value", f => conc(deals && deals.filter(d => d.fund === f.name)), conc(deals), null, "c90"]] : []),
-    ["Net TVPI", f => fx(f.tvpi), fx((T.dist + T.nav) / T.paid), "TVPI"], ["Net DPI", f => fx(f.dpi), fx(T.dist / T.paid), "DPI"],
-    ...(det ? [["RVPI", f => fx(f.rvpi), fx(T.nav / T.paid)]] : []), ["Net IRR", f => fp(f.irr), fp(xirr(allFlows)), "IRR"],
+    ["Net TVPI", f => fx(f.tvpi, 1), fx((T.dist + T.nav) / T.paid, 1), "TVPI"], ["Net DPI", f => fx(f.dpi, 1), fx(T.dist / T.paid, 1), "DPI"],
+    ...(det ? [["RVPI", f => fx(f.rvpi, 1), fx(T.nav / T.paid, 1)]] : []), ["Net IRR", f => fp(f.irr), fp(xirr(allFlows)), "IRR"],
     ...(det ? [["Quartile", f => `${q(f, "TVPI", f.tvpi)} ${q(f, "IRR", f.irr)} ${q(f, "DPI", f.dpi)}`, "", null, "qb"]] : [])];
   const fnKeys = cols.map(c => c[4]).filter(Boolean), head = c => c[0] + (c[4] ? `<sup class="fn">${fnKeys.indexOf(c[4]) + 1}</sup>` : "");
   const metric = { TVPI: "tvpi", DPI: "dpi", IRR: "irr" }, bmName = bmOn ? esc(document.querySelector("#bmSrc option:checked").textContent) : "";
