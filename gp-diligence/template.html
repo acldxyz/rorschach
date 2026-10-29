@@ -72,6 +72,8 @@ tr.total td { font-weight: 600; border-top: 2px solid var(--ink-3) }
 .panel { grid-template-columns: minmax(0, 1fr) }
 .grid2 > *, .grid3 > * { min-width: 0 }
 .grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 520px), 1fr)); gap: 20px }
+/* Two charts that belong together (Gross TVM beside Number of investments) stay side by side down to phone width. */
+.pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px } .pair > * { min-width: 0 } @media (max-width: 560px) { .pair { grid-template-columns: 1fr } }
 .grid3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); gap: 16px }
 .chart { position: relative; height: 280px; min-width: 0 } .chart.tall { height: 340px } .chart.xtall { height: 460px }
 .scbar { gap: 6px } .scbar button[aria-pressed="true"] { background: var(--accent); color: var(--panel); border-color: var(--accent) }
@@ -1196,7 +1198,7 @@ function drawSlices(F, Dall, asOf) {
   const Call = cats.length > 8 ? [...top, "Other"] : top, colorOf = Object.fromEntries(Call.map((c, i) => [c, series(i)]));
   const C = Call.filter(c => D.some(d => catOf(d) === c));
   body.innerHTML = `<div><h3>Invested capital mix by fund</h3><div class="chart" id="mixBox" style="height:${Math.max(170, 96 + 42 * S.length)}px"><canvas id="cMix"></canvas></div></div>
-    <div class="grid2"><div><h3>Gross TVM</h3><div class="chart"><canvas id="cSliceTvm"></canvas></div></div><div><h3>Number of investments</h3><div class="chart"><canvas id="cCount"></canvas></div></div></div>
+    <div class="pair"><div><h3>Gross TVM</h3><div class="chart"><canvas id="cSliceTvm"></canvas></div></div><div><h3>Number of investments</h3><div class="chart"><canvas id="cCount"></canvas></div></div></div>
     <div class="tbl" id="sliceTbl"></div>`;
   setChartDefaults();
   charts.push(new Chart(document.getElementById("cMix"), { type: "bar", data: { labels: S.map(f => fundShort(f.name)),
