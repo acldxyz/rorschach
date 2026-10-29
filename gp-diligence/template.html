@@ -122,6 +122,8 @@ tr.total td { font-weight: 600; border-top: 2px solid var(--ink-3) }
 .choice { display: grid; gap: 6px; align-content: start; justify-items: start; padding: 12px; border: 1px solid var(--rule); border-radius: 6px; background: var(--bg) }
 /* Long headers wrap so the detailed table fits without sideways scrolling. */
 .sumtbl th { white-space: normal; vertical-align: bottom; min-width: 4.5em }
+/* Detailed has 16 columns: tighter cells and narrower badges keep it within a desktop panel. */
+.sumtbl.det th, .sumtbl.det td { padding: 6px 5px } .sumtbl.det th { min-width: 3.6em } .sumtbl.det .pill { min-width: 0; padding: 2px 5px }
 /* Quartile shading: the quartile tokens run strongest (top) to faintest in each theme; mixed into the panel so text stays readable. */
 /* Quartile rating: green (top), yellow, orange, red (bottom), on their own --qr tokens so a brand palette never recolours a rating. */
 .qcell.q1 { background: color-mix(in srgb, var(--qr1) 30%, var(--panel)) } .qcell.q2 { background: color-mix(in srgb, var(--qr2) 30%, var(--panel)) }
@@ -560,27 +562,33 @@ function renderView() {
   const det = state.sumView === "detailed", qr = (f, m, v) => quartile(v, bm[f.vintage]?.[m]);
   const q = (f, m, v) => { const r = qr(f, m, v); return r ? `<span class="pill qr${r}">Q${r}</span>` : `<span class="pill na">–</span>` };
   const qcell = (f, m, v, txt) => { const r = bmOn && qr(f, m, v); return r ? `<td class="qcell q${r}" title="${["Top", "2nd", "3rd", "Bottom"][r - 1]} quartile for ${f.vintage}">${txt}</td>` : `<td>${txt}</td>` };
-  const fn = n => `<sup class="fn">${n}</sup>`;
+  // Columns carry their own footnote; markers are numbered in the order the shown columns appear.
+  const notes = { tv: "Total value is distributions plus NAV: what LPs have received plus what they still hold, net of fees and carry.",
+    inv: "% invested is paid-in capital as a share of fund size. It can pass 100% when fees and expenses are called on top of commitments.",
+    rlz: "% realized is distributions as a share of total value: how much of the value has come back as cash (DPI ÷ TVPI).",
+    yrs: "Years active is the time since the fund's first capital call, to the as-of date.",
+    c90: "90% of value counts the fewest companies that make up 90% of the fund's gross value (realized plus unrealized), out of all its investments.",
+    qb: `Quartile badges rank TVPI, IRR and DPI, in that order, against the ${bmOn ? esc(document.querySelector("#bmSrc option:checked").textContent) : "chosen"} benchmark for each fund's vintage.` };
+  const pctOf = (a, b) => b > 0 ? fp(a / b, 0) : "–";
   const cols = [["Fund", f => esc(f.name), "Total / pooled"], ["Vintage", f => f.vintage, ""], ["Size", f => f.size > 0 ? fm(f.size, 0) : "–", fm(T.size, 0)],
-    ...(det ? [["Paid-in", f => fm(f.paid), fm(T.paid)]] : []), ["% invested" + fn(1), f => pctIn(f.paid, f.size), pctIn(T.paid, T.size)],
+    ["Total value", f => fm(f.dist + f.nav), fm(T.dist + T.nav), null, "tv"],
+    ...(det ? [["Paid-in", f => fm(f.paid), fm(T.paid)]] : []), ["% invested", f => pctIn(f.paid, f.size), pctIn(T.paid, T.size), null, "inv"],
     ...(det ? [["Distributed", f => fm(f.dist), fm(T.dist)], ["NAV", f => fm(f.nav), fm(T.nav)]] : []),
-    ["Years active" + fn(2), f => yrs(firstFlow([f])), yrs(firstFlow(F))], ["90% of value" + fn(3), f => conc(deals && deals.filter(d => d.fund === f.name)), conc(deals)],
+    ["% realized", f => pctOf(f.dist, f.dist + f.nav), pctOf(T.dist, T.dist + T.nav), null, "rlz"],
+    ["Years active", f => yrs(firstFlow([f])), yrs(firstFlow(F)), null, "yrs"],
+    ...(det ? [["90% of value", f => conc(deals && deals.filter(d => d.fund === f.name)), conc(deals), null, "c90"]] : []),
     ["Net TVPI", f => fx(f.tvpi), fx((T.dist + T.nav) / T.paid), "TVPI"], ["Net DPI", f => fx(f.dpi), fx(T.dist / T.paid), "DPI"],
     ...(det ? [["RVPI", f => fx(f.rvpi), fx(T.nav / T.paid)]] : []), ["Net IRR", f => fp(f.irr), fp(xirr(allFlows)), "IRR"],
-    ...(det ? [["Quartile" + fn(4), f => `${q(f, "TVPI", f.tvpi)} ${q(f, "IRR", f.irr)} ${q(f, "DPI", f.dpi)}`, ""]] : [])];
+    ...(det ? [["Quartile", f => `${q(f, "TVPI", f.tvpi)} ${q(f, "IRR", f.irr)} ${q(f, "DPI", f.dpi)}`, "", null, "qb"]] : [])];
+  const fnKeys = cols.map(c => c[4]).filter(Boolean), head = c => c[0] + (c[4] ? `<sup class="fn">${fnKeys.indexOf(c[4]) + 1}</sup>` : "");
   const metric = { TVPI: "tvpi", DPI: "dpi", IRR: "irr" }, bmName = bmOn ? esc(document.querySelector("#bmSrc option:checked").textContent) : "";
   let html = `<section class="panel"><div class="panel-head"><h2>Net performance summary</h2>
     <span class="seg" role="group" aria-label="Table detail">${[["summary", "Summary"], ["detailed", "Detailed"]].map(([k, l]) => `<button type="button" data-sumview="${k}" aria-pressed="${(k === "detailed") === det}">${l}</button>`).join("")}</span></div>
-  <div class="tbl"><table class="sumtbl"><thead><tr>${cols.map(c => `<th>${c[0]}</th>`).join("")}</tr></thead><tbody>
+  <div class="tbl"><table class="sumtbl${det ? " det" : ""}"><thead><tr>${cols.map(c => `<th>${head(c)}</th>`).join("")}</tr></thead><tbody>
   ${F.map(f => `<tr>${cols.map(c => c[3] ? qcell(f, c[3], f[metric[c[3]]], c[1](f)) : `<td>${c[1](f)}</td>`).join("")}</tr>`).join("")}
   <tr class="total">${cols.map(c => `<td>${c[2]}</td>`).join("")}</tr>
   </tbody></table></div>
-  <ol class="footnotes">
-    <li>% invested is paid-in capital as a share of fund size. It can pass 100% when fees and expenses are called on top of commitments.</li>
-    <li>Years active is the time since the fund's first capital call, to the as-of date.</li>
-    <li>90% of value counts the fewest companies that make up 90% of the fund's gross value (realized plus unrealized), out of all its investments.</li>
-    ${det ? `<li>Quartile badges rank TVPI, IRR and DPI, in that order, against the ${bmName || "chosen"} benchmark for each fund's vintage.</li>` : ""}
-  </ol>
+  <ol class="footnotes">${fnKeys.map(k => `<li>${notes[k]}</li>`).join("")}</ol>
   <p class="note qkey">${bmOn ? `Net TVPI, DPI and IRR are shaded by quartile against the ${bmName} benchmark for each fund's vintage: ${[1, 2, 3, 4].map(r => `<span class="qcell q${r} qsw">${["Top", "2nd", "3rd", "Bottom"][r - 1]}</span>`).join(" ")}` : "Pick a benchmark in the Data view to shade net TVPI, DPI and IRR by quartile."}</p></section>`;
 
   html += `<section class="panel"><div class="panel-head"><h2>Net relative performance</h2><p class="note">${bmOn ? `Bands show ${esc(document.querySelector("#bmSrc option:checked").textContent)} quartiles for each fund's vintage; the marker is the fund.` : "Pick a benchmark source and fill its quartiles to draw the bands."}</p></div>
