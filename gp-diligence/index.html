@@ -236,6 +236,13 @@ tr.total td { font-weight: 600; border-top: 2px solid var(--ink-3) }
 .choice { display: grid; gap: 6px; align-content: start; justify-items: start; padding: 12px; border: 1px solid var(--rule); border-radius: 6px; background: var(--bg) }
 /* Long headers wrap so the detailed table fits without sideways scrolling. */
 .sumtbl th { white-space: normal; vertical-align: bottom; min-width: 4.5em }
+/* Checklist dropdown (Annual cash flows' fund picker). */
+.ms { position: relative } .ms summary { list-style: none; cursor: pointer; font: 500 13px var(--body); border: 1px solid var(--rule); border-radius: 4px; padding: 6px 30px 6px 12px; background: var(--panel); position: relative }
+.ms summary::-webkit-details-marker { display: none } .ms summary::after { content: "▾"; position: absolute; right: 10px; color: var(--ink-3) }
+.ms summary:hover, .ms[open] summary { border-color: var(--accent) } .ms summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px }
+.ms-list { position: absolute; right: 0; top: calc(100% + 4px); z-index: 20; min-width: 240px; max-width: min(90vw, 360px); background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 8px 10px; display: grid; gap: 6px; box-shadow: 0 6px 20px rgb(0 0 0 / .15) }
+.ms-list label { display: flex; gap: 8px; align-items: center; font-size: 13px; cursor: pointer } .ms-all { border-bottom: 1px solid var(--rule); padding-bottom: 6px; font-weight: 600 }
+.ms-list input { accent-color: var(--accent) }
 /* Detailed has 16 columns: tighter cells and narrower badges keep it within a desktop panel. */
 .sumtbl.det th, .sumtbl.det td { padding: 6px 5px } .sumtbl.det th { min-width: 3.6em } .sumtbl.det .pill { min-width: 0; padding: 2px 5px }
 /* Quartile shading: the quartile tokens run strongest (top) to faintest in each theme; mixed into the panel so text stays readable. */
@@ -672,6 +679,44 @@ function setChartDefaults() {
   // know how to tween each property, and without them tooltips stall while fading in. 0 = no animation.
   Chart.defaults.animation.duration = state.capturing || matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 350;
 }
+// Annual cash flows: the funds shown are picked in a checklist dropdown (one, several or all). state.annFunds is
+// null for all funds, else the chosen names; ticking redraws only this chart so the list stays open while picking.
+// A choice that names none of the loaded funds (new data was loaded) falls back to all of them.
+const annShown = F => { const S = state.annFunds ? F.filter(f => state.annFunds.includes(f.name)) : F; return state.annFunds && state.annFunds.length && !S.length ? F : S };
+function fundPicker(F) {
+  const on = n => !state.annFunds || state.annFunds.includes(n), k = annShown(F).length;
+  const label = k === F.length ? "All funds" : k === 0 ? "No funds" : k <= 2 ? annShown(F).map(f => fundShort(f.name)).join(", ") : `${k} of ${F.length} funds`;
+  return `<details class="ms" id="annPick"><summary aria-label="Funds shown: ${esc(label)}"><span class="note">Funds</span> <b id="annLbl">${esc(label)}</b></summary>
+    <div class="ms-list" role="group" aria-label="Funds shown">
+      <label class="ms-all"><input type="checkbox" data-ann="*"${k === F.length ? " checked" : ""}> All funds</label>
+      ${F.map(f => `<label><input type="checkbox" data-ann="${esc(f.name)}"${on(f.name) ? " checked" : ""}> ${esc(f.name)}</label>`).join("")}</div></details>`;
+}
+function drawAnnual(F, fundColor) {
+  const old = Chart.getChart("cAnnual"); if (old) { charts = charts.filter(c => c !== old); old.destroy() }
+  const S = annShown(F), note = document.getElementById("annNote");
+  note.textContent = S.length ? `Capital called (below zero) and distributed (above): ${S.length === F.length ? "all funds" : S.map(f => f.name).join(", ")}.` : "Pick at least one fund to chart.";
+  const years = [...new Set(S.flatMap(f => f.rows.map(r => r.date.getFullYear())))].sort();
+  const annual = [];
+  S.forEach(f => ["Called", "Distributed"].forEach(kind => annual.push({ label: `${f.name} · ${kind}`, stack: kind, backgroundColor: fundColor[f.name], borderColor: css("--panel"), borderWidth: 1, borderRadius: 2,
+    data: years.map(y => f.rows.filter(r => r.date.getFullYear() === y && (kind === "Called" ? r.amount < 0 : r.amount > 0)).reduce((s, r) => s + r.amount, 0)) })));
+  charts.push(new Chart(document.getElementById("cAnnual"), { type: "bar", data: { labels: years, datasets: annual }, options: {
+    scales: { x: { stacked: true, grid: { display: false } }, y: { stacked: true, ticks: { callback: fa }, title: unitTitle(), grid: { color: c => c.tick.value === 0 ? css("--ink-3") : css("--rule") } } },
+    plugins: { legend: { position: "bottom", labels: { boxWidth: 10, filter: i => i.text.endsWith("Called"), generateLabels: ch => Chart.defaults.plugins.legend.labels.generateLabels(ch).filter(l => l.text.endsWith("Called")).map(l => ({ ...l, text: l.text.replace(" · Called", "") })) } },
+      tooltip: { callbacks: { label: c => `${c.dataset.label}: ${fm(c.raw)}` } } } } }));
+}
+document.addEventListener("change", e => {
+  const box = e.target.closest?.("[data-ann]"); if (!box) return;
+  const F = fundStats(cfView()), all = F.map(f => f.name), cur = state.annFunds || all.slice();
+  let next = box.dataset.ann === "*" ? (box.checked ? all : []) : box.checked ? [...cur, box.dataset.ann] : cur.filter(n => n !== box.dataset.ann);
+  state.annFunds = next.length === all.length ? null : all.filter(n => next.includes(n));
+  const fundColor = Object.fromEntries(F.map((f, i) => [f.name, series(i)])), pick = document.getElementById("annPick");
+  pick.querySelectorAll("[data-ann]").forEach(i => i.checked = i.dataset.ann === "*" ? !state.annFunds : !state.annFunds || state.annFunds.includes(i.dataset.ann));
+  const lbl = pick.querySelector("summary"), tmp = document.createElement("div"); tmp.innerHTML = fundPicker(F); lbl.replaceWith(tmp.querySelector("summary"));
+  drawAnnual(F, fundColor); decorateDownloads();
+});
+// The checklist closes on Escape (focus back on its button) or a click anywhere outside it.
+document.addEventListener("click", e => document.querySelectorAll("details.ms[open]").forEach(d => { if (!d.contains(e.target)) d.open = false }));
+document.addEventListener("keydown", e => { if (e.key !== "Escape") return; const d = e.target.closest?.("details.ms[open]"); if (d) { d.open = false; d.querySelector("summary").focus() } });
 function renderView() {
   charts.forEach(c => c.destroy()); charts = [];
   document.querySelectorAll(".tabs [role=tab]").forEach(b => b.setAttribute("aria-selected", String(b.dataset.view === state.view)));
@@ -741,7 +786,7 @@ function renderView() {
     <div class="grid3"><div><h3>Net TVPI</h3><div class="chart"><canvas id="cTvpi"></canvas></div></div><div><h3>Net IRR</h3><div class="chart"><canvas id="cIrr"></canvas></div></div><div><h3>DPI</h3><div class="chart"><canvas id="cDpi"></canvas></div></div></div></section>`;
 
   html += `<div class="grid2"><section class="panel"><h2>J-curve</h2><p class="note">Cumulative net cash flow to LPs, by quarter since each fund's first call.</p><div class="chart tall"><canvas id="cJ"></canvas></div></section>
-    <section class="panel"><h2>Annual cash flows</h2><p class="note">Capital called (below zero) and distributed (above), all funds.</p><div class="chart tall"><canvas id="cAnnual"></canvas></div></section></div>`;
+    <section class="panel"><div class="panel-head"><h2>Annual cash flows</h2>${fundPicker(F)}</div><p class="note" id="annNote"></p><div class="chart tall"><canvas id="cAnnual"></canvas></div></section></div>`;
 
   if (state.inv) {
     html += `<section class="panel"><div class="panel-head"><h2>Portfolio slices</h2><div class="row"><label for="dimSel" class="note">Slice by</label><select id="dimSel">
@@ -800,14 +845,7 @@ function renderView() {
     scales: { x: { type: "linear", title: { display: true, text: "Years since first call" }, grid: { display: false } }, y: { ticks: { callback: fa }, title: unitTitle(), grid: { color: c => c.tick.value === 0 ? css("--ink-3") : css("--rule") } } },
     plugins: { legend: { position: "bottom", labels: { boxWidth: 10 } }, tooltip: { callbacks: { title: c => `Year ${c[0].raw.x.toFixed(2)}`, label: c => `${c.dataset.label}: ${fm(c.raw.y)}` } } } } }));
 
-  const years = [...new Set(F.flatMap(f => f.rows.map(r => r.date.getFullYear())))].sort();
-  const annual = [];
-  F.forEach(f => ["Called", "Distributed"].forEach(kind => annual.push({ label: `${f.name} · ${kind}`, stack: kind, backgroundColor: fundColor[f.name], borderColor: css("--panel"), borderWidth: 1, borderRadius: 2,
-    data: years.map(y => f.rows.filter(r => r.date.getFullYear() === y && (kind === "Called" ? r.amount < 0 : r.amount > 0)).reduce((s, r) => s + r.amount, 0)) })));
-  charts.push(new Chart(document.getElementById("cAnnual"), { type: "bar", data: { labels: years, datasets: annual }, options: {
-    scales: { x: { stacked: true, grid: { display: false } }, y: { stacked: true, ticks: { callback: fa }, title: unitTitle(), grid: { color: c => c.tick.value === 0 ? css("--ink-3") : css("--rule") } } },
-    plugins: { legend: { position: "bottom", labels: { boxWidth: 10, filter: i => i.text.endsWith("Called"), generateLabels: ch => Chart.defaults.plugins.legend.labels.generateLabels(ch).filter(l => l.text.endsWith("Called")).map(l => ({ ...l, text: l.text.replace(" · Called", "") })) } },
-      tooltip: { callbacks: { label: c => `${c.dataset.label}: ${fm(c.raw)}` } } } } }));
+  drawAnnual(F, fundColor);
 
   if (state.inv) renderGross(F, fundColor, asOf);
 }
