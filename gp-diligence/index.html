@@ -236,6 +236,9 @@ tr.total td { font-weight: 600; border-top: 2px solid var(--ink-3) }
 .choice { display: grid; gap: 6px; align-content: start; justify-items: start; padding: 12px; border: 1px solid var(--rule); border-radius: 6px; background: var(--bg) }
 /* Long headers wrap so the detailed table fits without sideways scrolling. */
 .sumtbl th { white-space: normal; vertical-align: bottom; min-width: 4.5em }
+/* Sortable headers: the header text is a button; the active column is marked and carries an arrow. */
+.sortbtn { all: unset; cursor: pointer; font: inherit; color: inherit; letter-spacing: inherit; text-transform: inherit; border-radius: 3px }
+.sortbtn:hover, .sortbtn.on { color: var(--accent) } .sortbtn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px }
 /* Checklist dropdown (Annual cash flows' fund picker). */
 .ms { position: relative } .ms summary { list-style: none; cursor: pointer; font: 500 13px var(--body); border: 1px solid var(--rule); border-radius: 4px; padding: 6px 30px 6px 12px; background: var(--panel); position: relative }
 .ms summary::-webkit-details-marker { display: none } .ms summary::after { content: "▾"; position: absolute; right: 10px; color: var(--ink-3) }
@@ -625,7 +628,7 @@ const fx = (v, d = 2) => isFinite(v) ? v.toFixed(state.fullPrec ? Math.max(d, 2)
 const fp = (v, d = 1) => isFinite(v) ? (v * 100).toFixed(d) + "%" : "–";
 // Money is converted into the display currency before any maths (see cfView / invView); fm only
 // shortens and labels. The unit is chosen once per render so every figure on the page shares it.
-const fm = (v, d = 1) => { if (!isFinite(v)) return "–"; const u = state.cur.unit, dd = u.div === 1 ? 0 : state.fullPrec ? Math.max(d, 1) : d;
+const fm = (v, d = 1) => { if (!isFinite(v)) return "–"; const u = state.cur.unit, dd = u.div === 1 ? 0 : state.fullPrec || (v && Math.abs(v) < u.div) ? Math.max(d, 1) : d;
   return (v < 0 ? "-" : "") + state.cur.sym + (Math.abs(v) / u.div).toLocaleString("en-US", { minimumFractionDigits: dd, maximumFractionDigits: dd }) + u.suffix };
 // Chart axes name the unit once in their title ("USD millions"); money ticks carry the currency symbol, negatives in parentheses.
 const paren = (v, t) => v < 0 ? `(${t})` : t;
@@ -1027,11 +1030,26 @@ function renderCompanies(P, F, asOf) {
   if (G?.lines.length) drawGrowth(G);
 }
 
+// Sortable by any column: a header click sorts it, a second click reverses. Text sorts A→Z first, numbers high→low,
+// dates newest first; blanks always last. Opens shortest runway first.
+const RW_COLS = [["company", "Company", "t", c => c.company], ["fund", "Fund", "t", c => fundShort(c.fund)], ["round", "Latest round", "t", c => c.hist.rounds.at(-1)?.round],
+  ["raise", "Last raise", "d", c => c.hist.rounds.at(-1)?.date], ["cash", "Cash", "n", c => c.hist.cashNow], ["burn", "Monthly burn", "n", c => c.hist.last.monthly_burn],
+  ["runway", "Runway", "n", c => c.hist.runway], ["rep", "Reported", "d", c => c.hist.last.date], ["gm", "Gross margin", "n", c => c.hist.gmLast?.v],
+  ["gmch", "12-mo change", "n", c => c.hist.gmChange], ["own", "Fund ownership", "n", c => c.hist.own.at(-1)?.ownership]];
+const RW_WORD = { t: ["A to Z", "Z to A"], n: ["high to low", "low to high"], d: ["newest first", "oldest first"] };
 function runwayTable(P, asOf) {
-  const L = P.filter(c => c.status !== "Realized" && isFinite(c.hist.runway)).sort((a, b) => a.hist.runway - b.hist.runway);
+  const S = state.rwSort || { k: "runway", dir: 1 }, col = RW_COLS.find(c => c[0] === S.k) || RW_COLS[6], get = col[3];
+  const val = c => { const v = get(c); return v instanceof Date ? +v : typeof v === "number" ? (isFinite(v) ? v : null) : v == null || v === "" ? null : String(v) };
+  // dir 0 is the column's natural first order (A→Z, high→low, newest), 1 the reverse.
+  const L = P.filter(c => c.status !== "Realized" && isFinite(c.hist.runway)).sort((a, b) => {
+    const x = val(a), y = val(b); if (x === null || y === null) return (x === null) - (y === null);
+    const r = col[2] === "t" ? String(x).localeCompare(String(y), undefined, { numeric: true, sensitivity: "base" }) : y - x;
+    return S.dir ? -r : r });
   if (!L.length) return "";
-  return `<section class="panel"><div class="panel-head"><h2>Runway watchlist</h2><p class="note">Held companies, shortest runway first. Runway = latest cash ÷ monthly burn. * includes money raised after the last cash report.</p></div>
-    <div class="tbl"><table><thead><tr><th>Company</th><th>Fund</th><th>Latest round</th><th>Last raise</th><th>Cash</th><th>Monthly burn</th><th>Runway</th><th>Reported</th><th>Gross margin</th><th>12-mo change</th><th>Fund ownership</th></tr></thead><tbody>
+  const th = ([k, label, t]) => { const on = k === col[0], dirTxt = RW_WORD[t][on ? S.dir : 0], asc = (t === "t") === !S.dir;
+    return `<th aria-sort="${on ? (asc ? "ascending" : "descending") : "none"}"><button type="button" class="sortbtn${on ? " on" : ""}" data-rwsort="${k}" title="Sort ${on ? RW_WORD[t][1 - S.dir] : dirTxt}">${label}<span aria-hidden="true">${on ? (asc ? " ▲" : " ▼") : ""}</span></button></th>` };
+  return `<section class="panel"><div class="panel-head"><h2>Runway watchlist</h2><p class="note">Held companies, sorted by ${col[1].toLowerCase()}, ${RW_WORD[col[2]][S.dir]}. Click a column to sort by it; click again to reverse. Runway = latest cash ÷ monthly burn. * includes money raised after the last cash report.</p></div>
+    <div class="tbl"><table class="rwtbl"><thead><tr>${RW_COLS.map(th).join("")}</tr></thead><tbody>
     ${L.map(c => { const r = c.hist.rounds[c.hist.rounds.length - 1], rw = c.hist.runway, own = c.hist.own[c.hist.own.length - 1];
       return `<tr><td>${esc(c.company)}</td><td style="font-family:var(--body)">${esc(fundShort(c.fund))}</td><td style="font-family:var(--body)">${r ? esc(r.round) : "–"}</td><td>${r ? ym(r.date) : "–"}</td><td>${fm(c.hist.cashNow, 0)}${c.hist.raisedSince > 0 ? "*" : ""}</td><td>${fm(c.hist.last.monthly_burn, 0)}</td>
         <td><span class="pill ${rw < LOW_RUNWAY ? "rw-bad" : rw < WATCH_RUNWAY ? "rw-warn" : "rw-ok"}">${rw >= 36 ? "36+" : rw.toFixed(1)} mo</span></td><td>${ym(c.hist.last.date)}</td><td>${c.hist.gmLast ? fp(c.hist.gmLast.v, 0) : "–"}</td><td${c.hist.gmChange <= -GM_SLIP ? ' class="warn-text"' : ""}>${isFinite(c.hist.gmChange) ? ptsTxt(c.hist.gmChange) : "–"}</td><td>${own ? fp(own.ownership) : "–"}</td></tr>` }).join("")}</tbody></table></div></section>`;
@@ -1456,6 +1474,11 @@ document.getElementById("curCtl").addEventListener("change", e => { const c = e.
   if (x > 0) state.rates[c] = x; else delete state.rates[c]; try { localStorage.setItem("fx-rates", JSON.stringify(state.rates)) } catch {} render() });
 document.getElementById("out").addEventListener("click", e => { const b = e.target.closest("[data-sumview]"); if (!b) return;
   state.sumView = b.dataset.sumview; try { localStorage.setItem("sumView", state.sumView) } catch {} render(); document.querySelector(`[data-sumview="${state.sumView}"]`)?.focus() });
+
+// Runway watchlist sort: a new column starts in its natural order; the same column flips. Focus stays on the header.
+document.getElementById("out").addEventListener("click", e => { const b = e.target.closest("[data-rwsort]"); if (!b) return;
+  const k = b.dataset.rwsort, cur = state.rwSort || { k: "runway", dir: 1 };
+  state.rwSort = cur.k === k ? { k, dir: 1 - cur.dir } : { k, dir: 0 }; render(); document.querySelector(`[data-rwsort="${k}"]`)?.focus() });
 
 // ---------- welcome ----------
 // With nothing loaded, the welcome card asks how to start. Loading anything (sample, upload, workspace)
